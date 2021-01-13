@@ -1,14 +1,14 @@
 sdrx
 ====
 `sdrx` is a simple software defined narrow band AM receiver that uses a RTL-SDR
-USB dongle as it's hardware part. It's main purpous is to act as a
-experimentation bench for different SDR implementation aspects as decimation,
-filtering, demodulation, interaction between clock domains, efficent threading
-and so on. `sdrx` is written in C++ and is continuously tested on x86_64 with
-Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running Raspberry Pi OS.
+USB dongle as it's hardware part. It's main purpous is to act as a test bench
+for different SDR implementation aspects as decimation, filtering, demodulation,
+interaction between clock domains, efficent threading and so on. `sdrx` is
+written in C++ and is continuously tested on x86_64 with Fedora 33 and on a
+Raspberry Pi 4 Model B 4GiB running Raspberry Pi OS.
 
 
-Requirements
+Build requirements
 ====
 Besides git, gcc, cmake and the standard set of development tools, `sdrx`
 depend on the following libraries. They, and their development parts, need to
@@ -22,7 +22,8 @@ be installed on your machine in order to build and run `sdrx`:
 
 On Fedora they can be installed with:
 
-    $ sudo dnf install gcc-c++ cmake git libusbx-devel rtl-sdr-devel alsa-lib-devel fftw-devel fftw-libs-single popt-devel
+    $ sudo dnf install gcc-c++ cmake git libusbx-devel rtl-sdr-devel \
+                       alsa-lib-devel fftw-devel fftw-libs-single popt-devel
 
 
 Checking out and building
@@ -45,11 +46,12 @@ To keep up to date with upstream, simply run:
 
 Running
 ====
-`sdrx`is run from the command line and take the frequency to listen on as
+`sdrx`is run from the command line and take the frequency to listen to as
 its sole argument. Besides the frequency, some other options are available
 and can be listed with --help:
 
-    $ sdrx --help
-    $ sdrx --rf-gain 30 122.450
+    $ cd sdrx
+    $ ./sdrx --help
+    $ ./sdrx --rf-gain 30 122.450
 
 The audio is played using ALSA.
