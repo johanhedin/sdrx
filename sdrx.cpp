@@ -743,8 +743,9 @@ sdrx is a simple software defined narrow band AM receiver using a RTL-SDR
 dongle as its hadware backend. It is mainly designed for use in the airband,
 118 to 138 MHz. The program is run from the command line and the frequency to
 listen to is given as an argument in MHz with a dot (.) as the decimal
-delimiter. Audio is played using ALSA The squelch is adaptive with respect to the current noise floor and
-is given as a SNR value in dB. Examples:
+delimiter. Audio is played using ALSA The squelch is adaptive with respect to
+the current noise floor and the squelch level is given as a SNR value in dB.
+Examples:
 
 Listen to 122.450 MHz with 40dB of RF gain and 8dB of audio gain:
 
