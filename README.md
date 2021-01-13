@@ -7,6 +7,10 @@ interaction between clock domains, threading and so on. `sdrx` is written in
 C++ and is continuously tested on x86_64 with Fedora 33 and on a
 Raspberry Pi 4 Model B 4GiB running Raspberry Pi OS.
 
+The RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
+is the one used for development. Choises made in the design of the code
+may be incompatible with other dongles. YMMV.
+
 
 Build requirements
 ====
