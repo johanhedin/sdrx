@@ -1,6 +1,7 @@
 sdrx
 ====
-[![Build Status](https://travis-ci.com/johanhedin/sdrx.svg?branch=main)](https://travis-ci.com/johanhedin/sdrx)
+
+![C/C++ CI](https://github.com/johanhedin/sdrx/workflows/C/C++%20CI/badge.svg)
 
 `sdrx` is a simple software defined narrow band AM receiver that uses a RTL-SDR
 USB dongle as it's hardware part. It's main purpous is to act as a test bench
