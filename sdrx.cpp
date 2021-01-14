@@ -40,6 +40,7 @@
 #include <utility>
 #include <cmath>
 #include <cstdint>
+#include <clocale>
 
 // Libs that we use
 #include <popt.h>
@@ -814,6 +815,10 @@ int main(int argc, char** argv) {
     int              ret;
     struct sigaction sigact;
     Settings         settings;
+
+    // Set numeric locale so that we can parse frequency with deciaml dot (.)
+    // instead of comma (,)
+    std::setlocale(LC_NUMERIC, "en_US.UTF-8");
 
     // Parse command line. Exit if incomplete or if help was requested
     if (parse_cmd_line(argc, argv, settings) < 0) {
