@@ -26,6 +26,35 @@
 
 #include <vector>
 
+// Notes about the filter designs.
+//
+// firpm is a Matlab function for creating FIR-filters.
+//
+//     b = firpm(n, f, a);
+//
+// Where:
+//     n - Filter order
+//     f - Vector of frequencies for the pass/stop bands expressed in the
+//         range 0 - 1 where 1 corresponds to the Nyqusit frequency (fs/2)
+//     a - Vector of the desired amplitude for the frequency points
+//
+// Returns:
+//     b - A vector of length n + 1 with the filter coefficients.
+//
+// Example:
+//   Given a sampling frequency fs of 2400kHz, create a low pass filter with a
+//   passband between 0 and 10kHz and a stop band between 400kHz and 1200kHz.
+//
+//       a = [ 1 1 0 0 ];
+//       f = [ 0 10/(fs/s) 400/(fs/2) 1200/(fs/2) ];
+//
+//   After filtering with this filter, the sampling frequency can be reduced
+//   by 3 (to 800kHz) with resonalble aliasing in the upper frequency range.
+//
+// A filter can be plotted online:
+// https://www.earlevel.com/main/2016/12/08/filter-frequency-response-grapher
+
+
 // Lowpass filter of order 12 for first stage decimation from 2400kHz to 800kHz
 // sampling frequency. Below -50dB over 400kHz.
 //
