@@ -41,6 +41,7 @@
 #include <cmath>
 #include <cstdint>
 #include <clocale>
+#include <cctype>
 
 // Libs that we use
 #include <popt.h>
@@ -62,6 +63,8 @@
 // ALSA: https://alsa.opensrc.org/Asynchronous_Playback_(Howto)
 //
 
+#define AERONAUTICAL_CHANNEL true
+#define NORMAL_FQ            false
 
 // Interval in seconds between statistics output
 #define STAT_INTERVAL  5
@@ -688,6 +691,43 @@ static void dongle_worker(struct InputState &input_state) {
 }
 
 
+// Parse a string with a frequency in MHz and with dot (.) as decimal separator
+// into a frequency in Hz. If aeronautical is true, the parser expect a
+// aeronautical 8.33kHz channel number instead of a frequency.
+//
+// Returns the parsed frequency or 0 if a invalid string is given.
+uint32_t parse_fq(const std::string &str, bool aeronautical = false) {
+    uint32_t fq = 0;
+
+    auto dot_pos = str.find_first_of('.');
+    if (dot_pos != std::string::npos) {
+        auto int_str  = str.substr(0, dot_pos); // integral part
+        auto frac_str = str.substr(dot_pos+1);  // fractional part
+
+        if (std::all_of(int_str.begin(), int_str.end(), ::isdigit) &&
+            std::all_of(frac_str.begin(), frac_str.end(), ::isdigit) &&
+            2 <= int_str.length() && int_str.length() <= 4 &&
+            0 < frac_str.length() && frac_str.length() <= 6
+        ) {
+            unsigned mhz = std::atol(int_str.c_str());
+            unsigned hz = 0;
+            unsigned frac_multiplier = 100000;
+
+            for (auto i = frac_str.begin(); i < frac_str.end(); ++i) {
+                hz += (*i - '0') * frac_multiplier;
+                frac_multiplier /= 10;
+            }
+
+            if (mhz < 4000) {
+                fq = mhz * 1000000 + hz;
+            }
+        }
+    }
+
+    return fq;
+}
+
+
 // Parse the command line and fill the settings object. Return 0 on success
 // or < 0 on parse error or if help was requested
 static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
@@ -779,19 +819,14 @@ Listen to 118.100 MHz with 34dB of RF gain, 12dB of audio gain and 18dB squelch:
 
             if (poptPeekArg(popt_ctx) != nullptr) {
                 const char *arg = poptGetArg(popt_ctx);
-                double      tmp_fq;
 
-                if (sscanf(arg, "%lf", &tmp_fq) != 1) {
+                settings.fq = parse_fq(arg, AERONAUTICAL_CHANNEL);
+                if (settings.fq == 0) {
                     std::cerr << "Error: Invalid frequency given: " << arg << std::endl;
                     ret = -1;
-                } else {
-                    if (tmp_fq < 45.0 || tmp_fq > 1700.0) {
-                        fprintf(stderr, "Error: Invalid frequency given: %.3fMHz\n", tmp_fq);
-                        ret = -1;
-                    } else {
-                        tmp_fq = tmp_fq * 1000000.0;
-                        settings.fq = (uint32_t)tmp_fq;
-                    }
+                } else if (settings.fq < 45000000 || settings.fq > 1800000000) {
+                    fprintf(stderr, "Error: Invalid frequency given: %" PRIu32 "Hz\n", settings.fq);
+                    ret = -1;
                 }
             } else {
                 std::cerr << "Error: No frequency given" << std::endl;
