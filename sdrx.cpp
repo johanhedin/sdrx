@@ -694,7 +694,7 @@ static void dongle_worker(struct InputState &input_state) {
 
 // Parse a string with a frequency in MHz and with dot (.) as decimal separator
 // into a frequency in Hz. If aeronautical is true, the parser expect a
-// aeronautical 8.33kHz channel number instead of a frequency.
+// aeronautical 8.33 or 25 kHz channel number instead of a frequency.
 //
 // Returns the parsed frequency or 0 if a invalid string is given.
 uint32_t parse_fq(const std::string &str, bool aeronautical = false) {
@@ -702,9 +702,10 @@ uint32_t parse_fq(const std::string &str, bool aeronautical = false) {
     unsigned mhz = 0;
     unsigned hz = 0;
 
+    // Dot is used as decimal separator
     auto dot_pos = str.find_first_of('.');
 
-    // Must contain a decimal dot (.)
+    // Decimal dot must be present
     if (dot_pos == std::string::npos) return 0;
 
     auto int_str  = str.substr(0, dot_pos); // integral part
@@ -721,6 +722,9 @@ uint32_t parse_fq(const std::string &str, bool aeronautical = false) {
     if (aeronautical && frac_str.length() != 3) return 0;
 
     if (aeronautical) {
+        // A 100kHz wide band "contains" 12 8.33kHz channels or 4 25kHz
+        // channels. Each channel has it's unique two digits making it
+        // possible to correctly convert a channel in both schemas
         const std::map<std::string, unsigned> sub_ch_map{
             { "00",     0 }, { "05",     0 }, { "10",  8333 }, { "15", 16667 },
             { "25", 25000 }, { "30", 25000 }, { "35", 33333 }, { "40", 41667 },
