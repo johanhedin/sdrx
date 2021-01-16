@@ -738,14 +738,13 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         if (print_help) {
             // Ignore given options and just print the extended help
             poptPrintHelp(popt_ctx, stderr, 0);
-            //std::cerr << std::endl;
             std::cerr << R"(
 sdrx is a simple software defined narrow band AM receiver using a RTL-SDR
 dongle as its hadware backend. It is mainly designed for use in the airband,
 118 to 138 MHz. The program is run from the command line and the frequency to
 listen to is given as an argument in MHz with a dot (.) as the decimal
-delimiter. Audio is played using ALSA The squelch is adaptive with respect to
-the current noise floor and the squelch level is given as a SNR value in dB.
+delimiter. The squelch is adaptive with respect to the current noise floor
+and the squelch level is given as a SNR value in dB. Audio is played using ALSA.
 Examples:
 
 Listen to 122.450 MHz with 40dB of RF gain and 8dB of audio gain:
