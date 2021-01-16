@@ -45,8 +45,9 @@
 //   Given a sampling frequency fs of 2400kHz, create a low pass filter with a
 //   passband between 0 and 10kHz and a stop band between 400kHz and 1200kHz.
 //
-//       a = [ 1 1 0 0 ];
-//       f = [ 0 10/(fs/s) 400/(fs/2) 1200/(fs/2) ];
+//       fs = 2400;
+//       a  = [ 1 1 0 0 ];
+//       f  = [ 0 10/(fs/s) 400/(fs/2) 1200/(fs/2) ];
 //
 //   After filtering with this filter, the sampling frequency can be reduced
 //   by 3 (to 800kHz) with resonalble aliasing in the upper frequency range.
