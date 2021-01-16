@@ -42,6 +42,7 @@
 #include <cstdint>
 #include <clocale>
 #include <cctype>
+#include <map>
 
 // Libs that we use
 #include <popt.h>
@@ -698,30 +699,54 @@ static void dongle_worker(struct InputState &input_state) {
 // Returns the parsed frequency or 0 if a invalid string is given.
 uint32_t parse_fq(const std::string &str, bool aeronautical = false) {
     uint32_t fq = 0;
+    unsigned mhz = 0;
+    unsigned hz = 0;
 
     auto dot_pos = str.find_first_of('.');
-    if (dot_pos != std::string::npos) {
-        auto int_str  = str.substr(0, dot_pos); // integral part
-        auto frac_str = str.substr(dot_pos+1);  // fractional part
 
-        if (std::all_of(int_str.begin(), int_str.end(), ::isdigit) &&
-            std::all_of(frac_str.begin(), frac_str.end(), ::isdigit) &&
-            2 <= int_str.length() && int_str.length() <= 4 &&
-            0 < frac_str.length() && frac_str.length() <= 6
-        ) {
-            unsigned mhz = std::atol(int_str.c_str());
-            unsigned hz = 0;
-            unsigned frac_multiplier = 100000;
+    // Must contain a decimal dot (.)
+    if (dot_pos == std::string::npos) return 0;
 
-            for (auto i = frac_str.begin(); i < frac_str.end(); ++i) {
-                hz += (*i - '0') * frac_multiplier;
-                frac_multiplier /= 10;
-            }
+    auto int_str  = str.substr(0, dot_pos); // integral part
+    auto frac_str = str.substr(dot_pos+1);  // fractional part
 
-            if (mhz < 4000) {
-                fq = mhz * 1000000 + hz;
-            }
+    // Integral and fractional strings must contain digits and have correct lengths
+    if (!std::all_of(int_str.begin(), int_str.end(), ::isdigit) ||
+        !std::all_of(frac_str.begin(), frac_str.end(), ::isdigit) ||
+        int_str.length() < 2 || int_str.length() > 4 ||
+        frac_str.length() == 0 || frac_str.length() > 6
+    ) return 0;
+
+    // Aeronautical notation reqires exactly thre digits in the fractional part
+    if (aeronautical && frac_str.length() != 3) return 0;
+
+    if (aeronautical) {
+        const std::map<std::string, unsigned> sub_ch_map{
+            { "00",     0 }, { "05",     0 }, { "10",  8333 }, { "15", 16667 },
+            { "25", 25000 }, { "30", 25000 }, { "35", 33333 }, { "40", 41667 },
+            { "50", 50000 }, { "55", 50000 }, { "60", 58333 }, { "65", 66667 },
+            { "75", 75000 }, { "80", 75000 }, { "85", 83333 }, { "90", 91667 }
+        };
+        auto sub_ch = sub_ch_map.find(frac_str.substr(1));
+        if (sub_ch != sub_ch_map.end()) {
+            mhz = std::atol(int_str.c_str());
+            hz = (frac_str[0] - '0') * 100000 + sub_ch->second;
         }
+    } else {
+        mhz = std::atol(int_str.c_str());
+        const std::vector<unsigned> frac_multipliers = { 100000, 10000, 1000, 100, 10, 1 };
+
+        auto digit = frac_str.begin();
+        auto multi = frac_multipliers.begin();
+        while (digit != frac_str.end()) {
+            hz += (*digit - '0') * *multi;
+            ++digit;
+            ++multi;
+        }
+    }
+
+    if (mhz < 4000) {
+        fq = mhz * 1000000 + hz;
     }
 
     return fq;
@@ -735,6 +760,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     poptContext   popt_ctx;
     char         *audio_device = nullptr;
     int           print_help = 0;
+    int           normal_fq_fmt = 0;
 
     struct poptOption options_table[] = {
         { "rtl-dev",   'd', POPT_ARG_INT,    &settings.rtl_device, 0, "RTL-SDR device ID to use. Defaults to 0 if not set", "RTLDEVEID" },
@@ -742,13 +768,14 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "rf-gain",   'r', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
         { "lf-gain",   'l', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio gain in dB. Defaults to 3 if not set", "LFGAIN" },
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 25 if not set", "SQLLEVEL" },
-        { "audio-dev", 'a', POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
+        { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
+        { "fq-mode",     0, POPT_ARG_NONE,   &normal_fq_fmt, 0, "interpret the CHANNEL argument as a normal frequency in MHz", nullptr },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show this help message and quit", nullptr },
         POPT_TABLEEND
     };
 
     popt_ctx = poptGetContext(nullptr, argc, (const char**)argv, options_table, POPT_CONTEXT_POSIXMEHARDER);
-    poptSetOtherOptionHelp(popt_ctx, "[OPTION...] FREQUENCY");
+    poptSetOtherOptionHelp(popt_ctx, "[OPTION...] CHANNEL");
 
     // Parse options
     while ((ret = poptGetNextOpt(popt_ctx)) > 0);
@@ -780,20 +807,31 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
             poptPrintHelp(popt_ctx, stderr, 0);
             std::cerr << R"(
 sdrx is a simple software defined narrow band AM receiver using a RTL-SDR
-dongle as its hadware backend. It is mainly designed for use in the airband,
-118 to 138 MHz. The program is run from the command line and the frequency to
-listen to is given as an argument in MHz with a dot (.) as the decimal
-delimiter. The squelch is adaptive with respect to the current noise floor
-and the squelch level is given as a SNR value in dB. Audio is played using ALSA.
-Examples:
+dongle as its hadware backend. It is mainly designed for use in the 118 to
+138 MHz airband. The program is run from the command line and the channel to
+listen to is given as an argument in standard six digit aeronautical notation.
+Both the legacy (25kHz channel separation) and new (8.33kHz channel separation)
+notations are supported, i.e. 118.275 and 118.280 both mean the frequency
+118.275 MHz.
 
-Listen to 122.450 MHz with 40dB of RF gain and 8dB of audio gain:
+The squelch is adaptive with respect to the current noise floor and the squelch
+level is given as a SNR value in dB. Audio is played using ALSA.
+
+Use the --fq-mode option to give the frequency in MHz instead of as a channel
+number. Examples:
+
+Listen to the channel 122.450 MHz with 40dB of RF gain and 8dB of audio gain:
 
     $ sdrx --rf-gain 40 --lf-gain 8 122.450
 
-Listen to 118.100 MHz with 34dB of RF gain, 12dB of audio gain and 18dB squelch:
+Listen to the channel 118.105 with 34dB of RF gain, 12dB of audio gain and
+18dB squelch:
 
-    $ sdrx --rf-gain 34 --lf-gain 12 --sql-level 18 118.100
+    $ sdrx --rf-gain 34 --lf-gain 12 --sql-level 18 118.105
+
+Listen to the frequency 118.111 MHz:
+
+    $ sdrx --fq-mode 118.111003
 )"
             << std::endl;
             ret = -1;
@@ -820,9 +858,12 @@ Listen to 118.100 MHz with 34dB of RF gain, 12dB of audio gain and 18dB squelch:
             if (poptPeekArg(popt_ctx) != nullptr) {
                 const char *arg = poptGetArg(popt_ctx);
 
-                settings.fq = parse_fq(arg, AERONAUTICAL_CHANNEL);
+                bool fq_type = AERONAUTICAL_CHANNEL;
+                if (normal_fq_fmt) fq_type = NORMAL_FQ;
+
+                settings.fq = parse_fq(arg, fq_type);
                 if (settings.fq == 0) {
-                    std::cerr << "Error: Invalid frequency given: " << arg << std::endl;
+                    std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") << " given: " << arg << std::endl;
                     ret = -1;
                 } else if (settings.fq < 45000000 || settings.fq > 1800000000) {
                     fprintf(stderr, "Error: Invalid frequency given: %" PRIu32 "Hz\n", settings.fq);
@@ -917,9 +958,9 @@ int main(int argc, char** argv) {
 
     std::cout << "Setting up device with ";
     std::cout << "Fq=" << settings.fq << "Hz, ";
-    std::cout << "Fq Corr=" << settings.fq_corr << "ppm, ";
+    std::cout << "Corr=" << settings.fq_corr << "ppm, ";
     std::cout << "Bw=" << bw << "Hz, ";
-    std::cout << "RF gain=" << settings.rf_gain << "dB, ";
+    std::cout << "Gain=" << settings.rf_gain << "dB, ";
     std::cout << "Sample rate=" << sample_rate << " samples/s";
     std::cout << std::endl;
 
@@ -932,7 +973,7 @@ int main(int argc, char** argv) {
     // Check what happend
     uint32_t actual_sample_rate = rtlsdr_get_sample_rate(input_state.rtl_device);
     if (actual_sample_rate != sample_rate) {
-        std::cout << "Actual Sample rate: " << actual_sample_rate << "samples/s" << std::endl;
+        std::cerr << "Warning: Actual Sample rate: " << actual_sample_rate << "samples/s. Program will not work." << std::endl;
     }
 
     sigact.sa_handler = signal_handler;
