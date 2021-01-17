@@ -65,7 +65,7 @@ be listed with --help:
     $ ./sdrx --help
     $ ./sdrx --rf-gain 30 122.455
 
-If you like to use frequency notation instead of channel notation, use the
-`--fq-mode` option:
+If you like to use frequency notation in MHz instead of channel notation,
+use the `--fq-mode` option:
 
     $ ./sdrx --fq-mode 118.111034
