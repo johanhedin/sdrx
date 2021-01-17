@@ -166,6 +166,9 @@ struct OutputState {
     unsigned        sql_wait;
     unsigned        fft_samples;
     bool            sql_open;
+    std::vector<float> hi_energy;
+    std::vector<float> lo_energy;
+    unsigned           energy_idx;
     Settings        settings;
 };
 
@@ -385,9 +388,27 @@ static void alsa_write_cb(OutputState &ctx) {
                 sig_level += std::norm(ctx.fft_out[i]);
             }
 
+            // Determine spectal imbalance (indicating unwanted frequency offset)
+            // Note: This is a quick hack. Redo properly
+            float low_energy = 0.0f;
+            float hi_energy = 0.0f;
+            for (unsigned i = 0; i < 256; i++) {
+                hi_energy  += std::norm(ctx.fft_out[i]);
+                low_energy += std::norm(ctx.fft_out[i+128]);
+            }
+
+            hi_energy -= std::norm(ctx.fft_out[0]);
+            hi_energy -= std::norm(ctx.fft_out[1]);
+            ctx.lo_energy[ctx.energy_idx] = low_energy / 256;
+            ctx.hi_energy[ctx.energy_idx] = hi_energy / 254;
+            if (++ctx.energy_idx == 10) ctx.energy_idx = 0;
+            low_energy /= 256;
+            hi_energy /= 254;
+
             // In AM we have DSB so the user signal is x2
             //sig_level = sig_level / 2.0f;
 
+            float imbalance = 1.0f;
             float noise = (ref_level_lo+ref_level_hi)/2;
             float snr = 20 * std::log10((sig_level) / noise);
 
@@ -398,7 +419,24 @@ static void alsa_write_cb(OutputState &ctx) {
             }
 
             if (++ctx.sql_wait >= 10) {
-                printf("Sql %s. Levels (lo|mid|hi|SNR): %.4f|%.4f|%.4f|%.4f\n", ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr);
+                low_energy = 0.0f;
+                hi_energy = 0.0f;
+                for (unsigned i = 0; i < 10; ++i) {
+                    low_energy += ctx.lo_energy[i];
+                    hi_energy += ctx.hi_energy[i];
+                }
+
+                low_energy /= 10;
+                hi_energy /= 10;
+
+                if (low_energy > 0.0f) {
+                    imbalance = hi_energy / low_energy;
+                }
+
+                imbalance = hi_energy - low_energy;
+
+                printf("Sql %s. Levels (lo|mid|hi|SNR|imbalance): %.4f|%.4f|%.4f|%.4f|%.4f\n",
+                       ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
 
                 ctx.sql_wait = 0;
             }
@@ -545,6 +583,9 @@ static void alsa_worker(struct OutputState &output_state) {
     ctx.sql_wait       = 0;
     ctx.fft_samples    = 0;
     ctx.sql_open       = false;
+    ctx.energy_idx     = 0;
+    ctx.hi_energy.reserve(10);
+    ctx.lo_energy.reserve(10);
 
     // Create FFT window
     // Hamming: 0.54-0.46cos(2*pi*x/N), 0 <= n <= N. Length L = N+1
@@ -874,7 +915,7 @@ Listen to the frequency 118.111 MHz:
                     ret = -1;
                 }
             } else {
-                std::cerr << "Error: No frequency given" << std::endl;
+                std::cerr << "Error: No channel/frequency given" << std::endl;
                 ret = -1;
             }
 
