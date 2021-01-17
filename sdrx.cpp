@@ -349,15 +349,20 @@ static void alsa_write_cb(OutputState &ctx) {
         //
         // Contents of fft_out:
         //
-        // 0          -> FFT_SIZE/2-1 : Positive frequencies in increasing order
-        // FFT_SIZE/2 -> FFT_SIZE-1   : Negative frequencies in increasing order
+        // Index                         Contents
+        // --------------------------------------------------------------------
+        // 0                           : DC part
+        // 1           -> FFT_SIZE/2-1 : Positive frequencies in increasing order
+        // FFT_SIZE/2                  : Nyquist component. Common to both the negative and positive parts
+        // FFT_SIZE/2+1 -> FFT_SIZE-1  : Negative frequencies in increasing order
         //
         // If the IQ signal is at 110.000MHz and Fs == 2MS/s we can represent
         // a band between 109.000 and 111.000 MHz. The sub-band 110 -> 111 is
-        // in samples 0:FFT_SIZE/2-1 and the sub-band 109 -> 110 is in samples
-        // FFT_SIZE/2:FFT_SIZE-1
+        // in samples 1:FFT_SIZE/2-1 and the sub-band 109 -> 110 is in samples
+        // FFT_SIZE/2+1:FFT_SIZE-1
         //
         // http://www.fftw.org/fftw3.pdf chapter 4.8
+        // https://www.gaussianwaves.com/2015/11/interpreting-fft-results-complex-dft-frequency-bins-and-fftshift
         //
         if (ctx.fft_samples == FFT_SIZE) {
             fftwf_execute(ctx.fft_plan);
@@ -389,26 +394,20 @@ static void alsa_write_cb(OutputState &ctx) {
             }
 
             // Determine spectal imbalance (indicating unwanted frequency offset)
-            // Note: This is a quick hack. Redo properly
-            float low_energy = 0.0f;
+            float lo_energy = 0.0f;
             float hi_energy = 0.0f;
-            for (unsigned i = 0; i < 256; i++) {
-                hi_energy  += std::norm(ctx.fft_out[i]);
-                low_energy += std::norm(ctx.fft_out[i+128]);
+            for (unsigned i = 1; i < FFT_SIZE/2; i++) {
+                hi_energy += std::norm(ctx.fft_out[i]);
+                lo_energy += std::norm(ctx.fft_out[i+FFT_SIZE/2]);
             }
 
-            hi_energy -= std::norm(ctx.fft_out[0]);
-            hi_energy -= std::norm(ctx.fft_out[1]);
-            ctx.lo_energy[ctx.energy_idx] = low_energy / 256;
-            ctx.hi_energy[ctx.energy_idx] = hi_energy / 254;
+            ctx.lo_energy[ctx.energy_idx] = lo_energy / 255;
+            ctx.hi_energy[ctx.energy_idx] = hi_energy / 255;
             if (++ctx.energy_idx == 10) ctx.energy_idx = 0;
-            low_energy /= 256;
-            hi_energy /= 254;
 
             // In AM we have DSB so the user signal is x2
             //sig_level = sig_level / 2.0f;
 
-            float imbalance = 1.0f;
             float noise = (ref_level_lo+ref_level_hi)/2;
             float snr = 20 * std::log10((sig_level) / noise);
 
@@ -419,21 +418,17 @@ static void alsa_write_cb(OutputState &ctx) {
             }
 
             if (++ctx.sql_wait >= 10) {
-                low_energy = 0.0f;
+                lo_energy = 0.0f;
                 hi_energy = 0.0f;
                 for (unsigned i = 0; i < 10; ++i) {
-                    low_energy += ctx.lo_energy[i];
+                    lo_energy += ctx.lo_energy[i];
                     hi_energy += ctx.hi_energy[i];
                 }
 
-                low_energy /= 10;
+                lo_energy /= 10;
                 hi_energy /= 10;
 
-                if (low_energy > 0.0f) {
-                    imbalance = hi_energy / low_energy;
-                }
-
-                imbalance = hi_energy - low_energy;
+                float imbalance = hi_energy - lo_energy;
 
                 printf("Sql %s. Levels (lo|mid|hi|SNR|imbalance): %.4f|%.4f|%.4f|%.4f|%.4f\n",
                        ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
