@@ -361,6 +361,11 @@ static void alsa_write_cb(OutputState &ctx) {
         // in samples 1:FFT_SIZE/2-1 and the sub-band 109 -> 110 is in samples
         // FFT_SIZE/2+1:FFT_SIZE-1
         //
+        // Since our sampling frequency is 16kHz and we are processing IQ,
+        // the "band" we observe is fc +/- 8Khz and every bin represent
+        // 16000/FFT_SIZE (31.25Hz for a fft size of 512). Index 0 is thus
+        // fc, index 1 fc + 31.25 and index FFT_SIZE-1 is fc - 31.25.
+        //
         // http://www.fftw.org/fftw3.pdf chapter 4.8
         // https://www.gaussianwaves.com/2015/11/interpreting-fft-results-complex-dft-frequency-bins-and-fftshift
         //
@@ -371,6 +376,7 @@ static void alsa_write_cb(OutputState &ctx) {
             // sort-of, but is not correct.
             float ref_level_lo = 0.0f;
             float sig_level    = 0.0f;
+            float noise_level  = 0.0f;
             float ref_level_hi = 0.0f;
 
             // First part of the signal
@@ -393,6 +399,28 @@ static void alsa_write_cb(OutputState &ctx) {
                 sig_level += std::norm(ctx.fft_out[i]);
             }
 
+            // More correct sql calculation
+            // Include DC?
+            sig_level = 0.0f;
+            for (unsigned i = 1; i < 91; i++) {
+                // About 2.8kHz +/- Fc
+                sig_level += std::norm(ctx.fft_out[i]);
+                sig_level += std::norm(ctx.fft_out[FFT_SIZE - i]);
+            }
+            //sig_level += std::norm(ctx.fft_out[0]);
+            sig_level /= 180;
+
+            ref_level_hi = 0.0f;
+            ref_level_lo = 0.0f;
+            for (unsigned i = 112; i < 157; i++) {
+                // About 3.5kHz to 4.9kHz
+                ref_level_hi += std::norm(ctx.fft_out[i]);
+                ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]);
+            }
+            ref_level_hi /= 45;
+            ref_level_lo /= 45;
+            noise_level = (ref_level_hi + ref_level_lo) / 2;
+
             // Determine spectal imbalance (indicating unwanted frequency offset)
             float lo_energy = 0.0f;
             float hi_energy = 0.0f;
@@ -408,10 +436,15 @@ static void alsa_write_cb(OutputState &ctx) {
             // In AM we have DSB so the user signal is x2
             //sig_level = sig_level / 2.0f;
 
-            float noise = (ref_level_lo+ref_level_hi)/2;
-            float snr = 20 * std::log10((sig_level) / noise);
+            //float noise = (ref_level_lo+ref_level_hi)/2;
+            //float snr = 20 * std::log10((sig_level) / noise);
+            float snr2 = 20 * std::log10(sig_level / noise_level);
 
-            if (snr > ctx.settings.sql_level) {
+            sig_level    = 10 * std::log10(sig_level);
+            ref_level_hi = 10 * std::log10(ref_level_hi);
+            ref_level_lo = 10 * std::log10(ref_level_lo);
+
+            if (snr2 > ctx.settings.sql_level) {
                 ctx.sql_open = true;
             } else {
                 ctx.sql_open = false;
@@ -431,7 +464,7 @@ static void alsa_write_cb(OutputState &ctx) {
                 float imbalance = hi_energy - lo_energy;
 
                 printf("Sql %s. Levels (lo|mid|hi|SNR|imbalance): %.4f|%.4f|%.4f|%.4f|%.4f\n",
-                       ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
+                       ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr2, imbalance);
 
                 ctx.sql_wait = 0;
             }
