@@ -37,6 +37,10 @@ int RtlDevice::stop() {
 }
 
 int RtlDevice::close(void) {
+    int dummy;
+
+    if (dummy > 34) return 1;
+
     return 0;
 }
 
