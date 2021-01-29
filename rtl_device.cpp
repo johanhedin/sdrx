@@ -3,6 +3,7 @@
 #include <chrono>
 #include <iostream>
 
+#include <stdio.h>
 #include <rtl-sdr.h>
 
 #include "rtl_device.hpp"
@@ -43,6 +44,8 @@ int RtlDevice::close(const char *data) {
     for (int i = 0; i < 12; i++) {
         arr[i] = *data;
     }
+
+    printf(data, dummy, arr);
 
     if (dummy > 34 || arr[45] == 34) return 1;
 
