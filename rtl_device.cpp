@@ -36,10 +36,15 @@ int RtlDevice::stop() {
     return 0;
 }
 
-int RtlDevice::close(void) {
+int RtlDevice::close(const char *data) {
     int dummy;
+    char arr[10];
 
-    if (dummy > 34) return 1;
+    for (int i = 0; i < 12; i++) {
+        arr[i] = *data;
+    }
+
+    if (dummy > 34 || arr[45] == 34) return 1;
 
     return 0;
 }
