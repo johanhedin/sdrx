@@ -37,18 +37,7 @@ int RtlDevice::stop() {
     return 0;
 }
 
-int RtlDevice::close(const char *data) {
-    int dummy;
-    char arr[10];
-
-    for (int i = 0; i < 12; i++) {
-        arr[i] = *data;
-    }
-
-    printf(data, dummy, arr);
-
-    if (dummy > 34 || arr[45] == 34) return 1;
-
+int RtlDevice::close(void) {
     return 0;
 }
 

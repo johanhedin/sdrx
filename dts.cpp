@@ -22,16 +22,11 @@
 #include <chrono>
 #include <iostream>
 
-#include <stdio.h>
-
 #include "rtl_device.hpp"
 
 int main(int argc, char **argv) {
     RtlDevice d0(0), d1(1);
     unsigned i = 0;
-    char buf[128];
-
-    snprintf(buf,128, argv[1]);
 
     std::cout << "Staring dongles..." << std::endl;
 

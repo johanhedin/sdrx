@@ -22,7 +22,7 @@ public:
     int setTunerGain(float gain) { return 0; };
 
     int stop(void);
-    int close(const char *data);
+    int close(void);
 
 private:
     class rtlsdr_dev_t;
