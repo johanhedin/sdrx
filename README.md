@@ -89,18 +89,20 @@ A typical output look like this:
     Sql   open. Levels (lo|mid|hi|SNR|imbalance): -21.79| 16.90|-24.18| 39.72|-30.66
     ...
 
-mid is the power level in dB for the center band, i.e fc +/- 2.8kHz and lo and
-hi are the power levels for the bands fc - 3.5-4.9kHz and fc + 3.5-4.9kHz.
+**mid** is the power level in dB for the center band, i.e fc +/- 2.8kHz and
+**lo** and **hi** are the power levels for the bands fc - 3.5-4.9kHz and
+fc + 3.5-4.9kHz.
 
 The noise level is thus estimated as the power just outside of where the
-modulated audo resides. The SNR is the difference between "signal power" and
-"noise power".
+modulated audo resides. **SNR** is the difference between "signal power" and
+"noise power" and is checked against the wanted squelch level to determine if
+audio is played or not.
 
-imbalance is a measure of how "off" your receiver is compared to the frequency
+**imbalance** is a measure of how "off" your receiver is compared to the frequency
 that the transmitter is using. If it is negative, you are tuned above the
 transmitter and if it is positive you are tuned below the transmitter frequency.
 
-The imbalance determined by checking the energy balance between "negative" and
-"positive" frequenies from the FFT used for the squelch. Since AM is a symetric
-modulation around the carrier, the imbalance should be 0 if you are tuned
-to the transmitters frequency.
+The imbalance is determined by calculating the energy balance between "negative"
+and "positive" frequencies from the FFT used for the squelch. Since AM is a
+symetric modulation around the carrier, the imbalance should be 0 if you are
+tuned to the transmitters frequency.
