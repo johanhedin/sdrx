@@ -21,19 +21,12 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
-#include <cmath>
-#include <stdio.h>
 
 #include "rtl_device.hpp"
 
 int main(int argc, char **argv) {
     RtlDevice d0(0), d1(1);
     unsigned i = 0;
-    float sample1, sample2;
-
-    sscanf(argv[2], "%f %f", &sample1, &sample2);
-    double power = std::pow(10.0f, sample1) * sample2;
-    std::cout << "Power is: " << power << std::endl;
 
     std::cout << "Staring dongles..." << std::endl;
 
