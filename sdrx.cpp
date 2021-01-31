@@ -118,7 +118,7 @@ static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 // Datatype to hold the sdrx settins
 class Settings {
 public:
-    Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(3.0f), sql_level(25.0f), audio_device("default"), fq(0) {}
+    Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(3.0f), sql_level(15.0f), audio_device("default"), fq(0) {}
     int         rtl_device;   // RTL-SDR device to use (in id form)
     int         fq_corr;      // Frequency correction in ppm
     float       rf_gain;      // RF gain in dB
@@ -166,7 +166,7 @@ struct OutputState {
 
 
 static void signal_handler(int signo) {
-    printf("Signal received. Stopping...\n");
+    std::cout << "Signal received. Stopping..." << std::endl;
     quit = 1;
 }
 
@@ -425,7 +425,7 @@ static void alsa_write_cb(OutputState &ctx) {
 
                 float imbalance = hi_energy - lo_energy;
 
-                printf("Sql %s. Levels (lo|mid|hi|SNR|imbalance): %.4f|%.4f|%.4f|%.4f|%.4f\n",
+                fprintf(stdout, "Sql %s. Levels (lo|mid|hi|SNR|imbalance): %6.2f|%6.2f|%6.2f|%6.2f|%6.2f\n",
                        ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
 
                 ctx.sql_wait = 0;
@@ -802,7 +802,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm. Defaults to 0 if not set", "FQCORR" },
         { "rf-gain",   'r', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
         { "lf-gain",   'l', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio gain in dB. Defaults to 3 if not set", "LFGAIN" },
-        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 25 if not set", "SQLLEVEL" },
+        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 15 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
         { "fq-mode",     0, POPT_ARG_NONE,   &normal_fq_fmt, 0, "interpret the CHANNEL argument as a normal frequency in MHz", nullptr },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show this help message and quit", nullptr },
@@ -857,7 +857,7 @@ instead of as a channel number.
 
 Examples:
 
-Listen to the channel 122.450 MHz with 40dB of RF gain and 8dB of audio gain:
+Listen to the channel 122.450 with 40dB of RF gain and 8dB of audio gain:
 
     $ sdrx --rf-gain 40 --lf-gain 8 122.450
 
@@ -1039,7 +1039,10 @@ int main(int argc, char** argv) {
     // IQ_BUF_SIZE is the size of the callback buffer. This will become len
     // in the data callback.
     ret = rtlsdr_read_async(input_state.rtl_device, iq_cb, &input_state, 4, IQ_BUF_SIZE);
-    if (ret < 0) { printf("Error: rtlsdr_read_async returned %d\n", ret); return(0); }
+    if (ret < 0) {
+        std::cerr << "Error: rtlsdr_read_async returned: " << ret << std::endl;
+        return(0);
+    }
 
     while (!quit) {
         sleep(1);
@@ -1048,8 +1051,8 @@ int main(int argc, char** argv) {
     dongle_thread.join();
     alsa_thread.join();
 
-    printf("Closing rtl device.\n");
+    std::cout << "Closing RTL device." << std::endl;
     rtlsdr_close(input_state.rtl_device);
 
-    printf("Stopped.\n");
+    std::cout << "Stopped." << std::endl;
 }
