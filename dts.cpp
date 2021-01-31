@@ -21,6 +21,7 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
+#include <cmath>
 
 #include "rtl_device.hpp"
 
@@ -28,7 +29,7 @@ int main(int argc, char **argv) {
     RtlDevice d0(0), d1(1);
     unsigned i = 0;
     float sample = 2.3f;
-    double power = sample * sample;
+    double power = std::pow(10.0f, sample) * sample;
     std::cout << "Power is: " << power << std::endl;
 
     std::cout << "Staring dongles..." << std::endl;
