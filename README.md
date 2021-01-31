@@ -2,6 +2,7 @@ sdrx
 ====
 
 ![C/C++ CI](https://github.com/johanhedin/sdrx/workflows/C/C++%20CI/badge.svg)
+![CodeQL](https://github.com/johanhedin/sdrx/workflows/CodeQL/badge.svg)
 
 `sdrx` is a simple software defined narrow band AM receiver that uses a RTL-SDR
 USB dongle as it's hardware part. It's main purpous is to act as a test bench
