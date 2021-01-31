@@ -27,6 +27,9 @@
 int main(int argc, char **argv) {
     RtlDevice d0(0), d1(1);
     unsigned i = 0;
+    float sample = 2.3f;
+    double power = sample * sample;
+    std::cout << "Power is: " << power << std::endl;
 
     std::cout << "Staring dongles..." << std::endl;
 
