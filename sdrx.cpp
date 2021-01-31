@@ -115,15 +115,6 @@ static uint32_t samples;
 static uint32_t frames;
 static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 
-// Decimate by 75
-static MSD decimator(std::vector<MSD::Stage>{
-    {3, coeff_dec_2400k_800k},
-    {5, coeff_dec_800k_160k},
-    {5, coeff_dec_160k_32k}
-//    {2, coeff_dec_32k_16k}
-});
-
-
 // Datatype to hold the sdrx settins
 class Settings {
 public:
@@ -140,36 +131,37 @@ public:
 
 #define LEVEL_SIZE 10
 struct InputState {
-    rtlsdr_dev_t   *rtl_device;
-    RB<iqsample_t> *rb_ptr;
+    rtlsdr_dev_t   *rtl_device;           // RTL device
+    MSD            *ds;                   // Downsampler
+    RB<iqsample_t> *rb_ptr;               // Input -> Output buffer
+    Settings        settings;             // System wide settings
     float           i_levels[LEVEL_SIZE];
     float           q_levels[LEVEL_SIZE];
     unsigned        num_levels;
-    Settings        settings;
 };
 
 
 #define FFT_SIZE 512
 struct OutputState {
-    snd_pcm_t      *pcm_handle;
-    RB<iqsample_t> *rb_ptr;
-    struct timeval  last_stat_time;
-    int16_t        *silence[2048];
-    float           audio_buffer_float[2048];
-    int16_t         audio_buffer_s16[2048];
-    FIR            *audio_filter;
-    float           gain;
-    iqsample_t      fft_in[FFT_SIZE];
-    iqsample_t      fft_out[FFT_SIZE];
-    float           window[FFT_SIZE+1];
-    fftwf_plan      fft_plan;
-    unsigned        sql_wait;
-    unsigned        fft_samples;
-    bool            sql_open;
+    snd_pcm_t         *pcm_handle;               // ALSA PCM device
+    RB<iqsample_t>    *rb_ptr;                   // Input -> Output buffer
+    struct timeval     last_stat_time;
+    int16_t            silence[2048];
+    float              audio_buffer_float[2048];
+    int16_t            audio_buffer_s16[2048];
+    FIR               *audio_filter;
+    float              gain;
+    iqsample_t         fft_in[FFT_SIZE];
+    iqsample_t         fft_out[FFT_SIZE];
+    float              window[FFT_SIZE+1];
+    fftwf_plan         fft_plan;
+    unsigned           sql_wait;
+    unsigned           fft_samples;
+    bool               sql_open;
     std::vector<float> hi_energy;
     std::vector<float> lo_energy;
     unsigned           energy_idx;
-    Settings        settings;
+    Settings           settings;
 };
 
 
@@ -211,17 +203,15 @@ static snd_pcm_t *open_alsa_dev(const std::string &device_name) {
     pcm_sample_rate     = 16000;                 // 16kHz
     pcm_sample_format   = SND_PCM_FORMAT_S16;    // Signed 16 bit samples
     num_channels        = 1;                     // Mono
-    //pcm_period         = 2048;                  // Play chunks of this many frames 128ms
-    pcm_period          = 512;                   // Play chunks of this many frames 32ms
-    //pcm_buffer_size    = pcm_period * 4;        // Playback buffer is 4 periods, i.e. 512ms
+    pcm_period          = 512;                   // Play chunks of this many frames (512/16000 -> 32ms)
     pcm_buffer_size     = pcm_period * 8;        // Playback buffer is 4 periods, i.e. 128ms
     pcm_note_threshold  = pcm_period;            // Notify us when we can write at least this number of frames
-    pcm_start_threshold = pcm_period*4;          // Start playing when this many frames are available in the device buffer
+    pcm_start_threshold = pcm_period*4;          // Start playing when this many frames have been written to the device buffer
 
     // Summary:
     // poll will return when we can write at least pcm_period samples. Actual
-    // playback will not start until pcm_start_threshold has been written to
-    // the buffer
+    // playback will not start until pcm_start_threshold samples has been
+    // written to the device buffer
 
     std::cout << "Opening ALSA device '" << device_name << "' with:" << std::endl;
     std::cout << "    Sample rate: " << pcm_sample_rate << " samples/s" << std::endl;
@@ -335,13 +325,13 @@ static void alsa_write_cb(OutputState &ctx) {
         size_t samples_to_write = std::min(samples_avail, (size_t)256);
 
         if (samples_to_write != 256) {
-            std::cout << "RB Error: did not get 512 samples. Got " << samples_to_write << std::endl;
+            std::cout << "RB Error: did not get 256 samples. Got " << samples_to_write << std::endl;
         }
 
         for (size_t j = 0; j < samples_to_write; j++) {
             ctx.fft_in[ctx.fft_samples] = iq_buffer[j] * ctx.window[ctx.fft_samples];  // Fill FFT in buffer
             ctx.fft_samples++;
-            ctx.audio_buffer_float[j] = abs(iq_buffer[j]); // Demodulate AM signal
+            ctx.audio_buffer_float[j] = std::abs(iq_buffer[j]); // Demodulate AM signal
         }
         ctx.rb_ptr->commitRead(samples_to_write);
 
@@ -372,56 +362,31 @@ static void alsa_write_cb(OutputState &ctx) {
         if (ctx.fft_samples == FFT_SIZE) {
             fftwf_execute(ctx.fft_plan);
 
-            // Note: The calculations below need to be reworked. They work
-            // sort-of, but is not correct.
-            float ref_level_lo = 0.0f;
-            float sig_level    = 0.0f;
-            float noise_level  = 0.0f;
-            float ref_level_hi = 0.0f;
-
-            // First part of the signal
-            for (unsigned i = 1; i < 32; i++) {
-                sig_level += std::norm(ctx.fft_out[i]);
-            }
-
-            // Hi ref level
-            for (unsigned i = 96; i < 159; i++) {
-                ref_level_hi += std::norm(ctx.fft_out[i]);
-            }
-
-            // Lo ref level
-            for (unsigned i = 353; i < 416; i++) {
-                ref_level_lo += std::norm(ctx.fft_out[i]);
-            }
-
-            // Second part of the signal
-            for (unsigned i = 481; i < 512; i++) {
-                sig_level += std::norm(ctx.fft_out[i]);
-            }
-
-            // More correct sql calculation
-            // Include DC?
-            sig_level = 0.0f;
-            for (unsigned i = 1; i < 91; i++) {
+            // Energy/power calculations for squelch and spectral imbalance
+            float sig_level = 0.0f;
+            for (unsigned i = 3; i < 91; i++) {
                 // About 2.8kHz +/- Fc
                 sig_level += std::norm(ctx.fft_out[i]);
                 sig_level += std::norm(ctx.fft_out[FFT_SIZE - i]);
             }
+            // Including DC seem to increase base level with ~5dB
             //sig_level += std::norm(ctx.fft_out[0]);
-            sig_level /= 180;
+            sig_level /= 176;
 
-            ref_level_hi = 0.0f;
-            ref_level_lo = 0.0f;
+            float ref_level_hi = 0.0f;
+            float ref_level_lo = 0.0f;
             for (unsigned i = 112; i < 157; i++) {
                 // About 3.5kHz to 4.9kHz
-                ref_level_hi += std::norm(ctx.fft_out[i]);
-                ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]);
+                ref_level_hi += std::norm(ctx.fft_out[i]) * passband_shape[i];
+                ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]) * passband_shape[FFT_SIZE - i];
+                //ref_level_hi += std::norm(ctx.fft_out[i]);
+                //ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]);
             }
             ref_level_hi /= 45;
             ref_level_lo /= 45;
-            noise_level = (ref_level_hi + ref_level_lo) / 2;
+            float noise_level = (ref_level_hi + ref_level_lo) / 2;
 
-            // Determine spectal imbalance (indicating unwanted frequency offset)
+            // Determine spectral imbalance (indicating frequency offset between signal and receiver fqs)
             float lo_energy = 0.0f;
             float hi_energy = 0.0f;
             for (unsigned i = 1; i < FFT_SIZE/2; i++) {
@@ -433,18 +398,15 @@ static void alsa_write_cb(OutputState &ctx) {
             ctx.hi_energy[ctx.energy_idx] = hi_energy / 255;
             if (++ctx.energy_idx == 10) ctx.energy_idx = 0;
 
-            // In AM we have DSB so the user signal is x2
-            //sig_level = sig_level / 2.0f;
+            // Calculate SNR
+            float snr = 10 * std::log10(sig_level / noise_level);
 
-            //float noise = (ref_level_lo+ref_level_hi)/2;
-            //float snr = 20 * std::log10((sig_level) / noise);
-            float snr2 = 20 * std::log10(sig_level / noise_level);
-
+            // Convert levels to dB
             sig_level    = 10 * std::log10(sig_level);
             ref_level_hi = 10 * std::log10(ref_level_hi);
             ref_level_lo = 10 * std::log10(ref_level_lo);
 
-            if (snr2 > ctx.settings.sql_level) {
+            if (snr > ctx.settings.sql_level) {
                 ctx.sql_open = true;
             } else {
                 ctx.sql_open = false;
@@ -464,7 +426,7 @@ static void alsa_write_cb(OutputState &ctx) {
                 float imbalance = hi_energy - lo_energy;
 
                 printf("Sql %s. Levels (lo|mid|hi|SNR|imbalance): %.4f|%.4f|%.4f|%.4f|%.4f\n",
-                       ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr2, imbalance);
+                       ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
 
                 ctx.sql_wait = 0;
             }
@@ -472,6 +434,7 @@ static void alsa_write_cb(OutputState &ctx) {
             ctx.fft_samples = 0;
         }
 
+        // Final audio filter
         ctx.audio_filter->filter(ctx.audio_buffer_float, samples_to_write, ctx.audio_buffer_float);
 
         for (size_t j = 0; j < samples_to_write; j++) {
@@ -499,7 +462,6 @@ static void alsa_write_cb(OutputState &ctx) {
         }
     } else {
         // Underrrun
-        //std::cout << "    ring buffer underrun" << std::endl;
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, 512);
         if (ret < 0) {
             fprintf(stderr, "ALSA Error writei silence: %s\n", snd_strerror(ret));
@@ -693,7 +655,7 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
 
     // Acquire IQ ring buffer, decimate and write the result to the buffer
     if (ctx->rb_ptr->acquireWrite(&iq_buf_ptr, DECIMATED_SIZE)) {
-        decimator.decimate(buf, len, iq_buf_ptr, &decimated_out_len);
+        ctx->ds->decimate(buf, len, iq_buf_ptr, &decimated_out_len);
         if (!ctx->rb_ptr->commitWrite(decimated_out_len)) {
             printf("iq_rb write commit error\n");
         }
@@ -702,8 +664,8 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
             printf("Major sample rate calculation error!\n");
         }
 
-        ctx->i_levels[ctx->num_levels] = decimator.iMean();
-        ctx->q_levels[ctx->num_levels] = decimator.qMean();
+        ctx->i_levels[ctx->num_levels] = ctx->ds->iMean();
+        ctx->q_levels[ctx->num_levels] = ctx->ds->qMean();
         if (++ctx->num_levels == LEVEL_SIZE) {
             float i_lvl=0.0f, q_lvl=0.0f;
             for (unsigned i = 0; i < LEVEL_SIZE; i++) {
@@ -883,15 +845,17 @@ sdrx is a simple software defined narrow band AM receiver using a RTL-SDR
 dongle as its hadware backend. It is mainly designed for use in the 118 to
 138 MHz airband. The program is run from the command line and the channel to
 listen to is given as an argument in standard six digit aeronautical notation.
-Both the legacy (25kHz channel separation) and new (8.33kHz channel separation)
+Both the legacy 25kHz channel separation and the new 8.33kHz channel separation
 notations are supported, i.e. 118.275 and 118.280 both mean the frequency
 118.275 MHz.
 
 The squelch is adaptive with respect to the current noise floor and the squelch
 level is given as a SNR value in dB. Audio is played using ALSA.
 
-Use the --fq-mode option to give the frequency in MHz instead of as a channel
-number. Examples:
+The --fq-mode option (with no argument) can be used to give the frequency in MHz
+instead of as a channel number.
+
+Examples:
 
 Listen to the channel 122.450 MHz with 40dB of RF gain and 8dB of audio gain:
 
@@ -902,7 +866,7 @@ Listen to the channel 118.105 with 34dB of RF gain, 12dB of audio gain and
 
     $ sdrx --rf-gain 34 --lf-gain 12 --sql-level 18 118.105
 
-Listen to the frequency 118.111 MHz:
+Listen to the frequency 118.111003 MHz:
 
     $ sdrx --fq-mode 118.111003
 )"
@@ -964,10 +928,6 @@ int main(int argc, char** argv) {
     struct sigaction sigact;
     Settings         settings;
 
-    // Set numeric locale so that we can parse frequency with deciaml dot (.)
-    // instead of comma (,)
-    std::setlocale(LC_NUMERIC, "en_US.UTF-8");
-
     // Parse command line. Exit if incomplete or if help was requested
     if (parse_cmd_line(argc, argv, settings) < 0) {
         return 1;
@@ -985,21 +945,26 @@ int main(int argc, char** argv) {
     std::cout << "    Frequency: " << settings.fq << "Hz" << std::endl;
     */
 
-    //RB<iqsample_t> iq_rb(IQ_BUF_SIZE*8);
+    MSD downsampler(std::vector<MSD::Stage>{
+        {3, lp_ds_1200k_400k},
+        {5, lp_ds_400k_80k},
+        {5, lp_ds_80k_16k}
+    });
     RB<iqsample_t> iq_rb(256*16); // 16 chunks or 256ms
 
-    // Mute librtlsdr internal fprintf(stderr, "...");
+    // Mute librtlsdr internal fprintf(stderr, "..."); Will mute our own printouts as well...
     //freopen("/dev/null", "w", stderr);
 
     struct InputState input_state;
     input_state.settings   = settings;
     input_state.rtl_device = nullptr;
-    input_state.rb_ptr     =  &iq_rb;
+    input_state.ds         = &downsampler;
+    input_state.rb_ptr     = &iq_rb;
     input_state.num_levels = 0;
 
     ret = rtlsdr_open(&input_state.rtl_device, settings.rtl_device);
     if (ret < 0 || input_state.rtl_device == NULL) {
-        fprintf(stderr, "Error: Unable to open device %" PRIu32 ". ret = %d\n", settings.rtl_device, ret);
+        std::cerr << "Error: Unable to open device " << settings.rtl_device << ". ret = " << ret << std::endl;
         return 1;
     }
 
@@ -1059,8 +1024,8 @@ int main(int argc, char** argv) {
     quit = 0;
 
     struct OutputState output_state;
-    output_state.rb_ptr     =  &iq_rb;
-    output_state.settings   = settings;
+    output_state.rb_ptr   = &iq_rb;
+    output_state.settings = settings;
 
     std::thread alsa_thread(alsa_worker, std::ref(output_state));
     std::thread dongle_thread(dongle_worker, std::ref(input_state));
