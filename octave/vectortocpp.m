@@ -21,3 +21,4 @@ for i = 1:length(vec)
     str = [ str sprintf('\n') ];
 end
 str = [ str sprintf('};\n') ];
+endfunction
