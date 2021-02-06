@@ -55,6 +55,7 @@
 #include "msd.hpp"
 #include "rb.hpp"
 #include "fir.hpp"
+#include "agc.hpp"
 
 // Usefull notes:
 // libusb and threads: http://libusb.sourceforge.net/api-1.0/libusb_mtasync.html
@@ -161,6 +162,7 @@ struct OutputState {
     std::vector<float> hi_energy;
     std::vector<float> lo_energy;
     unsigned           energy_idx;
+    AGC                agc;
     Settings           settings;
 };
 
@@ -331,7 +333,7 @@ static void alsa_write_cb(OutputState &ctx) {
         for (size_t j = 0; j < samples_to_write; j++) {
             ctx.fft_in[ctx.fft_samples] = iq_buffer[j] * ctx.window[ctx.fft_samples];  // Fill FFT in buffer
             ctx.fft_samples++;
-            ctx.audio_buffer_float[j] = std::abs(iq_buffer[j]); // Demodulate AM signal
+            ctx.audio_buffer_float[j] = std::abs(ctx.agc.adjust(iq_buffer[j])); // Demodulate AGC adjusted AM signal
         }
         ctx.rb_ptr->commitRead(samples_to_write);
 
@@ -576,6 +578,9 @@ static void alsa_worker(struct OutputState &output_state) {
     ctx.energy_idx     = 0;
     ctx.hi_energy.reserve(10);
     ctx.lo_energy.reserve(10);
+    ctx.agc.setAttack(1.0f);
+    ctx.agc.setDecay(0.01f);
+    ctx.agc.setReference(1.0f);
 
     // Create FFT window
     // Hamming: 0.54-0.46cos(2*pi*x/N), 0 <= n <= N. Length L = N+1
