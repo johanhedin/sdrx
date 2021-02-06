@@ -75,31 +75,30 @@ use the `--fq-mode` option:
 Output
 ====
 Besides playing audio when the squelch is open, `sdrx` write signal power
-measurements to the console while running. How the printouts look change from
-time to time and the description below might not always be up-to-date.
+measurements to the console while running.
 
 A typical output look like this:
 
     $ ./sdrx -r 45 -l 9 118.105
     ...
-    Sql closed. Levels (lo|mid|hi|SNR|imbalance): -22.54|-22.55|-23.44|  0.42|  0.00
-    Sql closed. Levels (lo|mid|hi|SNR|imbalance): -22.14|-22.97|-22.21| -0.80|  0.00
-    Sql closed. Levels (lo|mid|hi|SNR|imbalance): -21.10|-22.25|-22.81| -0.38|  0.00
-    Sql   open. Levels (lo|mid|hi|SNR|imbalance): -21.36| 16.48|-21.72| 38.01|-12.28
-    Sql   open. Levels (lo|mid|hi|SNR|imbalance): -22.73| 16.61|-21.57| 38.72|-30.74
-    Sql   open. Levels (lo|mid|hi|SNR|imbalance): -21.79| 16.90|-24.18| 39.72|-30.66
+    118.105 closed. [lo|mid|hi|SNR|imbalance]: -22.54|-22.55|-23.44|  0.42|  0.00
+    118.105 closed. [lo|mid|hi|SNR|imbalance]: -22.14|-22.97|-22.21| -0.80|  0.00
+    118.105 closed. [lo|mid|hi|SNR|imbalance]: -21.10|-22.25|-22.81| -0.38|  0.00
+    118.105   open. [lo|mid|hi|SNR|imbalance]: -21.36| 16.48|-21.72| 38.01|-12.28
+    118.105   open. [lo|mid|hi|SNR|imbalance]: -22.73| 16.61|-21.57| 38.72|-30.74
+    118.105   open. [lo|mid|hi|SNR|imbalance]: -21.79| 16.90|-24.18| 39.72|-30.66
     ...
 
 **mid** is the power level in dB for the center band, i.e fc +/- 2.8kHz and
 **lo** and **hi** are the power levels for the bands fc - 3.5-4.9kHz and
 fc + 3.5-4.9kHz.
 
-The noise level is thus estimated as the power just outside of where the
-modulated audo resides. **SNR** is the difference between "signal power" and
-"noise power" and is checked against the wanted squelch level to determine if
-audio is played or not.
+The noise level is estimated as the power just outside of where the modulated
+audio resides. **SNR** is the difference between "signal power" and "noise power"
+and is checked against the wanted squelch level to determine if audio is played
+or not.
 
-**imbalance** is a measure of how "off" your receiver is compared to the frequency
+**imbalance** is a measure of how "off" the receiver is compared to the frequency
 that the transmitter is using. If it is negative, you are tuned above the
 transmitter and if it is positive you are tuned below the transmitter frequency.
 

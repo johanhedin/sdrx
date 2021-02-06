@@ -127,6 +127,7 @@ public:
     float       sql_level;    // Squelch level in dB (over noise level)
     std::string audio_device; // ALSA device to use for playback
     uint32_t    fq;           // Frequency to tune to
+    std::string channel;      // String representation of the channel, e.g. "118.105"
 };
 
 
@@ -427,8 +428,9 @@ static void alsa_write_cb(OutputState &ctx) {
 
                 float imbalance = hi_energy - lo_energy;
 
-                fprintf(stdout, "Sql %s. Levels (lo|mid|hi|SNR|imbalance): %6.2f|%6.2f|%6.2f|%6.2f|%6.2f\n",
-                       ctx.sql_open ? "  open":"closed", ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
+                fprintf(stdout, "%s %s. [lo|mid|hi|SNR|imbalance]: %6.2f|%6.2f|%6.2f|%6.2f|%6.2f\n",
+                        ctx.settings.channel.c_str(), ctx.sql_open ? "  open":"closed",
+                        ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
 
                 ctx.sql_wait = 0;
             }
@@ -903,6 +905,7 @@ Listen to the frequency 118.111003 MHz:
                 bool fq_type = AERONAUTICAL_CHANNEL;
                 if (normal_fq_fmt) fq_type = NORMAL_FQ;
 
+                settings.channel = arg;
                 settings.fq = parse_fq(arg, fq_type);
                 if (settings.fq == 0) {
                     std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") << " given: " << arg << std::endl;
