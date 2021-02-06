@@ -911,7 +911,7 @@ Listen to the frequency 118.111003 MHz:
                     std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") << " given: " << arg << std::endl;
                     ret = -1;
                 } else if (settings.fq < 45000000 || settings.fq > 1800000000) {
-                    fprintf(stderr, "Error: Invalid frequency given: %" PRIu32 "Hz\n", settings.fq);
+                    std::cerr << "Error: Invalid frequency given: " << settings.fq << "Hz" << std::endl;
                     ret = -1;
                 }
             } else {
