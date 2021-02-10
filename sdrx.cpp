@@ -119,7 +119,7 @@ static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 // Datatype to hold the sdrx settins
 class Settings {
 public:
-    Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(3.0f), sql_level(15.0f), audio_device("default"), fq(0) {}
+    Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(0.0f), sql_level(12.0f), audio_device("default"), fq(0) {}
     int         rtl_device;   // RTL-SDR device to use (in id form)
     int         fq_corr;      // Frequency correction in ppm
     float       rf_gain;      // RF gain in dB
@@ -808,8 +808,8 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "rtl-dev",   'd', POPT_ARG_INT,    &settings.rtl_device, 0, "RTL-SDR device ID to use. Defaults to 0 if not set", "RTLDEVEID" },
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm. Defaults to 0 if not set", "FQCORR" },
         { "rf-gain",   'r', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
-        { "lf-gain",   'l', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio gain in dB. Defaults to 3 if not set", "LFGAIN" },
-        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 15 if not set", "SQLLEVEL" },
+        { "lf-gain",   'l', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio gain in dB. Defaults to 0 if not set", "LFGAIN" },
+        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 12 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
         { "fq-mode",     0, POPT_ARG_NONE,   &normal_fq_fmt, 0, "interpret the CHANNEL argument as a normal frequency in MHz", nullptr },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show this help message and quit", nullptr },
@@ -894,7 +894,7 @@ Listen to the frequency 118.111003 MHz:
                 fprintf(stderr, "Error: Invalid RF gain given: %.4f\n", settings.rf_gain);
                 ret = -1;
             }
-            if (settings.sql_level < 0.0f || settings.sql_level > 50.0f) {
+            if (settings.sql_level < -10.0f || settings.sql_level > 50.0f) {
                 fprintf(stderr, "Error: Invalid SQL level given: %.4f\n", settings.sql_level);
                 ret = -1;
             }
