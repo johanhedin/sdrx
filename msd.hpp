@@ -35,7 +35,9 @@ public:
     };
 
     // Construct a MSD. Argument is a list of stage configurations
-    MSD(const std::vector<MSD::Stage> &stages) : m_(1), i_mean_lvl_(0.0f), q_mean_lvl_(0.0f), overload_(false), overload_count_(0) {
+    MSD(const std::vector<iqsample_t> &t, const std::vector<MSD::Stage> &stages) :
+      m_(1), i_mean_lvl_(0.0f), q_mean_lvl_(0.0f), overload_(false), overload_count_(0),
+      translator_(t), trans_pos_(0) {
         auto iter = stages.begin();
         while (iter != stages.end()) {
             stages_.push_back(MSD::S(iter->m, iter->coef));
@@ -90,7 +92,12 @@ public:
             i_mean_lvl_ += std::abs(i);
             q_mean_lvl_ += std::abs(q);
 
-            sample = iqsample_t(i, q);
+            if (translator_.size() != 0) {
+                sample = translator_[trans_pos_] * iqsample_t(i, q);
+                if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
+            } else {
+                sample = iqsample_t(i, q);
+            }
 
             auto stage_iter = stages_.begin();
             while (stage_iter != stages_.end()) {
@@ -172,6 +179,8 @@ private:
     float               q_mean_lvl_;
     bool                overload_;
     unsigned            overload_count_;
+    std::vector<iqsample_t> translator_;
+    unsigned                trans_pos_;
 };
 
 #endif // MSD_HPP

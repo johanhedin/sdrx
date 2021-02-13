@@ -119,7 +119,9 @@ static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 // Datatype to hold the sdrx settins
 class Settings {
 public:
-    Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(0.0f), sql_level(12.0f), audio_device("default"), fq(0) {}
+    Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(0.0f),
+                     sql_level(12.0f), audio_device("default"), fq(0),
+                     fq_offset(0) {}
     int         rtl_device;   // RTL-SDR device to use (in id form)
     int         fq_corr;      // Frequency correction in ppm
     float       rf_gain;      // RF gain in dB
@@ -128,6 +130,7 @@ public:
     std::string audio_device; // ALSA device to use for playback
     uint32_t    fq;           // Frequency to tune to
     std::string channel;      // String representation of the channel, e.g. "118.105"
+    int         fq_offset;    // Tune dongle this much "off" of the desired fq. Compensated in DDC
 };
 
 
@@ -806,6 +809,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     struct poptOption options_table[] = {
         { "rtl-dev",   'd', POPT_ARG_INT,    &settings.rtl_device, 0, "RTL-SDR device ID to use. Defaults to 0 if not set", "RTLDEVEID" },
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm. Defaults to 0 if not set", "FQCORR" },
+        { "fq-offset", 'o', POPT_ARG_INT,    &settings.fq_offset, 0, "tuner offset in kHz in steps of 25. Defaults to 0 if not set", "FQOFF" },
         { "rf-gain",   'r', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
         { "lf-gain",   'l', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio gain in dB. Defaults to 0 if not set", "LFGAIN" },
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 12 if not set", "SQLLEVEL" },
@@ -897,6 +901,15 @@ Listen to the frequency 118.111003 MHz:
                 fprintf(stderr, "Error: Invalid SQL level given: %.4f\n", settings.sql_level);
                 ret = -1;
             }
+            if (settings.fq_offset < -500 || settings.fq_offset > 500) {
+                std::cerr << "Error: Frequency offset must be within -500 to 500 kHz" << std::endl;
+                ret = -1;
+            } else if (settings.fq_offset % 25 != 0) {
+                std::cerr << "Error: Frequency offset must be in steps of 25" << std::endl;
+                ret = -1;
+            }
+
+            settings.fq_offset *= 1000;
 
             if (poptPeekArg(popt_ctx) != nullptr) {
                 const char *arg = poptGetArg(popt_ctx);
@@ -933,6 +946,8 @@ Listen to the frequency 118.111003 MHz:
 int main(int argc, char** argv) {
     int              ret;
     struct sigaction sigact;
+    uint32_t         sample_rate = 1200000;
+    uint32_t         bw = 300000;
     Settings         settings;
 
     // Parse command line. Exit if incomplete or if help was requested
@@ -945,14 +960,33 @@ int main(int argc, char** argv) {
     std::cout << "The folowing settings were given:" << std::endl;
     std::cout << "    RTL device: " << settings.rtl_device << std::endl;
     std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
+    std::cout << "    Frequency offset: " << settings.fq_offset << "kHz" << std::endl;
     std::cout << "    RF gain: " << settings.rf_gain << "dB" << std::endl;
     std::cout << "    LF (audio) gain: " << settings.lf_gain << "dB" << std::endl;
     std::cout << "    Squelch level: " << settings.sql_level << "dB" << std::endl;
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
     std::cout << "    Frequency: " << settings.fq << "Hz" << std::endl;
+    return 0;
     */
 
-    MSD downsampler(std::vector<MSD::Stage>{
+    std::vector<iqsample_t> translator;
+
+    if (settings.fq_offset != 0) {
+        int N = 144;              // fs / (25000/3) a.k.a 8.33kHz channels
+        //int rate = 1200000;
+        //int offset = 250000;
+        //int ch = 30;
+        for (int n = 0; n < N; n++) {
+            //std::complex<float> e(0.0f, -2.0f*M_PI*offset*n/rate);
+            //std::complex<float> e(0.0f, -2.0f * M_PI * n * ch/144.0f);
+            std::complex<float> e(0.0f, -2.0f * M_PI * n * (float)settings.fq_offset/1200000.0f);
+            translator.push_back(exp(e));
+        }
+
+        settings.fq -= settings.fq_offset;
+    }
+
+    MSD downsampler(translator, std::vector<MSD::Stage>{
         {3, lp_ds_1200k_400k},
         {5, lp_ds_400k_80k},
         {5, lp_ds_80k_16k}
@@ -997,9 +1031,6 @@ int main(int argc, char** argv) {
     std::cout << std::endl;
     free(tuner_gains);
     tuner_gains = nullptr;
-
-    uint32_t sample_rate = 1200000;
-    uint32_t bw = 300000;
 
     std::cout << "Setting up device with ";
     std::cout << "Fq=" << settings.fq << "Hz, ";
