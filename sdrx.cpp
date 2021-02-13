@@ -313,9 +313,8 @@ static void alsa_write_cb(OutputState &ctx) {
     gettimeofday(&current_time, NULL);
     ret = snd_pcm_avail_update(ctx.pcm_handle);
     if (ret < 0) {
-        fprintf(stderr, "ALSA Error pcm_avail: %s\n", snd_strerror(ret));
+        std::cerr << "ALSA Error pcm_avail: " << snd_strerror(ret) << std::endl;
         //snd_pcm_prepare(ctx.pcm_handle);
-        //continue;
     } else {
         if (current_time.tv_sec > ctx.last_stat_time.tv_sec + 1) {
             //fprintf(stdout, "ALSA available space: %d\n", ret);
@@ -459,7 +458,7 @@ static void alsa_write_cb(OutputState &ctx) {
             ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, samples_to_write);
         }
         if (ret < 0) {
-            fprintf(stderr, "ALSA Error writei real: %s\n", snd_strerror(ret));
+            std::cerr << "ALSA Error writei real: " << snd_strerror(ret) << std::endl;
             snd_pcm_prepare(ctx.pcm_handle);
         } else {
             //std::cout << "    frames written real: " << ret << std::endl;
@@ -468,7 +467,7 @@ static void alsa_write_cb(OutputState &ctx) {
         // Underrrun
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, 512);
         if (ret < 0) {
-            fprintf(stderr, "ALSA Error writei silence: %s\n", snd_strerror(ret));
+            std::cerr << "ALSA Error writei real: " << snd_strerror(ret) << std::endl;
             snd_pcm_prepare(ctx.pcm_handle);
         } else {
             std::cout << "Silence samples written: " << ret << std::endl;
