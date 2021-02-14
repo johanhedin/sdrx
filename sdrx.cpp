@@ -139,6 +139,7 @@ struct InputState {
     float           i_levels[LEVEL_SIZE];
     float           q_levels[LEVEL_SIZE];
     unsigned        num_levels;
+    unsigned char   iq_buf[IQ_BUF_SIZE];  // Jump buffer to handle Pi4 with 5.x kernel
 };
 
 
@@ -646,10 +647,18 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     iqsample_t        *iq_buf_ptr;
     unsigned           decimated_out_len;
 
+    if (len != IQ_BUF_SIZE) {
+        std::cerr << "Error: Unexpected number of iq samples: " << len << ". " << IQ_BUF_SIZE << " expected." << std::endl;
+        return;
+    }
+
     if (quit) {
         rtlsdr_cancel_async(ctx->rtl_device);
         return;
     }
+
+    // Copy to tmp buf to overcome slow access to data on Pi with kernel 5.x
+    memcpy(ctx->iq_buf, buf, IQ_BUF_SIZE);
 
     //
     // We use a ADC scale from -1.0 to 1.0. To calculate dBFS we can use:
@@ -659,7 +668,7 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
 
     // Acquire IQ ring buffer, decimate and write the result to the buffer
     if (ctx->rb_ptr->acquireWrite(&iq_buf_ptr, DECIMATED_SIZE)) {
-        ctx->ds->decimate(buf, len, iq_buf_ptr, &decimated_out_len);
+        ctx->ds->decimate(ctx->iq_buf, len, iq_buf_ptr, &decimated_out_len);
         if (!ctx->rb_ptr->commitWrite(decimated_out_len)) {
             printf("iq_rb write commit error\n");
         }
