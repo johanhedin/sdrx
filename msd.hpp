@@ -1,5 +1,6 @@
 //
-// Multi-Stage Decimator for decimating a IQ stream from a RTL dongle.
+// Multi-Stage translating down sampler for tuning and decimating a IQ stream
+// from a RTL dongle.
 //
 // @author Johan Hedin
 // @date   2021-01-13
@@ -24,7 +25,7 @@
 #include <vector>
 #include <iqsample.hpp>
 
-// Multi-Stage Decimator
+// Multi-Stage Down sampler
 class MSD {
 public:
     // Configuration for one stage. We need to know the decimation factor and
@@ -34,10 +35,9 @@ public:
         std::vector<float> coef; // Low pass filter FIR coefficients
     };
 
-    // Construct a MSD. Argument is a list of stage configurations
-    MSD(const std::vector<iqsample_t> &t, const std::vector<MSD::Stage> &stages) :
-      m_(1), i_mean_lvl_(0.0f), q_mean_lvl_(0.0f), overload_(false), overload_count_(0),
-      translator_(t), trans_pos_(0) {
+    // Construct a MSD. Argument is a translation vector and a list of stage configurations
+    MSD(const std::vector<iqsample_t> &translator, const std::vector<MSD::Stage> &stages) :
+      m_(1), translator_(translator), trans_pos_(0) {
         auto iter = stages.begin();
         while (iter != stages.end()) {
             stages_.push_back(MSD::S(iter->m, iter->coef));
@@ -49,49 +49,19 @@ public:
     // Get decimation factor for the MSD
     unsigned m(void) { return m_; }
 
-    // I and Q mean level based on the last call to decimate
-    float iMean(void) { return i_mean_lvl_; }
-    float qMean(void) { return q_mean_lvl_; }
-    bool overloaded(void) {
-        auto tmp = overload_;
-
-        if (overload_) overload_ = false;
-        return tmp;
-    }
-    unsigned overloadCnt(void) {
-        auto tmp = overload_count_;
-        if (overload_count_ > 0) overload_count_ = 0;
-        return tmp;
-    }
-
     void decimate(const unsigned char *in, unsigned in_len, iqsample_t *out, unsigned *out_len) {
-        unsigned sample_pos = 0;
+        unsigned   sample_pos = 0;
         iqsample_t sample;
-        float i, q;
-
-        i_mean_lvl_ = 0.0f;
-        q_mean_lvl_ = 0.0f;
+        float      i, q;
 
         *out_len = 0;
 
         while (sample_pos < in_len) {
             // Convert two 8-bit in values to one iqsample in the range (-1.0 1.0)
-            i = (float)in[sample_pos];
-            q = (float)in[sample_pos+1];
+            i = ((float)in[sample_pos])   / 127.5f - 1.0f;
+            q = ((float)in[sample_pos+1]) / 127.5f - 1.0f;
 
-#define CLIP_HI 255
-#define CLIP_LO 0
-            if (in[sample_pos] <= CLIP_LO || in[sample_pos] >= CLIP_HI  || in[sample_pos+1] <= CLIP_LO || in[sample_pos+1] >= CLIP_HI) {
-                overload_ = true;
-                overload_count_++;
-            }
-
-            i = i/127.5f - 1.0f;
-            q = q/127.5f - 1.0f;
-
-            i_mean_lvl_ += std::abs(i);
-            q_mean_lvl_ += std::abs(q);
-
+            // Tune if translating vector is supplied
             if (translator_.size() != 0) {
                 sample = translator_[trans_pos_] * iqsample_t(i, q);
                 if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
@@ -118,9 +88,6 @@ public:
 
             sample_pos += 2;
         }
-
-        i_mean_lvl_ = i_mean_lvl_ / in_len;
-        q_mean_lvl_ = q_mean_lvl_ / in_len;
     }
 
 private:
@@ -173,13 +140,9 @@ private:
         unsigned                 isn_;   // New in-samples needed before an output sample can be calculated
     };
 
-    std::vector<MSD::S> stages_; // List of stages
-    unsigned            m_;      // Total decimation factor
-    float               i_mean_lvl_;
-    float               q_mean_lvl_;
-    bool                overload_;
-    unsigned            overload_count_;
-    std::vector<iqsample_t> translator_;
+    std::vector<MSD::S>     stages_;     // List of stages
+    unsigned                m_;          // Total decimation factor
+    std::vector<iqsample_t> translator_; // Fq tuning sequence
     unsigned                trans_pos_;
 };
 

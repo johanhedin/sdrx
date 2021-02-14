@@ -652,8 +652,7 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     }
 
     //
-    // We use a ADC scale from -1.0 to 1.0. To calculate dBFS we then just
-    // use:
+    // We use a ADC scale from -1.0 to 1.0. To calculate dBFS we can use:
     //
     // dBFS = 10 * log10(i*i + q*q);
     //
@@ -667,24 +666,6 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
 
         if (decimated_out_len != DECIMATED_SIZE) {
             printf("Major sample rate calculation error!\n");
-        }
-
-        ctx->i_levels[ctx->num_levels] = ctx->ds->iMean();
-        ctx->q_levels[ctx->num_levels] = ctx->ds->qMean();
-        if (++ctx->num_levels == LEVEL_SIZE) {
-            float i_lvl=0.0f, q_lvl=0.0f;
-            for (unsigned i = 0; i < LEVEL_SIZE; i++) {
-                i_lvl += ctx->i_levels[i];
-                q_lvl += ctx->q_levels[i];
-            }
-
-            i_lvl = i_lvl / LEVEL_SIZE;
-            q_lvl = q_lvl / LEVEL_SIZE;
-
-            //std::cout << "Level stats: i=" << i_lvl << ", q=" << q_lvl << std::endl;
-            //printf("Level stats: i=%.4f, q=%.4f, overloaded=%s, cnt=%u, decimated_out_len=%u\n",
-            //       i_lvl, q_lvl, decimator.overloaded() ? "true":"false", decimator.overloadCnt(), decimated_out_len);
-            ctx->num_levels = 0;
         }
     } else {
         // Overrun
