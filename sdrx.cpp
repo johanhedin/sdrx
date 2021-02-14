@@ -105,10 +105,6 @@
 #define IQ_BUF_SIZE        (512 * DECIMATION_FACTOR)
 #define DECIMATED_SIZE     256
 
-
-// Name of the output sound device
-#define ALSA_DEVICE "default"
-
 static int quit = 0;
 static struct timeval last_stat_calc;
 static uint32_t bytes;
@@ -504,7 +500,7 @@ static void alsa_worker(struct OutputState &output_state) {
     //
 
     // Open the sound device
-    pcm_handle = open_alsa_dev(ALSA_DEVICE);
+    pcm_handle = open_alsa_dev(ctx.settings.audio_device);
     if (!pcm_handle) return;
 
     // Determine how many descriptos we need to poll for the ALSA device
