@@ -25,23 +25,37 @@
 #include "rtl_device.hpp"
 
 int main(int argc, char **argv) {
-    RtlDevice d0(0), d1(1);
+    RtlDevice dev0(0), dev1(1);
     unsigned i = 0;
 
-    std::cout << "Staring dongles..." << std::endl;
+    std::cout << "Listing available devices..." << std::endl;
+    RtlDevice::list();
 
-    d0.start();
-    d1.start();
+    std::cout << "Starting..." << std::endl;
 
+    std::cout << "Opening devices..." << std::endl;
+    dev0.open();
+    dev1.open();
+
+    std::cout << "Starting devices..." << std::endl;
+    dev0.start();
+    dev1.start();
+
+    std::cout << "Sleep some..." << std::endl;
     while (i < 5) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         i++;
     }
 
-    d1.stop();
-    d0.stop();
+    std::cout << "Stopping devices..." << std::endl;
+    dev1.stop();
+    dev0.stop();
 
-    std::cout << "All dongles stoped." << std::endl;
+    std::cout << "Closing devices..." << std::endl;
+    dev1.close();
+    dev0.close();
+
+    std::cout << "Done" << std::endl;
 
     return 0;
 }
