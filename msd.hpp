@@ -35,6 +35,8 @@ public:
         std::vector<float> coef; // Low pass filter FIR coefficients
     };
 
+    MSD(void) = default;
+
     // Construct a MSD. Argument is a translation vector and a list of stage configurations
     MSD(const std::vector<iqsample_t> &translator, const std::vector<MSD::Stage> &stages) :
       m_(1), translator_(translator), trans_pos_(0) {
@@ -134,7 +136,7 @@ private:
 
     private:
         unsigned                 m_;     // Decimation factor
-        const std::vector<float> c_;     // FIR coefficients
+        std::vector<float>       c_;     // FIR coefficients
         std::vector<iqsample_t>  rb_;    // Calculation ring buffer
         unsigned                 pos_;   // Current position in the ring buffer
         unsigned                 isn_;   // New in-samples needed before an output sample can be calculated
