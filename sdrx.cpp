@@ -101,6 +101,7 @@
 //
 // Due to latency we like to have the callback period around 20ms.
 #define SAMPLING_FREQUENCY 1200000
+#define MAX_OFFSET         500000   // 500Khz
 #define DECIMATION_FACTOR  75
 #define IQ_BUF_SIZE        (512 * DECIMATION_FACTOR)
 #define DECIMATED_SIZE     256
@@ -112,11 +113,26 @@ static uint32_t samples;
 static uint32_t frames;
 static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 
+// Datatype to represent one channel in the IQ spectra
+class Channel {
+public:
+    Channel(const std::string &name, float sql_level = 9.0f) : name(name), sql_level(sql_level) {}
+
+    std::string             name;        // Channel name, e.g "118.105"
+    MSD                     msd;         // Multi stage down sampler
+    AGC                     agc;         // Channel AGC
+    float                   sql_level;   // Squelch level for the channel
+
+    bool operator<(const Channel &rhv) { return name < rhv.name; }
+    bool operator==(const Channel &rhv) { return name == rhv.name; }
+};
+
+
 // Datatype to hold the sdrx settins
 class Settings {
 public:
     Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(0.0f),
-                     sql_level(12.0f), audio_device("default"), fq(0),
+                     sql_level(9.0f), audio_device("default"), fq(0),
                      fq_offset(0) {}
     int         rtl_device;   // RTL-SDR device to use (in id form)
     int         fq_corr;      // Frequency correction in ppm
@@ -127,6 +143,9 @@ public:
     uint32_t    fq;           // Frequency to tune to
     std::string channel;      // String representation of the channel, e.g. "118.105"
     int         fq_offset;    // Tune dongle this much "off" of the desired fq. Compensated in DDC
+
+    uint32_t    tuner_fq;              // Tuner frequency
+    std::vector<Channel> channels;     // String representations of the channels to listen to
 };
 
 
@@ -152,7 +171,6 @@ struct OutputState {
     float              audio_buffer_float[2048];
     int16_t            audio_buffer_s16[2048];
     FIR               *audio_filter;
-    float              gain;
     iqsample_t         fft_in[FFT_SIZE];
     iqsample_t         fft_out[FFT_SIZE];
     float              window[FFT_SIZE+1];
@@ -458,7 +476,7 @@ static void alsa_write_cb(OutputState &ctx) {
             ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, samples_to_write);
         }
         if (ret < 0) {
-            std::cerr << "ALSA Error writei real: " << snd_strerror(ret) << std::endl;
+            std::cerr << "Error: Failed to write audio samples: " << snd_strerror(ret) << std::endl;
             snd_pcm_prepare(ctx.pcm_handle);
         } else {
             //std::cout << "    frames written real: " << ret << std::endl;
@@ -467,10 +485,10 @@ static void alsa_write_cb(OutputState &ctx) {
         // Underrrun
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, 512);
         if (ret < 0) {
-            std::cerr << "ALSA Error writei real: " << snd_strerror(ret) << std::endl;
+            std::cerr << "Error: Failed to write underrun silence: " << snd_strerror(ret) << std::endl;
             snd_pcm_prepare(ctx.pcm_handle);
         } else {
-            std::cout << "Silence samples written: " << ret << std::endl;
+            std::cout << "Underrun silence samples written: " << ret << std::endl;
         }
     }
 }
@@ -798,7 +816,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "fq-offset", 'o', POPT_ARG_INT,    &settings.fq_offset, 0, "tuner offset in kHz in steps of 25. Defaults to 0 if not set", "FQOFF" },
         { "rf-gain",   'r', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
         { "lf-gain",   'l', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio gain in dB. Defaults to 0 if not set", "LFGAIN" },
-        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 12 if not set", "SQLLEVEL" },
+        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
         { "fq-mode",     0, POPT_ARG_NONE,   &normal_fq_fmt, 0, "interpret the CHANNEL argument as a normal frequency in MHz", nullptr },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show this help message and quit", nullptr },
@@ -897,20 +915,57 @@ Listen to the frequency 118.111003 MHz:
 
             settings.fq_offset *= 1000;
 
+            // Parse the arguments as channels
             if (poptPeekArg(popt_ctx) != nullptr) {
-                const char *arg = poptGetArg(popt_ctx);
+                bool fq_type = normal_fq_fmt ? NORMAL_FQ : AERONAUTICAL_CHANNEL;
+                const char *arg;
+                while ((arg = poptGetArg(popt_ctx)) != nullptr) {
+                    uint32_t fq_ret = parse_fq(arg, fq_type);
+                    if (fq_ret == 0) {
+                        std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") << " given: " << arg << std::endl;
+                        ret = -1;
+                    } else if (fq_ret < 45000000 || fq_ret > 1800000000) {
+                        std::cerr << "Error: Invalid frequency given: " << fq_ret << "Hz" << std::endl;
+                        ret = -1;
+                    } else {
+                        // Add to channels list if not already present
+                        if (std::find(settings.channels.begin(), settings.channels.end(), Channel(arg)) == settings.channels.end()) {
+                            settings.channels.push_back(Channel(arg, settings.sql_level));
+                        }
+                    }
+                }
 
-                bool fq_type = AERONAUTICAL_CHANNEL;
-                if (normal_fq_fmt) fq_type = NORMAL_FQ;
+                if (settings.channels.size() > 0) {
+                    // Backwards compatibility for one channel mode
+                    settings.channel = settings.channels[0].name;
+                    settings.fq = parse_fq(settings.channel, fq_type);
 
-                settings.channel = arg;
-                settings.fq = parse_fq(arg, fq_type);
-                if (settings.fq == 0) {
-                    std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") << " given: " << arg << std::endl;
-                    ret = -1;
-                } else if (settings.fq < 45000000 || settings.fq > 1800000000) {
-                    std::cerr << "Error: Invalid frequency given: " << settings.fq << "Hz" << std::endl;
-                    ret = -1;
+                    if (settings.channels.size() > 1 && fq_type == NORMAL_FQ) {
+                        std::cerr << "Error: Only one frequency allowed in frequency mode" << std::endl;
+                        ret = -1;
+                    } else {
+                        // If here, we know that all channels in settings.channels
+                        // are valid aeronautical and that we have at least one
+                        // channel. Sort the vector and determine what tuner
+                        // frequency to use (truncated to nearest 100kHz)
+                        std::sort(settings.channels.begin(), settings.channels.end());
+                        std::string lo_ch = (settings.channels.begin())->name;
+                        std::string hi_ch = (--settings.channels.end())->name;
+
+                        uint32_t lo_fq = parse_fq(lo_ch, fq_type);
+                        uint32_t hi_fq = parse_fq(hi_ch, fq_type);
+                        uint32_t mid_fq = lo_fq + (hi_fq - lo_fq) / 2;
+                        uint32_t mid_fq_rounded = (mid_fq / 100000) * 100000;
+
+                        // Verify that the requested channels fit
+                        if (lo_fq < (mid_fq_rounded - MAX_OFFSET) || hi_fq > (mid_fq_rounded + MAX_OFFSET)) {
+                            std::cerr << "Error: Requested channels does not fit inside available IF bandwidth (" <<
+                                         (MAX_OFFSET*2)/1000000 << "MHz)" << std::endl;
+                            ret = -1;
+                        }
+
+                        settings.tuner_fq = mid_fq_rounded;
+                    }
                 }
             } else {
                 std::cerr << "Error: No channel/frequency given" << std::endl;
@@ -929,6 +984,42 @@ Listen to the frequency 118.111003 MHz:
 }
 
 
+static int channel_to_offset(const std::string &channel, int32_t tuner_fq) {
+    int32_t fq_base;
+    int32_t fq_diff;
+    int32_t offset_diff;
+    int     offset;
+
+    // Dot is used as decimal separator
+    auto dot_pos  = channel.find_first_of('.');
+    auto int_str  = channel.substr(0, dot_pos); // integral part
+    auto frac_str = channel.substr(dot_pos+1);  // fractional part
+
+    // A 100kHz wide band "contains" 12 8.33kHz channels or 4 25kHz
+    // channels. Each channel has it's unique two digits making it
+    // possible to correctly convert a channel to offset in both schemas
+    const std::map<std::string, int> sub_ch_map{
+        { "00",  0 }, { "05",  0 }, { "10",  1 }, { "15",  2 },
+        { "25",  3 }, { "30",  3 }, { "35",  4 }, { "40",  5 },
+        { "50",  6 }, { "55",  6 }, { "60",  7 }, { "65",  8 },
+        { "75",  9 }, { "80",  9 }, { "85", 10 }, { "90", 11 }
+    };
+    auto sub_offset = sub_ch_map.find(frac_str.substr(1));
+
+    fq_base = std::atol(int_str.c_str())*1000000;
+    fq_base += (frac_str[0] - '0') * 100000;
+    fq_diff = fq_base - tuner_fq;
+    offset_diff = (fq_diff / 100000)*12;
+    offset = offset_diff + sub_offset->second;
+
+    std::cout << "Tuner fq: " << tuner_fq << ", channel: " << channel << ", offset: " <<
+    sub_offset->second << ", offset_diff: " << offset_diff <<
+    ", real_offset: "  << offset << std::endl;
+
+    return offset;
+}
+
+
 int main(int argc, char** argv) {
     int              ret;
     struct sigaction sigact;
@@ -941,8 +1032,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    /*
-    // Print the settings
+    // Print settings
     std::cout << "The folowing settings were given:" << std::endl;
     std::cout << "    RTL device: " << settings.rtl_device << std::endl;
     std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
@@ -952,8 +1042,29 @@ int main(int argc, char** argv) {
     std::cout << "    Squelch level: " << settings.sql_level << "dB" << std::endl;
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
     std::cout << "    Frequency: " << settings.fq << "Hz" << std::endl;
-    return 0;
-    */
+    std::cout << "    Channel: " << settings.channel << std::endl;
+    std::cout << "    Channels:";
+    for (auto &ch : settings.channels) std::cout << " " << ch.name;
+    std::cout << std::endl;
+
+    for (auto &ch : settings.channels) {
+        std::vector<iqsample_t> translator;
+
+        int ch_offset = channel_to_offset(ch.name, (int32_t)settings.tuner_fq);
+        if (ch_offset != 0) {
+            int N = 144;
+            for (int n= 0; n < N; n++) {
+                std::complex<float> e(0.0f, -2.0f * M_PI * n * ch_offset/144.0f);
+                translator.push_back(exp(e));
+            }
+        }
+
+        ch.msd = MSD(translator, std::vector<MSD::Stage>{
+            { 3, lp_ds_1200k_400k },
+            { 5, lp_ds_400k_80k },
+            { 5, lp_ds_80k_16k }
+        });
+    }
 
     std::vector<iqsample_t> translator;
 
@@ -978,9 +1089,6 @@ int main(int argc, char** argv) {
         {5, lp_ds_80k_16k}
     });
     RB<iqsample_t> iq_rb(256*16); // 16 chunks or 256ms
-
-    // Mute librtlsdr internal fprintf(stderr, "..."); Will mute our own printouts as well...
-    //freopen("/dev/null", "w", stderr);
 
     struct InputState input_state;
     input_state.settings   = settings;
@@ -1011,8 +1119,10 @@ int main(int argc, char** argv) {
 
     rtlsdr_get_tuner_gains(input_state.rtl_device, tuner_gains);
     std::cout << "Tuner gain steps (dB):";
+    std::cout.precision(3);
+    std::cout.width(3);
     for (int i = 0; i < num_tuner_gains; i++) {
-        fprintf(stdout, " %.1f", ((float)tuner_gains[i])/10.0f);
+        std::cout << " " << ((float)tuner_gains[i])/10.0f;
     }
     std::cout << std::endl;
     free(tuner_gains);
