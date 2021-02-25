@@ -26,22 +26,23 @@
 
 class FIR {
 public:
-    FIR(const std::vector<float> c) : c_(c), c_adj_(c), buf_(c.size(), 0.0f), buf_pos_(buf_.begin()), gain_(0.0f) {}
+    FIR(void) = default;
+    FIR(const std::vector<float> c) : c_(c), c_adj_(c), buf_(c.size(), 0.0f), size_(c.size()), pos_(0), gain_(0.0f) {}
 
     // Filter data from in and write to out. in and out may point to the same array
     void filter(const float *in, unsigned in_len, float *out) {
         for (auto sample = in; sample != in + in_len; ++sample) {
             // Write in sample to internal ring buffer.
-            *buf_pos_ = *sample;
+            buf_[pos_] = *sample;
 
             // Advance and wrap around if necessary
-            if (++buf_pos_ == buf_.end()) buf_pos_ = buf_.begin();
+            if (++pos_ == size_) pos_ = 0;
 
             // Calculate out sample
             *out = 0.0f;
-            for (auto c = c_adj_.begin(); c != c_adj_.end(); ++c) {
-                *out += *c * *buf_pos_;
-                if (++buf_pos_ == buf_.end()) buf_pos_ = buf_.begin();
+            for (unsigned i = 0; i < size_; ++i) {
+                *out += c_adj_[i] * buf_[pos_];
+                if (++pos_ == size_) pos_ = 0;
             }
 
             out++;
@@ -62,14 +63,15 @@ public:
     }
 
     // Get filter gain (in dB)
-    const float gain(void) { return gain_; }
+    float gain(void) const { return gain_; }
 
 private:
-    const std::vector<float>     c_;       // FIR coefficients
-    std::vector<float>           c_adj_;   // FIR coefficients adjusted for gain
-    std::vector<float>           buf_;     // Ring buffer delay line
-    std::vector<float>::iterator buf_pos_; // Position in ring buffer
-    float                        gain_;    // Filter gain in dB
+    std::vector<float>  c_;       // FIR coefficients
+    std::vector<float>  c_adj_;   // FIR coefficients adjusted for gain
+    std::vector<float>  buf_;     // Ring buffer delay line
+    unsigned            size_;    // Buffer/coefficient size
+    unsigned            pos_;     // Position in ring buffer
+    float               gain_;    // Filter gain in dB
 };
 
 #endif // FIR_HPP
