@@ -51,12 +51,14 @@ public:
     // Get decimation factor for the MSD
     unsigned m(void) { return m_; }
 
-    void decimate(const unsigned char *in, unsigned in_len, iqsample_t *out, unsigned *out_len) {
+    // Translate and down sample. If in_len is a multiple of m, you don't need
+    // out_len since you know how many out samples that are to be output.
+    void decimate(const unsigned char *in, unsigned in_len, iqsample_t *out, unsigned *out_len = nullptr) {
         unsigned   sample_pos = 0;
         iqsample_t sample;
         float      i, q;
 
-        *out_len = 0;
+        if (out_len) *out_len = 0;
 
         while (sample_pos < in_len) {
             // Convert two 8-bit in values to one iqsample in the range (-1.0 1.0)
@@ -84,8 +86,9 @@ public:
             }
 
             if (stage_iter == stages_.end()) {
-                out[*out_len] = sample;
-                *out_len += 1;
+                // Write out sample
+                *(out++) = sample;
+                if (out_len) *out_len += 1;
             }
 
             sample_pos += 2;
