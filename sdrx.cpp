@@ -206,7 +206,6 @@ static const char* rtlsdr_tuner_to_str(enum rtlsdr_tuner tuner_id) {
 static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     struct InputState    &ctx = *reinterpret_cast<struct InputState*>(user_data);
     iqsample_t           *iq_buf_ptr;
-    unsigned              decimated_out_len;
     std::vector<Channel> &channels = ctx.settings.channels;
 
     if (len != RTL_IQ_BUF_SIZE) {
@@ -233,11 +232,11 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, CH_IQ_BUF_SIZE * channels.size())) {
         // Channelize the IQ data and write output into ring buffer
         for (auto &ch : channels) {
-            ch.msd.decimate(ctx.iq_buf, len, iq_buf_ptr, &decimated_out_len);
-            iq_buf_ptr += decimated_out_len;
+            ch.msd.decimate(ctx.iq_buf, len, iq_buf_ptr);
+            iq_buf_ptr += CH_IQ_BUF_SIZE;
         }
 
-        if (!ctx.rb_ptr->commitWrite(decimated_out_len * channels.size())) {
+        if (!ctx.rb_ptr->commitWrite(CH_IQ_BUF_SIZE * channels.size())) {
             std::cerr << "Error: Unable to commit ring buffer write" << std::endl;
         }
     } else {
