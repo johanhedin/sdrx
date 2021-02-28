@@ -6,10 +6,11 @@ sdrx
 
 `sdrx` is a simple software defined narrow band AM receiver that uses a RTL-SDR
 USB dongle as it's hardware part. It's main purpous is to act as a test bench
-for different SDR implementation aspects as decimation, filtering, demodulation,
-interaction between clock domains, threading and so on. `sdrx` is written in
-C++17 and is tested on a x86_64 machine running Fedora 33 and on a Raspberry
-Pi 4 Model B 4GiB running Raspberry Pi OS. Audio is played using ALSA.
+for different SDR implementation aspects as tuning, down sampling, filtering,
+demodulation, interaction between clock domains, threading, audio processing
+and so on. `sdrx` is written in C++17 and is tested on a x86_64 machine running
+Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running Raspberry Pi OS. Audio
+is played using ALSA.
 
 A RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
 is used for development. The program may be incompatible with other dongles. YMMV.
@@ -66,10 +67,11 @@ be listed with --help:
     $ ./sdrx --help
     $ ./sdrx --rf-gain 30 122.455
 
-If you like to use frequency notation in MHz instead of channel notation,
-use the `--fq-mode` option:
+Experimental support for multiple channels are available as well. Just list
+the channels as arguments (due to the fixed sampling frequency used, they must
+fit inside a 1MHz band):
 
-    $ ./sdrx --fq-mode 118.111034
+    $ ./sdrs --rf-gain 40 118.105 118.280 118.405 118.505
 
 
 Output
