@@ -72,59 +72,68 @@
 #define STAT_INTERVAL  5
 
 
-// Size of the sample callback buffer. This will become len in the data
-// callback.
-//
-// Must be a multiple of 512. Shoulb be a multiple of 16384 (URB size).
-//
-// The larger this is set, the more seldom the iq_cb is called.
-//#define IQ_BUF_SIZE 6*16384
-
-// Sampling, decimation. latency and IQ buffer size setup
+// Sampling, down sampling, latency, audio and IQ buffer sizes
 //
 // A sample frequency that is evenly divided with the TCXO clock is advicable.
-// The dongle clock runs at 28.8MHz. This gives "nice" IQ sampling frequenies
+// The dongle clock runs at 28.8MHz. This gives "nice" IQ sampling frequencies
 // of 2 400 000 (1/12th), 1 800 000 (1/16th) 1 200 000 (1/24th),
 // 960 000 (1/30th) and so on.
 //
-// To get down to the signal of interest we like to get to a 16000 IQ sampling
-// frequency (16kHz RF bandwidth) by using decimation.
+// To extract the channel of intrest (16kHz bandwidth) we need to down sample
+// with an integral factor.
 //
-// For FFT calculations, batches of power of 2 number of samples are most
-// efficent.
+// The minumum "block" of data that can be transported through USB is 512 bytes
+// so the buffer size used when starting librtlsdr must be a multiple of 512
+// bytes. 512 bytes equals 256 complex samples and represent a "time slice"
+// of (512/2)/fs seconds.
 //
-// The IQ data must be fetched in blocks 512 bytes, or 256 IQ samples. So if
-// we set the dongle USB buffer to the decimation factor times 512 we will
-// get 256 decimated IQ samples at 16kHz (16kHz RF BW) per "callback period".
+// Since batches of just 512 bytes are inefficient we need to have a larger
+// buffer. Larger buffer will also give us samples in batches that nicely
+// match the sound card requirements.
 //
-// The callback period is 1/Fs * (buffer_size/2) seconds.
+// Example:
 //
-// Due to latency we like to have the callback period around 20ms.
-#define SAMPLING_FREQUENCY 1200000
-#define MAX_OFFSET         500000   // 500Khz
-#define DECIMATION_FACTOR  75
-#define IQ_BUF_SIZE        (512 * DECIMATION_FACTOR)
-#define DECIMATED_SIZE     256
+// With a IQ sampling frequency of 1200000 and a target channel sampling
+// frequency of 16000Hz we need to down sample by a factor of 75 (1200/16).
+//
+// We like to work with chunks of channel IQ data of 512 samples (@16kHz) which
+// corresponds to 32ms. To get 512 samples after the down sampler we need to
+// have 512*75 samples before the down sampler. Since one sample occupy two
+// bytes from the dongle we need to set the librtlsdr buffer size to 512*75*2.
+//
+#define RTL_IQ_SAMPLING_FQ   1200000
+#define MAX_CH_OFFSET        500000   // 500Khz
+#define DOWNSAMPLING_FACTOR  75
+#define RTL_IQ_BUF_SIZE      (512 * DOWNSAMPLING_FACTOR * 2)  // callback frequency is 31.25Hz or 32ms
+#define CH_IQ_SAMPLING_FQ    16000    // RTL_IQ_SAMPLING_FQ / DOWNSAMPLING_FACTOR
+#define CH_IQ_BUF_SIZE       512
+#define FFT_SIZE             CH_IQ_BUF_SIZE
 
 static int quit = 0;
 static struct timeval last_stat_calc;
-static uint32_t bytes;
-static uint32_t samples;
-static uint32_t frames;
+static uint32_t rtl_bytes;
+static uint32_t rtl_samples;
+static uint32_t rtl_callbacks;
 static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
+
 
 // Datatype to represent one channel in the IQ spectra
 class Channel {
 public:
-    Channel(const std::string &name, float sql_level = 9.0f) : name(name), sql_level(sql_level) {}
+    Channel(const std::string &name, float sql_level = 9.0f)
+    : name(name), sql_level(sql_level), sql_open(false) {}
 
-    std::string             name;        // Channel name, e.g "118.105"
-    MSD                     msd;         // Multi stage down sampler
-    AGC                     agc;         // Channel AGC
-    float                   sql_level;   // Squelch level for the channel
+    std::string             name;         // Channel name, e.g "118.105"
+    MSD                     msd;          // Multi stage down sampler with tuner
+    AGC                     agc;          // AGC
+    float                   sql_level;    // Squelch level for the channel
+    bool                    sql_open;     // Squelch open/close state
 
     bool operator<(const Channel &rhv) { return name < rhv.name; }
     bool operator==(const Channel &rhv) { return name == rhv.name; }
+
+    bool operator<(const char *rhv) { return name < rhv; }
+    bool operator==(const char *rhv) { return name == rhv; }
 };
 
 
@@ -132,56 +141,44 @@ public:
 class Settings {
 public:
     Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(0.0f),
-                     sql_level(9.0f), audio_device("default"), fq(0),
-                     fq_offset(0) {}
+                     sql_level(9.0f), audio_device("default"), tuner_fq(0)
+                     {}
     int         rtl_device;   // RTL-SDR device to use (in id form)
     int         fq_corr;      // Frequency correction in ppm
     float       rf_gain;      // RF gain in dB
     float       lf_gain;      // LF (audio gain) in dB
     float       sql_level;    // Squelch level in dB (over noise level)
     std::string audio_device; // ALSA device to use for playback
-    uint32_t    fq;           // Frequency to tune to
-    std::string channel;      // String representation of the channel, e.g. "118.105"
-    int         fq_offset;    // Tune dongle this much "off" of the desired fq. Compensated in DDC
-
-    uint32_t    tuner_fq;              // Tuner frequency
+    uint32_t    tuner_fq;     // Tuner frequency
     std::vector<Channel> channels;     // String representations of the channels to listen to
 };
 
 
 #define LEVEL_SIZE 10
 struct InputState {
-    rtlsdr_dev_t   *rtl_device;           // RTL device
-    MSD            *ds;                   // Downsampler
-    RB<iqsample_t> *rb_ptr;               // Input -> Output buffer
-    Settings        settings;             // System wide settings
-    float           i_levels[LEVEL_SIZE];
-    float           q_levels[LEVEL_SIZE];
-    unsigned        num_levels;
-    unsigned char   iq_buf[IQ_BUF_SIZE];  // Jump buffer to handle Pi4 with 5.x kernel
+    rtlsdr_dev_t   *rtl_device;              // RTL device
+    RB<iqsample_t> *rb_ptr;                  // Input -> Output buffer
+    Settings        settings;                // System wide settings
+    unsigned char   iq_buf[RTL_IQ_BUF_SIZE]; // Jump buffer to handle Pi4 with 5.x kernel
 };
 
 
-#define FFT_SIZE 512
 struct OutputState {
     snd_pcm_t         *pcm_handle;               // ALSA PCM device
     RB<iqsample_t>    *rb_ptr;                   // Input -> Output buffer
     struct timeval     last_stat_time;
-    int16_t            silence[2048];
-    float              audio_buffer_float[2048];
-    int16_t            audio_buffer_s16[2048];
+    int16_t            silence[CH_IQ_BUF_SIZE];
+    float              audio_buffer_float[CH_IQ_BUF_SIZE];
+    int16_t            audio_buffer_s16[CH_IQ_BUF_SIZE];
     FIR               *audio_filter;
     iqsample_t         fft_in[FFT_SIZE];
     iqsample_t         fft_out[FFT_SIZE];
     float              window[FFT_SIZE+1];
     fftwf_plan         fft_plan;
     unsigned           sql_wait;
-    unsigned           fft_samples;
-    bool               sql_open;
     std::vector<float> hi_energy;
     std::vector<float> lo_energy;
     unsigned           energy_idx;
-    AGC                agc;
     Settings           settings;
 };
 
@@ -205,134 +202,86 @@ static const char* rtlsdr_tuner_to_str(enum rtlsdr_tuner tuner_id) {
 }
 
 
-static snd_pcm_t *open_alsa_dev(const std::string &device_name) {
-    int                  ret;
-    snd_pcm_t           *handle = nullptr;
-    snd_pcm_hw_params_t *pcm_hw_params = nullptr;
-    snd_pcm_sw_params_t *pcm_sw_params = nullptr;
-    snd_pcm_uframes_t    pcm_period;
-    snd_pcm_uframes_t    pcm_buffer_size;
-    snd_pcm_uframes_t    pcm_start_threshold;
-    snd_pcm_uframes_t    pcm_note_threshold;
-    snd_pcm_format_t     pcm_sample_format;
-    snd_pcm_access_t     pcm_access;
-    unsigned int         pcm_sample_rate;
-    unsigned int         num_channels;
+// Called by librtlsdr when a chunk of new IQ data is available
+static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
+    struct InputState    &ctx = *reinterpret_cast<struct InputState*>(user_data);
+    iqsample_t           *iq_buf_ptr;
+    unsigned              decimated_out_len;
+    std::vector<Channel> &channels = ctx.settings.channels;
 
-    // How we like our ALSA device to operate
-    pcm_access = SND_PCM_ACCESS_RW_INTERLEAVED;  // Channel samples are interleaved
-    pcm_sample_rate     = 16000;                 // 16kHz
-    pcm_sample_format   = SND_PCM_FORMAT_S16;    // Signed 16 bit samples
-    num_channels        = 1;                     // Mono
-    pcm_period          = 512;                   // Play chunks of this many frames (512/16000 -> 32ms)
-    pcm_buffer_size     = pcm_period * 8;        // Playback buffer is 4 periods, i.e. 128ms
-    pcm_note_threshold  = pcm_period;            // Notify us when we can write at least this number of frames
-    pcm_start_threshold = pcm_period*4;          // Start playing when this many frames have been written to the device buffer
-
-    // Summary:
-    // poll will return when we can write at least pcm_period samples. Actual
-    // playback will not start until pcm_start_threshold samples has been
-    // written to the device buffer
-
-    std::cout << "Opening ALSA device '" << device_name << "' with:" << std::endl;
-    std::cout << "    Sample rate: " << pcm_sample_rate << " samples/s" << std::endl;
-    std::cout << "    Sample format: 16 bit signed integer" << std::endl;
-    std::cout << "    Number of channels: " << num_channels << std::endl;
-    std::cout << "    PCM Period: " << pcm_period << " samples (" << pcm_period / (pcm_sample_rate/1000) << "ms)" << std::endl;
-    std::cout << "    Buffer size: " << pcm_buffer_size << " samples (" << pcm_buffer_size / (pcm_sample_rate/1000) << "ms)" << std::endl;
-    std::cout << "    Wakeup low limit: " << pcm_note_threshold << " samples (" << pcm_note_threshold / (pcm_sample_rate/1000) << "ms)" << std::endl;
-    std::cout << "    Start threshold: " << pcm_start_threshold << " samples (" << pcm_start_threshold / (pcm_sample_rate/1000) << "ms)" << std::endl;
-
-    // Open device 'device_name' for playback
-    ret = snd_pcm_open(&handle, device_name.c_str(), SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK);
-    if (ret < 0) {
-        std::cerr << "ALSA error from snd_pcm_open for device '" << device_name
-                  << "': " << snd_strerror(ret) << std::endl;
-        handle = nullptr;
-        return handle;
+    if (len != RTL_IQ_BUF_SIZE) {
+        std::cerr << "Error: Unexpected number of IQ bytes received from dongle: " <<
+                     len << ". " << RTL_IQ_BUF_SIZE << " expected." << std::endl;
+        return;
     }
 
-    // Allocate space for the hardare params config struct
-    snd_pcm_hw_params_malloc(&pcm_hw_params);
-
-    // Read the current hardware config from the device
-    snd_pcm_hw_params_any(handle, pcm_hw_params);
-
-    // Set hardware configurations
-    snd_pcm_hw_params_set_access(handle, pcm_hw_params, pcm_access);
-    snd_pcm_hw_params_set_format(handle, pcm_hw_params, pcm_sample_format);
-    snd_pcm_hw_params_set_channels(handle, pcm_hw_params, num_channels);
-    snd_pcm_hw_params_set_period_size(handle, pcm_hw_params, pcm_period, 0);
-    snd_pcm_hw_params_set_buffer_size(handle, pcm_hw_params, pcm_buffer_size);
-
-    // Probe sample rate to detect if the sound card is incapable of the
-    // requested rate
-    unsigned int tmp_sample_rate = pcm_sample_rate;
-    ret = snd_pcm_hw_params_set_rate_near(handle, pcm_hw_params, &tmp_sample_rate, NULL);
-    if (ret < 0) {
-        std::cout << "ALSA error: Unable to set sample rate to " << pcm_sample_rate
-                  << ". Got " << tmp_sample_rate << std::endl;
+    if (quit) {
+        rtlsdr_cancel_async(ctx.rtl_device);
+        return;
     }
 
-    // Write hadware configuration to the device
-    ret = snd_pcm_hw_params(handle, pcm_hw_params);
-    if (ret < 0) {
-        std::cerr << "ALSA error. Unable to set hw params: " << snd_strerror(ret) << std::endl;
+    // Copy to tmp buf to overcome slow access to data on Pi with kernel 5.x
+    memcpy(ctx.iq_buf, buf, RTL_IQ_BUF_SIZE);
+
+    //
+    // We use a ADC scale from -1.0 to 1.0. To calculate dBFS we can use:
+    //
+    // dBFS = 10 * log10(i*i + q*q);
+    //
+
+    // Acquire IQ ring buffer
+    if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, CH_IQ_BUF_SIZE * channels.size())) {
+        // Channelize the IQ data and write output into ring buffer
+        for (auto &ch : channels) {
+            ch.msd.decimate(ctx.iq_buf, len, iq_buf_ptr, &decimated_out_len);
+            iq_buf_ptr += decimated_out_len;
+        }
+
+        if (!ctx.rb_ptr->commitWrite(decimated_out_len * channels.size())) {
+            std::cerr << "Error: Unable to commit ring buffer write" << std::endl;
+        }
+    } else {
+        // Overrun
+        std::cerr << "Warning: Unable to write samples. Ring buffer full" << std::endl;
     }
 
-    // Free the hardware parameters struct
-    snd_pcm_hw_params_free(pcm_hw_params);
+    struct timeval current_time;
+    gettimeofday(&current_time, NULL);
+    rtl_bytes += len;
+    rtl_samples += (len >> 1);
+    rtl_callbacks++;
 
-    // Allocate space for the software params config struct
-    snd_pcm_sw_params_malloc(&pcm_sw_params);
+    // Output stats every STAT_INTERVAL seconds
+    if (current_time.tv_sec > last_stat_calc.tv_sec + STAT_INTERVAL) {
+        //double elapsed_time = (double)(current_time.tv_sec*1000000+current_time.tv_usec - (last_stat_calc.tv_sec*1000000+last_stat_calc.tv_usec));
+        //double rtl_data_rate = ((double)rtl_bytes)/(elapsed_time/1000000);
+        //double rtl_callback_rate = ((double)rtl_callbacks)/(elapsed_time/1000000);
+        //double rtl_sample_rate = ((double)rtl_samples)/(elapsed_time/1000000);
+        //printf("RTL buf len: %" PRIu32 ", RTL rates/s: %.4f bytes, %.2f callbacks, %.2f samples\n",
+        //       len, rtl_data_rate, rtl_callback_rate, rtl_sample_rate);
 
-    // Read the current software config from the device
-    snd_pcm_sw_params_current(handle, pcm_sw_params);
-
-    ret = snd_pcm_sw_params_set_avail_min(handle, pcm_sw_params, pcm_note_threshold);
-    if (ret < 0) {
-        std::cerr << "ALSA error. Unable to set min available: " << snd_strerror(ret) << std::endl;
+        rtl_bytes = 0;
+        rtl_callbacks = 0;
+        rtl_samples = 0;
+        last_stat_calc = current_time;
     }
-
-    ret = snd_pcm_sw_params_set_start_threshold(handle, pcm_sw_params, pcm_start_threshold);
-    if (ret < 0) {
-        std::cerr << "ALSA error. Unable to set start threshold: " << snd_strerror(ret) << std::endl;
-    }
-
-    // Write software configuration to the device
-    ret = snd_pcm_sw_params(handle, pcm_sw_params);
-    if (ret < 0) {
-        std::cerr << "ALSA error. Unable to set sw params: " << snd_strerror(ret) << std::endl;
-    }
-
-    // Free the software params config struct
-    snd_pcm_sw_params_free(pcm_sw_params);
-
-    return handle;
 }
 
 
-static void close_alsa_dev(snd_pcm_t *dev) {
-    snd_pcm_close(dev);
-
-    // ALSA will cache config in a global wide variable indicating memory
-    // leaks if not freed
-    snd_config_update_free_global();
-}
-
-
+// Called when the sound card wants another period
 static void alsa_write_cb(OutputState &ctx) {
-    struct timeval    current_time;
-    int16_t           sample_s16;
-    size_t            samples_avail;
-    const iqsample_t *iq_buffer;
-    int               ret;
+    int                   ret;
+    const iqsample_t     *iq_buffer;
+    size_t                samples_avail;
+    struct timeval        current_time;
+    std::vector<Channel> &channels = ctx.settings.channels;
 
     gettimeofday(&current_time, NULL);
     ret = snd_pcm_avail_update(ctx.pcm_handle);
     if (ret < 0) {
         std::cerr << "ALSA Error pcm_avail: " << snd_strerror(ret) << std::endl;
         //snd_pcm_prepare(ctx.pcm_handle);
+        // What to do here? Restart device? Just return?
     } else {
         if (current_time.tv_sec > ctx.last_stat_time.tv_sec + 1) {
             //fprintf(stdout, "ALSA available space: %d\n", ret);
@@ -341,11 +290,121 @@ static void alsa_write_cb(OutputState &ctx) {
     }
 
     // Ok to write more data
-    if (ctx.rb_ptr->acquireRead(&iq_buffer, &samples_avail)) {
-        size_t samples_to_write = std::min(samples_avail, (size_t)256);
+    if (ctx.rb_ptr->acquireRead(&iq_buffer, &samples_avail) && samples_avail >= CH_IQ_BUF_SIZE * channels.size()) {
+        // Zero out the output audio buffer
+        memset(ctx.audio_buffer_float, 0, sizeof(ctx.audio_buffer_float));
+        unsigned j = 0;
+        for (auto &ch : channels) {
+            for (unsigned i = 0; i < CH_IQ_BUF_SIZE; ++i) {
+                if (ch.sql_open) {
+                    // Mix in this channel to the output buffer if the squelch is open
+                    ctx.audio_buffer_float[i] += std::abs(ch.agc.adjust(iq_buffer[j])); // Demodulate AGC adjusted AM signal
+                }
+                ctx.fft_in[i] = iq_buffer[j] * ctx.window[i];  // Fill fft buffer
+                ++j;
+            }
+            fftwf_execute(ctx.fft_plan);
+            // **** Calculate sql for channel here. Start
 
-        if (samples_to_write != 256) {
-            std::cout << "RB Error: did not get 256 samples. Got " << samples_to_write << std::endl;
+            // Energy/power calculations for squelch and spectral imbalance
+            float sig_level = 0.0f;
+            for (unsigned i = 3; i < 91; i++) {
+                // About 2.8kHz +/- Fc
+                sig_level += std::norm(ctx.fft_out[i]);
+                sig_level += std::norm(ctx.fft_out[FFT_SIZE - i]);
+            }
+            // Including DC seem to increase base level with ~5dB
+            //sig_level += std::norm(ctx.fft_out[0]);
+            sig_level /= 176;
+
+            float ref_level_hi = 0.0f;
+            float ref_level_lo = 0.0f;
+            for (unsigned i = 112; i < 157; i++) {
+                // About 3.5kHz to 4.9kHz
+                ref_level_hi += std::norm(ctx.fft_out[i]) * passband_shape[i];
+                ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]) * passband_shape[FFT_SIZE - i];
+                //ref_level_hi += std::norm(ctx.fft_out[i]);
+                //ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]);
+            }
+            ref_level_hi /= 45;
+            ref_level_lo /= 45;
+            float noise_level = (ref_level_hi + ref_level_lo) / 2;
+
+            // Calculate SNR
+            float snr = 10 * std::log10(sig_level / noise_level);
+            if (snr > ch.sql_level) {
+                ch.sql_open = true;
+            } else {
+                ch.sql_open = false;
+            }
+
+            // Determine spectral imbalance (indicating frequency offset between signal and receiver fqs)
+            float lo_energy = 0.0f;
+            float hi_energy = 0.0f;
+            for (unsigned i = 1; i < FFT_SIZE/2; i++) {
+                hi_energy += std::norm(ctx.fft_out[i]);
+                lo_energy += std::norm(ctx.fft_out[i+FFT_SIZE/2]);
+            }
+
+            ctx.lo_energy[ctx.energy_idx] = lo_energy / 255;
+            ctx.hi_energy[ctx.energy_idx] = hi_energy / 255;
+            if (++ctx.energy_idx == 10) ctx.energy_idx = 0;
+
+            // Convert levels to dB
+            sig_level    = 10 * std::log10(sig_level);
+            ref_level_hi = 10 * std::log10(ref_level_hi);
+            ref_level_lo = 10 * std::log10(ref_level_lo);
+
+            if (ctx.sql_wait >= 10) {
+                lo_energy = 0.0f;
+                hi_energy = 0.0f;
+                for (unsigned i = 0; i < 10; ++i) {
+                    lo_energy += ctx.lo_energy[i];
+                    hi_energy += ctx.hi_energy[i];
+                }
+
+                lo_energy /= 10;
+                hi_energy /= 10;
+
+                float imbalance = hi_energy - lo_energy;
+
+                fprintf(stdout, "%s %s. [lo|mid|hi|SNR|imbalance]: %6.2f|%6.2f|%6.2f|%6.2f|%6.2f\n",
+                        ch.name.c_str(), ch.sql_open ? "  open":"closed",
+                        ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
+
+                //ctx.sql_wait = 0;
+            }
+            // **** Calculate sql for channel here. End
+        }
+
+        ctx.rb_ptr->commitRead(CH_IQ_BUF_SIZE * channels.size());
+
+        if (++ctx.sql_wait > 10) ctx.sql_wait = 0;
+
+        // Common filter for the mixed audio from all channels
+        ctx.audio_filter->filter(ctx.audio_buffer_float, CH_IQ_BUF_SIZE, ctx.audio_buffer_float);
+
+        // Convert float to 16 bit signed
+        for (unsigned i = 0; i < CH_IQ_BUF_SIZE; ++i) {
+            if (ctx.audio_buffer_float[i] > 1.0f)       ctx.audio_buffer_s16[i] = 32767;
+            else if (ctx.audio_buffer_float[i] < -1.0f) ctx.audio_buffer_s16[i] = -32767;
+            else ctx.audio_buffer_s16[i] = (int16_t)(ctx.audio_buffer_float[i] * 32767.0f);
+        }
+
+        // Write to sound card
+        ret = snd_pcm_writei(ctx.pcm_handle, ctx.audio_buffer_s16, CH_IQ_BUF_SIZE);
+        if (ret < 0) {
+            std::cerr << "Error: Failed to write audio samples: " << snd_strerror(ret) << std::endl;
+            snd_pcm_prepare(ctx.pcm_handle);
+        } else {
+            //std::cout << "    frames written real: " << ret << std::endl;
+        }
+
+#if 0
+        size_t samples_to_write = std::min(samples_avail, (size_t)512);
+
+        if (samples_to_write != 512) {
+            std::cout << "Error: Did not get 512 samples from ring buffer. Got: " << samples_to_write << std::endl;
         }
 
         for (size_t j = 0; j < samples_to_write; j++) {
@@ -458,6 +517,7 @@ static void alsa_write_cb(OutputState &ctx) {
         // Final audio filter
         ctx.audio_filter->filter(ctx.audio_buffer_float, samples_to_write, ctx.audio_buffer_float);
 
+        int16_t sample_s16;
         for (size_t j = 0; j < samples_to_write; j++) {
             // Calculate S16 sample
             if (ctx.audio_buffer_float[j] > 1.0f) {
@@ -481,16 +541,132 @@ static void alsa_write_cb(OutputState &ctx) {
         } else {
             //std::cout << "    frames written real: " << ret << std::endl;
         }
+#endif
     } else {
         // Underrrun
-        ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, 512);
+        std::cerr << "Warning: Unable to read samples. Ring buffer empty. Writing " << CH_IQ_BUF_SIZE << " samples of silence" << std::endl;
+        ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, CH_IQ_BUF_SIZE);
         if (ret < 0) {
             std::cerr << "Error: Failed to write underrun silence: " << snd_strerror(ret) << std::endl;
             snd_pcm_prepare(ctx.pcm_handle);
-        } else {
-            std::cout << "Underrun silence samples written: " << ret << std::endl;
         }
     }
+}
+
+
+static snd_pcm_t *open_alsa_dev(const std::string &device_name) {
+    int                  ret;
+    snd_pcm_t           *handle = nullptr;
+    snd_pcm_hw_params_t *pcm_hw_params = nullptr;
+    snd_pcm_sw_params_t *pcm_sw_params = nullptr;
+    snd_pcm_uframes_t    pcm_period;
+    snd_pcm_uframes_t    pcm_buffer_size;
+    snd_pcm_uframes_t    pcm_start_threshold;
+    snd_pcm_uframes_t    pcm_note_threshold;
+    snd_pcm_format_t     pcm_sample_format;
+    snd_pcm_access_t     pcm_access;
+    unsigned int         pcm_sample_rate;
+    unsigned int         num_channels;
+
+    // How we like our ALSA device to operate
+    pcm_access = SND_PCM_ACCESS_RW_INTERLEAVED;  // Channel samples are interleaved
+    pcm_sample_rate     = 16000;                 // 16kHz
+    pcm_sample_format   = SND_PCM_FORMAT_S16;    // Signed 16 bit samples
+    num_channels        = 1;                     // Mono
+    pcm_period          = 512;                   // Play chunks of this many frames (512/16000 -> 32ms)
+    pcm_buffer_size     = pcm_period * 8;        // Playback buffer is 8 periods, i.e. 256ms
+    pcm_note_threshold  = pcm_period;            // Notify us when we can write at least this number of frames
+    pcm_start_threshold = pcm_period * 4;        // Start playing when this many frames have been written to the device buffer
+
+    // Summary:
+    // poll will return when we can write at least pcm_period samples. Actual
+    // playback will not start until pcm_start_threshold samples has been
+    // written to the device buffer
+
+    std::cout << "Opening ALSA device '" << device_name << "' with:" << std::endl;
+    std::cout << "    Sample rate: " << pcm_sample_rate << " samples/s" << std::endl;
+    std::cout << "    Sample format: 16 bit signed integer" << std::endl;
+    std::cout << "    Number of channels: " << num_channels << std::endl;
+    std::cout << "    PCM Period: " << pcm_period << " samples (" << pcm_period / (pcm_sample_rate/1000) << "ms)" << std::endl;
+    std::cout << "    Buffer size: " << pcm_buffer_size << " samples (" << pcm_buffer_size / (pcm_sample_rate/1000) << "ms)" << std::endl;
+    std::cout << "    Wakeup low limit: " << pcm_note_threshold << " samples (" << pcm_note_threshold / (pcm_sample_rate/1000) << "ms)" << std::endl;
+    std::cout << "    Start threshold: " << pcm_start_threshold << " samples (" << pcm_start_threshold / (pcm_sample_rate/1000) << "ms)" << std::endl;
+
+    // Open device 'device_name' for playback
+    ret = snd_pcm_open(&handle, device_name.c_str(), SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK);
+    if (ret < 0) {
+        std::cerr << "ALSA error from snd_pcm_open for device '" << device_name
+                  << "': " << snd_strerror(ret) << std::endl;
+        handle = nullptr;
+        return handle;
+    }
+
+    // Allocate space for the hardare params config struct
+    snd_pcm_hw_params_malloc(&pcm_hw_params);
+
+    // Read the current hardware config from the device
+    snd_pcm_hw_params_any(handle, pcm_hw_params);
+
+    // Set hardware configurations
+    snd_pcm_hw_params_set_access(handle, pcm_hw_params, pcm_access);
+    snd_pcm_hw_params_set_format(handle, pcm_hw_params, pcm_sample_format);
+    snd_pcm_hw_params_set_channels(handle, pcm_hw_params, num_channels);
+    snd_pcm_hw_params_set_period_size(handle, pcm_hw_params, pcm_period, 0);
+    snd_pcm_hw_params_set_buffer_size(handle, pcm_hw_params, pcm_buffer_size);
+
+    // Probe sample rate to detect if the sound card is incapable of the
+    // requested rate
+    unsigned int tmp_sample_rate = pcm_sample_rate;
+    ret = snd_pcm_hw_params_set_rate_near(handle, pcm_hw_params, &tmp_sample_rate, NULL);
+    if (ret < 0) {
+        std::cout << "ALSA error: Unable to set sample rate to " << pcm_sample_rate
+                  << ". Got " << tmp_sample_rate << std::endl;
+    }
+
+    // Write hadware configuration to the device
+    ret = snd_pcm_hw_params(handle, pcm_hw_params);
+    if (ret < 0) {
+        std::cerr << "ALSA error. Unable to set hw params: " << snd_strerror(ret) << std::endl;
+    }
+
+    // Free the hardware parameters struct
+    snd_pcm_hw_params_free(pcm_hw_params);
+
+    // Allocate space for the software params config struct
+    snd_pcm_sw_params_malloc(&pcm_sw_params);
+
+    // Read the current software config from the device
+    snd_pcm_sw_params_current(handle, pcm_sw_params);
+
+    ret = snd_pcm_sw_params_set_avail_min(handle, pcm_sw_params, pcm_note_threshold);
+    if (ret < 0) {
+        std::cerr << "ALSA error. Unable to set min available: " << snd_strerror(ret) << std::endl;
+    }
+
+    ret = snd_pcm_sw_params_set_start_threshold(handle, pcm_sw_params, pcm_start_threshold);
+    if (ret < 0) {
+        std::cerr << "ALSA error. Unable to set start threshold: " << snd_strerror(ret) << std::endl;
+    }
+
+    // Write software configuration to the device
+    ret = snd_pcm_sw_params(handle, pcm_sw_params);
+    if (ret < 0) {
+        std::cerr << "ALSA error. Unable to set sw params: " << snd_strerror(ret) << std::endl;
+    }
+
+    // Free the software params config struct
+    snd_pcm_sw_params_free(pcm_sw_params);
+
+    return handle;
+}
+
+
+static void close_alsa_dev(snd_pcm_t *dev) {
+    snd_pcm_close(dev);
+
+    // ALSA will cache config in a global wide variable indicating memory
+    // leaks if not freed
+    snd_config_update_free_global();
 }
 
 
@@ -508,7 +684,7 @@ static void alsa_worker(struct OutputState &output_state) {
     std::cout << "Starting ALSA thread" << std::endl;
     cout_lock.clear();
 
-    for (int i = 0; i < 2048; i++) {
+    for (int i = 0; i < CH_IQ_BUF_SIZE; i++) {
         ctx.silence[i] = 0;
         ctx.audio_buffer_float[i] = 0.0f;
         ctx.audio_buffer_s16[i] = 0;
@@ -576,9 +752,7 @@ static void alsa_worker(struct OutputState &output_state) {
         std::cout << ")" << std::endl;
     }
 
-    //FIR    flt(coeff_nbam_channel);
-    FIR    flt(coeff_bpam_channel);
-    //FIR     flt(coeff_12k5_channel);
+    FIR flt(coeff_bpam_channel);
     flt.setGain(ctx.settings.lf_gain);
 
     gettimeofday(&current_time, NULL);
@@ -592,14 +766,9 @@ static void alsa_worker(struct OutputState &output_state) {
                                            reinterpret_cast<fftwf_complex*>(ctx.fft_out),
                                            FFTW_FORWARD, FFTW_ESTIMATE);
     ctx.sql_wait       = 0;
-    ctx.fft_samples    = 0;
-    ctx.sql_open       = false;
     ctx.energy_idx     = 0;
     ctx.hi_energy.reserve(10);
     ctx.lo_energy.reserve(10);
-    ctx.agc.setAttack(1.0f);
-    ctx.agc.setDecay(0.01f);
-    ctx.agc.setReference(1.0f);
 
     // Create FFT window
     // Hamming: 0.54-0.46cos(2*pi*x/N), 0 <= n <= N. Length L = N+1
@@ -634,7 +803,7 @@ static void alsa_worker(struct OutputState &output_state) {
                 // logical to ALSA
                 ret = snd_pcm_poll_descriptors_revents(pcm_handle, &poll_descs[desc], 1, &revents);
                 if (ret < 0) {
-                    fprintf(stderr, "ALSA Error revents: %s\n", snd_strerror(ret));
+                    std::cerr << "ALSA Error revents: " << snd_strerror(ret) << std::endl;
                 } else {
                     if (revents & POLLOUT) {
                         // The device indicate that it wants data to output
@@ -656,68 +825,6 @@ static void alsa_worker(struct OutputState &output_state) {
     while (cout_lock.test_and_set(std::memory_order_acquire));
     std::cout << "ALSA thread stopped" << std::endl;
     cout_lock.clear();
-}
-
-
-// Called when new IQ data is available
-static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
-    struct InputState *ctx = reinterpret_cast<struct InputState*>(user_data);
-    iqsample_t        *iq_buf_ptr;
-    unsigned           decimated_out_len;
-
-    if (len != IQ_BUF_SIZE) {
-        std::cerr << "Error: Unexpected number of iq samples: " << len << ". " << IQ_BUF_SIZE << " expected." << std::endl;
-        return;
-    }
-
-    if (quit) {
-        rtlsdr_cancel_async(ctx->rtl_device);
-        return;
-    }
-
-    // Copy to tmp buf to overcome slow access to data on Pi with kernel 5.x
-    memcpy(ctx->iq_buf, buf, IQ_BUF_SIZE);
-
-    //
-    // We use a ADC scale from -1.0 to 1.0. To calculate dBFS we can use:
-    //
-    // dBFS = 10 * log10(i*i + q*q);
-    //
-
-    // Acquire IQ ring buffer, decimate and write the result to the buffer
-    if (ctx->rb_ptr->acquireWrite(&iq_buf_ptr, DECIMATED_SIZE)) {
-        ctx->ds->decimate(ctx->iq_buf, len, iq_buf_ptr, &decimated_out_len);
-        if (!ctx->rb_ptr->commitWrite(decimated_out_len)) {
-            printf("iq_rb write commit error\n");
-        }
-
-        if (decimated_out_len != DECIMATED_SIZE) {
-            printf("Major sample rate calculation error!\n");
-        }
-    } else {
-        // Overrun
-        printf("iq_rb buffer full\n");
-    }
-
-    struct timeval current_time;
-    gettimeofday(&current_time, NULL);
-    bytes += len;
-    samples += (len >> 1);
-    frames++;
-
-    // Output stats every STAT_INTERVAL seconds
-    if (current_time.tv_sec > last_stat_calc.tv_sec + STAT_INTERVAL) {
-        //double elapsed_time = (double)(current_time.tv_sec*1000000+current_time.tv_usec - (last_stat_calc.tv_sec*1000000+last_stat_calc.tv_usec));
-        //double data_rate = ((double)bytes)/(elapsed_time/1000000);
-        //double frame_rate = ((double)frames)/(elapsed_time/1000000);
-        //double sample_rate = ((double)samples)/(elapsed_time/1000000);
-        bytes = 0;
-        frames = 0;
-        samples = 0;
-        last_stat_calc = current_time;
-
-        //printf("len: %" PRIu32 ", Rate: %.4f Bps, %.2f fps, %.2f Sps\n", len, data_rate, frame_rate, sample_rate);
-    }
 }
 
 
@@ -801,8 +908,9 @@ uint32_t parse_fq(const std::string &str, bool aeronautical = false) {
 }
 
 
-// Parse the command line and fill the settings object. Return 0 on success
-// or < 0 on parse error or if help was requested
+// Parses the command line and fills the settings object. Checks that the
+// options and arguments are within limits. Returns 0 on success or < 0 on
+// parse/value error or if help was requested
 static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     int           ret = -1;
     poptContext   popt_ctx;
@@ -813,18 +921,16 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     struct poptOption options_table[] = {
         { "rtl-dev",   'd', POPT_ARG_INT,    &settings.rtl_device, 0, "RTL-SDR device ID to use. Defaults to 0 if not set", "RTLDEVEID" },
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm. Defaults to 0 if not set", "FQCORR" },
-        { "fq-offset", 'o', POPT_ARG_INT,    &settings.fq_offset, 0, "tuner offset in kHz in steps of 25. Defaults to 0 if not set", "FQOFF" },
         { "rf-gain",   'r', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
         { "lf-gain",   'l', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio gain in dB. Defaults to 0 if not set", "LFGAIN" },
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
-        { "fq-mode",     0, POPT_ARG_NONE,   &normal_fq_fmt, 0, "interpret the CHANNEL argument as a normal frequency in MHz", nullptr },
-        { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show this help message and quit", nullptr },
+        { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
 
     popt_ctx = poptGetContext(nullptr, argc, (const char**)argv, options_table, POPT_CONTEXT_POSIXMEHARDER);
-    poptSetOtherOptionHelp(popt_ctx, "[OPTION...] CHANNEL");
+    poptSetOtherOptionHelp(popt_ctx, "[OPTION...] CHANNEL [CHANNEL...]");
 
     // Parse options
     while ((ret = poptGetNextOpt(popt_ctx)) > 0);
@@ -857,17 +963,19 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
             std::cerr << R"(
 sdrx is a simple software defined narrow band AM receiver using a RTL-SDR
 dongle as its hadware backend. It is mainly designed for use in the 118 to
-138 MHz airband. The program is run from the command line and the channel to
-listen to is given as an argument in standard six digit aeronautical notation.
+138 MHz airband. The program is run from the command line and the channels to
+listen to are given as arguments in standard six digit aeronautical notation.
 Both the legacy 25kHz channel separation and the new 8.33kHz channel separation
 notations are supported, i.e. 118.275 and 118.280 both mean the frequency
 118.275 MHz.
 
+If multiple channels are given, they must all be within 1MHz of bandwidth.
+
 The squelch is adaptive with respect to the current noise floor and the squelch
 level is given as a SNR value in dB. Audio is played using ALSA.
 
-The --fq-mode option (with no argument) can be used to give the frequency in MHz
-instead of as a channel number.
+Audio gain and squelch level should normally not be set since the defaults
+work well.
 
 Examples:
 
@@ -875,14 +983,10 @@ Listen to the channel 122.450 with 40dB of RF gain and 8dB of audio gain:
 
     $ sdrx --rf-gain 40 --lf-gain 8 122.450
 
-Listen to the channel 118.105 with 34dB of RF gain, 12dB of audio gain and
-18dB squelch:
+Listen to the channels 118.105 and 118.505 with 34dB of RF gain, 12dB of audio
+gain and 18dB squelch:
 
-    $ sdrx --rf-gain 34 --lf-gain 12 --sql-level 18 118.105
-
-Listen to the frequency 118.111003 MHz:
-
-    $ sdrx --fq-mode 118.111003
+    $ sdrx --rf-gain 34 --lf-gain 12 --sql-level 18 118.105 118.505
 )"
             << std::endl;
             ret = -1;
@@ -905,15 +1009,6 @@ Listen to the frequency 118.111003 MHz:
                 fprintf(stderr, "Error: Invalid SQL level given: %.4f\n", settings.sql_level);
                 ret = -1;
             }
-            if (settings.fq_offset < -500 || settings.fq_offset > 500) {
-                std::cerr << "Error: Frequency offset must be within -500 to 500 kHz" << std::endl;
-                ret = -1;
-            } else if (settings.fq_offset % 25 != 0) {
-                std::cerr << "Error: Frequency offset must be in steps of 25" << std::endl;
-                ret = -1;
-            }
-
-            settings.fq_offset *= 1000;
 
             // Parse the arguments as channels
             if (poptPeekArg(popt_ctx) != nullptr) {
@@ -922,24 +1017,21 @@ Listen to the frequency 118.111003 MHz:
                 while ((arg = poptGetArg(popt_ctx)) != nullptr) {
                     uint32_t fq_ret = parse_fq(arg, fq_type);
                     if (fq_ret == 0) {
-                        std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") << " given: " << arg << std::endl;
+                        std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") <<
+                                     " given: " << arg << std::endl;
                         ret = -1;
                     } else if (fq_ret < 45000000 || fq_ret > 1800000000) {
                         std::cerr << "Error: Invalid frequency given: " << fq_ret << "Hz" << std::endl;
                         ret = -1;
                     } else {
                         // Add to channels list if not already present
-                        if (std::find(settings.channels.begin(), settings.channels.end(), Channel(arg)) == settings.channels.end()) {
+                        if (std::find(settings.channels.begin(), settings.channels.end(), arg) == settings.channels.end()) {
                             settings.channels.push_back(Channel(arg, settings.sql_level));
                         }
                     }
                 }
 
                 if (settings.channels.size() > 0) {
-                    // Backwards compatibility for one channel mode
-                    settings.channel = settings.channels[0].name;
-                    settings.fq = parse_fq(settings.channel, fq_type);
-
                     if (settings.channels.size() > 1 && fq_type == NORMAL_FQ) {
                         std::cerr << "Error: Only one frequency allowed in frequency mode" << std::endl;
                         ret = -1;
@@ -958,9 +1050,9 @@ Listen to the frequency 118.111003 MHz:
                         uint32_t mid_fq_rounded = (mid_fq / 100000) * 100000;
 
                         // Verify that the requested channels fit
-                        if (lo_fq < (mid_fq_rounded - MAX_OFFSET) || hi_fq > (mid_fq_rounded + MAX_OFFSET)) {
+                        if (lo_fq < (mid_fq_rounded - MAX_CH_OFFSET) || hi_fq > (mid_fq_rounded + MAX_CH_OFFSET)) {
                             std::cerr << "Error: Requested channels does not fit inside available IF bandwidth (" <<
-                                         (MAX_OFFSET*2)/1000000 << "MHz)" << std::endl;
+                                         (MAX_CH_OFFSET*2)/1000000 << "MHz)" << std::endl;
                             ret = -1;
                         }
 
@@ -968,7 +1060,7 @@ Listen to the frequency 118.111003 MHz:
                     }
                 }
             } else {
-                std::cerr << "Error: No channel/frequency given" << std::endl;
+                std::cerr << "Error: No channel given" << std::endl;
                 ret = -1;
             }
 
@@ -1012,9 +1104,9 @@ static int channel_to_offset(const std::string &channel, int32_t tuner_fq) {
     offset_diff = (fq_diff / 100000)*12;
     offset = offset_diff + sub_offset->second;
 
-    std::cout << "Tuner fq: " << tuner_fq << ", channel: " << channel << ", offset: " <<
-    sub_offset->second << ", offset_diff: " << offset_diff <<
-    ", real_offset: "  << offset << std::endl;
+    //std::cout << "Tuner fq: " << tuner_fq << ", channel: " << channel << ", offset: " <<
+    //sub_offset->second << ", offset_diff: " << offset_diff <<
+    //", real_offset: "  << offset << std::endl;
 
     return offset;
 }
@@ -1023,7 +1115,7 @@ static int channel_to_offset(const std::string &channel, int32_t tuner_fq) {
 int main(int argc, char** argv) {
     int              ret;
     struct sigaction sigact;
-    uint32_t         sample_rate = 1200000;
+    uint32_t         sample_rate = RTL_IQ_SAMPLING_FQ;
     uint32_t         bw = 300000;
     Settings         settings;
 
@@ -1036,24 +1128,23 @@ int main(int argc, char** argv) {
     std::cout << "The folowing settings were given:" << std::endl;
     std::cout << "    RTL device: " << settings.rtl_device << std::endl;
     std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
-    std::cout << "    Frequency offset: " << settings.fq_offset << "kHz" << std::endl;
     std::cout << "    RF gain: " << settings.rf_gain << "dB" << std::endl;
     std::cout << "    LF (audio) gain: " << settings.lf_gain << "dB" << std::endl;
     std::cout << "    Squelch level: " << settings.sql_level << "dB" << std::endl;
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
-    std::cout << "    Frequency: " << settings.fq << "Hz" << std::endl;
-    std::cout << "    Channel: " << settings.channel << std::endl;
+    std::cout << "    Tuner frequency: " << settings.tuner_fq << "Hz" << std::endl;
     std::cout << "    Channels:";
     for (auto &ch : settings.channels) std::cout << " " << ch.name;
     std::cout << std::endl;
 
+    // Setup the channels with "tuner", down sampler and AGC
     for (auto &ch : settings.channels) {
         std::vector<iqsample_t> translator;
 
         int ch_offset = channel_to_offset(ch.name, (int32_t)settings.tuner_fq);
         if (ch_offset != 0) {
-            int N = 144;
-            for (int n= 0; n < N; n++) {
+            int N = 144;   // This number depends on the IQ sampling fq
+            for (int n = 0; n < N; n++) {
                 std::complex<float> e(0.0f, -2.0f * M_PI * n * ch_offset/144.0f);
                 translator.push_back(exp(e));
             }
@@ -1064,42 +1155,23 @@ int main(int argc, char** argv) {
             { 5, lp_ds_400k_80k },
             { 5, lp_ds_80k_16k }
         });
+
+        ch.agc.setAttack(1.0f);
+        ch.agc.setDecay(0.01f);
+        ch.agc.setReference(1.0f);
     }
 
-    std::vector<iqsample_t> translator;
-
-    if (settings.fq_offset != 0) {
-        int N = 144;              // fs / (25000/3) a.k.a 8.33kHz channels
-        //int rate = 1200000;
-        //int offset = 250000;
-        //int ch = 30;
-        for (int n = 0; n < N; n++) {
-            //std::complex<float> e(0.0f, -2.0f*M_PI*offset*n/rate);
-            //std::complex<float> e(0.0f, -2.0f * M_PI * n * ch/144.0f);
-            std::complex<float> e(0.0f, -2.0f * M_PI * n * (float)settings.fq_offset/1200000.0f);
-            translator.push_back(exp(e));
-        }
-
-        settings.fq -= settings.fq_offset;
-    }
-
-    MSD downsampler(translator, std::vector<MSD::Stage>{
-        {3, lp_ds_1200k_400k},
-        {5, lp_ds_400k_80k},
-        {5, lp_ds_80k_16k}
-    });
-    RB<iqsample_t> iq_rb(256*16); // 16 chunks or 256ms
+    RB<iqsample_t> iq_rb(CH_IQ_BUF_SIZE * settings.channels.size() * 8); // 8 chunks or 256ms
 
     struct InputState input_state;
     input_state.settings   = settings;
     input_state.rtl_device = nullptr;
-    input_state.ds         = &downsampler;
     input_state.rb_ptr     = &iq_rb;
-    input_state.num_levels = 0;
 
     ret = rtlsdr_open(&input_state.rtl_device, settings.rtl_device);
     if (ret < 0 || input_state.rtl_device == NULL) {
-        std::cerr << "Error: Unable to open device " << settings.rtl_device << ". ret = " << ret << std::endl;
+        std::cerr << "Error: Unable to open device " << settings.rtl_device <<
+                     ". ret = " << ret << std::endl;
         return 1;
     }
 
@@ -1129,14 +1201,14 @@ int main(int argc, char** argv) {
     tuner_gains = nullptr;
 
     std::cout << "Setting up device with ";
-    std::cout << "Fq=" << settings.fq << "Hz, ";
+    std::cout << "Fq=" << settings.tuner_fq << "Hz, ";
     std::cout << "Corr=" << settings.fq_corr << "ppm, ";
     std::cout << "Bw=" << bw << "Hz, ";
     std::cout << "Gain=" << settings.rf_gain << "dB, ";
     std::cout << "Sample rate=" << sample_rate << " samples/s";
     std::cout << std::endl;
 
-    ret = rtlsdr_set_center_freq(input_state.rtl_device, settings.fq);
+    ret = rtlsdr_set_center_freq(input_state.rtl_device, settings.tuner_fq);
     ret = rtlsdr_set_freq_correction(input_state.rtl_device, settings.fq_corr);
     ret = rtlsdr_set_tuner_bandwidth(input_state.rtl_device, bw);
     ret = rtlsdr_set_tuner_gain(input_state.rtl_device, settings.rf_gain * 10);
@@ -1145,7 +1217,8 @@ int main(int argc, char** argv) {
     // Check what happend
     uint32_t actual_sample_rate = rtlsdr_get_sample_rate(input_state.rtl_device);
     if (actual_sample_rate != sample_rate) {
-        std::cerr << "Warning: Actual Sample rate: " << actual_sample_rate << "samples/s. Program will not work." << std::endl;
+        std::cerr << "Warning: Actual Sample rate: " << actual_sample_rate <<
+                     "samples/s. Program will not work." << std::endl;
     }
 
     sigact.sa_handler = signal_handler;
@@ -1164,15 +1237,15 @@ int main(int argc, char** argv) {
     std::thread alsa_thread(alsa_worker, std::ref(output_state));
     std::thread dongle_thread(dongle_worker, std::ref(input_state));
 
-    bytes = 0;
-    samples = 0;
-    frames = 0;
+    rtl_bytes = 0;
+    rtl_samples = 0;
+    rtl_callbacks = 0;
     gettimeofday(&last_stat_calc, NULL);
     rtlsdr_reset_buffer(input_state.rtl_device);
 
-    // IQ_BUF_SIZE is the size of the callback buffer. This will become len
+    // RTL_IQ_BUF_SIZE is the size of the callback buffer. This will become len
     // in the data callback.
-    ret = rtlsdr_read_async(input_state.rtl_device, iq_cb, &input_state, 4, IQ_BUF_SIZE);
+    ret = rtlsdr_read_async(input_state.rtl_device, iq_cb, &input_state, 4, RTL_IQ_BUF_SIZE);
     if (ret < 0) {
         std::cerr << "Error: rtlsdr_read_async returned: " << ret << std::endl;
         return(0);
