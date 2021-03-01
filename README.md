@@ -5,7 +5,7 @@ sdrx
 ![CodeQL](https://github.com/johanhedin/sdrx/workflows/CodeQL/badge.svg)
 
 `sdrx` is a simple software defined narrow band AM receiver that uses a RTL-SDR
-USB dongle as it's hardware part. It's main purpous is to act as a test bench
+USB dongle as it's hardware part. It's main purpose is to act as a test bench
 for different SDR implementation aspects as tuning, down sampling, filtering,
 demodulation, interaction between clock domains, threading, audio processing
 and so on. `sdrx` is written in C++17 and is tested on a x86_64 machine running
@@ -106,5 +106,5 @@ transmitter and if it is positive you are tuned below the transmitter frequency.
 
 The imbalance is determined by calculating the energy balance between "negative"
 and "positive" frequencies from the FFT used for the squelch. Since AM is a
-symetric modulation around the carrier, the imbalance should be 0 if you are
+symmetric modulation around the carrier, the imbalance should be 0 if you are
 tuned to the transmitters frequency.
