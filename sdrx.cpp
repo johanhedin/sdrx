@@ -27,6 +27,7 @@
 #include <poll.h>
 #include <sys/time.h>
 #include <inttypes.h>
+#include <time.h>
 
 // Standard C++ includes
 #include <thread>
@@ -273,6 +274,8 @@ static void alsa_write_cb(OutputState &ctx) {
     const iqsample_t     *iq_buffer;
     size_t                samples_avail;
     struct timeval        current_time;
+    struct tm            *tm;
+    char                  tmp_str[256];
     std::vector<Channel> &channels = ctx.settings.channels;
 
     gettimeofday(&current_time, NULL);
@@ -290,6 +293,14 @@ static void alsa_write_cb(OutputState &ctx) {
 
     // Ok to write more data
     if (ctx.rb_ptr->acquireRead(&iq_buffer, &samples_avail) && samples_avail >= CH_IQ_BUF_SIZE * channels.size()) {
+        if (ctx.sql_wait >= 10) {
+            tm = localtime(&current_time.tv_sec);
+            strftime(tmp_str, 100, "%F %T", tm);
+            if (channels.size() > 1) {
+                fprintf(stdout, "%s:", tmp_str);
+            }
+        }
+
         // Zero out the output audio buffer
         memset(ctx.audio_buffer_float, 0, sizeof(ctx.audio_buffer_float));
         unsigned j = 0;
@@ -367,18 +378,28 @@ static void alsa_write_cb(OutputState &ctx) {
 
                 float imbalance = hi_energy - lo_energy;
 
-                fprintf(stdout, "%s %s. [lo|mid|hi|SNR|imbalance]: %6.2f|%6.2f|%6.2f|%6.2f|%6.2f\n",
-                        ch.name.c_str(), ch.sql_open ? "  open":"closed",
-                        ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
-
-                //ctx.sql_wait = 0;
+                if (channels.size() == 1) {
+                    fprintf(stdout, "%s: %s %s. [lo|mid|hi|SNR|imbalance]: %6.2f|%6.2f|%6.2f|%6.2f|%6.2f",
+                            tmp_str, ch.name.c_str(), ch.sql_open ? "  open":"closed",
+                            ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
+                } else {
+                    if (snr < 1.0f) snr = 0.0f;
+                    if (ch.sql_open) {
+                        fprintf(stdout, "  \033[103m\033[30m%s(%5.2f)\033[0m", ch.name.c_str(), snr);
+                    } else {
+                        fprintf(stdout, "  %s(%5.2f)", ch.name.c_str(), snr);
+                    }
+                }
             }
             // **** Calculate sql for channel here. End
         }
 
         ctx.rb_ptr->commitRead(CH_IQ_BUF_SIZE * channels.size());
 
-        if (++ctx.sql_wait > 10) ctx.sql_wait = 0;
+        if (++ctx.sql_wait > 10) {
+            ctx.sql_wait = 0;
+            fprintf(stdout, "\n");
+        }
 
         // Common filter for the mixed audio from all channels
         ctx.audio_filter->filter(ctx.audio_buffer_float, CH_IQ_BUF_SIZE, ctx.audio_buffer_float);
