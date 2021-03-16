@@ -4,16 +4,17 @@ sdrx
 ![C/C++ CI](https://github.com/johanhedin/sdrx/workflows/C/C++%20CI/badge.svg)
 ![CodeQL](https://github.com/johanhedin/sdrx/workflows/CodeQL/badge.svg)
 
-`sdrx` is a simple software defined narrow band AM receiver that uses a RTL-SDR
-USB dongle as it's hardware part. It's main purpose is to act as a test bench
-for different SDR implementation aspects as tuning, down sampling, filtering,
-demodulation, interaction between clock domains, threading, audio processing
-and so on. `sdrx` is written in C++17 and is tested on a x86_64 machine running
-Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running Raspberry Pi OS. Audio
-is played using ALSA.
+`sdrx` is a simple software defined narrow band AM airband receiver that uses a
+RTL-SDR USB dongle as it's hardware part. It's main purpose is to act as a test
+bench for different SDR implementation aspects as tuning, down sampling,
+filtering, demodulation, interaction between clock domains, threading, audio
+processing and so on. `sdrx` is written in C++17 and is tested on a x86_64
+machine running Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running
+Raspberry Pi OS. Audio is played using ALSA.
 
 A RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
-is used for development. The program may be incompatible with other dongles. YMMV.
+is used for development. The program may be incompatible with other dongles.
+YMMV.
 
 
 Build requirements
@@ -67,16 +68,16 @@ be listed with --help:
     $ ./sdrx --help
     $ ./sdrx --rf-gain 30 122.455
 
-Experimental support for multiple channels are available as well. Just list
-the channels as arguments (due to the fixed sampling frequency used, they must
-fit inside a 1MHz band):
+Support for multiple channels are available as well. Just list the channels as
+arguments (due to the fixed sampling frequency used, they must fit inside a
+1MHz band):
 
     $ ./sdrs --rf-gain 40 118.105 118.280 118.405 118.505
 
 
-Output
+Output in single channel mode
 ====
-Besides playing audio when the squelch is open, `sdrx` write signal power
+Besides playing audio when the squelch is open, `sdrx` writes signal power
 measurements to the console while running.
 
 A typical output look like this:
@@ -96,9 +97,9 @@ A typical output look like this:
 fc + 3.5-4.9kHz.
 
 The noise level is estimated as the power just outside of where the modulated
-audio resides. **SNR** is the difference between "signal power" and "noise power"
-and is checked against the wanted squelch level to determine if audio is played
-or not.
+audio resides (i.e. the **lo** and **hi** measurements). **SNR** is the
+difference between "signal power" and "noise power" and is checked against the
+wanted squelch level to determine if audio is played or not.
 
 **imbalance** is a measure of how "off" the receiver is compared to the frequency
 that the transmitter is using. If it is negative, you are tuned above the
@@ -108,3 +109,41 @@ The imbalance is determined by calculating the energy balance between "negative"
 and "positive" frequencies from the FFT used for the squelch. Since AM is a
 symmetric modulation around the carrier, the imbalance should be 0 if you are
 tuned to the transmitters frequency.
+
+
+Output in multi channel mode
+====
+In multi channel mode, audio from the different channels are distributed between
+the left and right speaker. This will create the sense of a set of speakers,
+one per channel, in front of the listener.
+
+Together with the visual presentation of the channels in the terminal this
+will increase the awareness of what channels that are active.
+
+Output in the terminal looks something like this:
+
+    $ ./sdrx -r 40 118.105 118.280 118.405 118.505
+    ...
+    10:57:00: 118.105( 0.00) 118.205( 0.00) 118.280( 0.00) 118.405( 0.00) 118.505( 0.00)
+    10:57:01: 118.105( 0.00) 118.205( 0.00) 118.280( 0.00) 118.405( 0.00) 118.505( 0.00)
+    10:57:01: 118.105( 0.00) 118.205( 1.05) 118.280( 0.00) 118.405( 0.00) 118.505( 1.39)
+    10:57:01: 118.105( 1.31) 118.205( 0.00) 118.280(27.02) 118.405( 0.00) 118.505( 1.07)
+    10:57:02: 118.105( 0.00) 118.205( 0.00) 118.280(28.59) 118.405( 0.00) 118.505( 0.00)
+    10:57:02: 118.105( 0.00) 118.205( 0.00) 118.280(28.93) 118.405( 0.00) 118.505( 0.00)
+    10:57:02: 118.105( 0.00) 118.205( 0.00) 118.280(29.07) 118.405( 0.00) 118.505( 0.00)
+    10:57:03: 118.105( 0.00) 118.205( 0.00) 118.280(29.48) 118.405( 0.00) 118.505( 0.00)
+    10:57:03: 118.105( 0.00) 118.205( 0.00) 118.280(28.26) 118.405( 0.00) 118.505( 0.00)
+    10:57:03: 118.105( 0.00) 118.205( 0.00) 118.280(28.47) 118.405( 0.00) 118.505( 0.00)
+    10:57:04: 118.105( 1.10) 118.205( 0.00) 118.280(29.80) 118.405( 0.00) 118.505( 0.00)
+    10:57:04: 118.105( 0.00) 118.205( 0.00) 118.280(28.92) 118.405( 0.00) 118.505( 0.00)
+    10:57:04: 118.105( 0.00) 118.205( 0.00) 118.280(28.58) 118.405( 0.00) 118.505( 1.49)
+    10:57:05: 118.105( 0.00) 118.205( 0.00) 118.280(27.99) 118.405( 0.00) 118.505( 0.00)
+    10:57:05: 118.105( 0.00) 118.205( 0.00) 118.280(28.88) 118.405( 0.00) 118.505( 0.00)
+    10:57:05: 118.105( 1.06) 118.205( 0.00) 118.280( 0.00) 118.405( 0.00) 118.505( 0.00)
+    10:57:06: 118.105( 1.82) 118.205( 0.00) 118.280( 1.28) 118.405( 0.00) 118.505( 1.07)
+    10:57:06: 118.105( 0.00) 118.205( 0.00) 118.280( 0.00) 118.405( 0.00) 118.505( 0.00)
+    ...
+
+Channels with open squelch will have the background color set to yellow. The
+number in parentheses after every channel is the signal level above the noise
+floor (see SNR for single mode channel above).

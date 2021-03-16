@@ -122,19 +122,20 @@ static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 class Channel {
 public:
     Channel(const std::string &name, float sql_level = 9.0f)
-    : name(name), sql_level(sql_level), sql_open(false) {}
-
-    std::string             name;         // Channel name, e.g "118.105"
-    MSD                     msd;          // Multi stage down sampler with tuner
-    AGC                     agc;          // AGC
-    float                   sql_level;    // Squelch level for the channel
-    bool                    sql_open;     // Squelch open/close state
+    : name(name), sql_level(sql_level), sql_open(false), pos(0) {}
 
     bool operator<(const Channel &rhv) { return name < rhv.name; }
     bool operator==(const Channel &rhv) { return name == rhv.name; }
 
     bool operator<(const char *rhv) { return name < rhv; }
     bool operator==(const char *rhv) { return name == rhv; }
+
+    std::string             name;         // Channel name, e.g "118.105"
+    MSD                     msd;          // Multi stage down sampler with tuner
+    AGC                     agc;          // AGC
+    float                   sql_level;    // Squelch level for the channel
+    bool                    sql_open;     // Squelch open/close state
+    int                     pos;          // Audio position. 0 == center
 };
 
 
@@ -168,10 +169,10 @@ struct OutputState {
     snd_pcm_t         *pcm_handle;               // ALSA PCM device
     RB<iqsample_t>    *rb_ptr;                   // Input -> Output buffer
     struct timeval     last_stat_time;
-    int16_t            silence[CH_IQ_BUF_SIZE];
-    float              audio_buffer_float[CH_IQ_BUF_SIZE];
-    int16_t            audio_buffer_s16[CH_IQ_BUF_SIZE];
-    FIR               *audio_filter;
+    int16_t            silence[CH_IQ_BUF_SIZE*2];            // Stereo
+    float              audio_buffer_float[CH_IQ_BUF_SIZE*2]; // Stereo
+    int16_t            audio_buffer_s16[CH_IQ_BUF_SIZE*2];   // Stereo
+    FIR2              *audio_filter;
     iqsample_t         fft_in[FFT_SIZE];
     iqsample_t         fft_out[FFT_SIZE];
     float              window[FFT_SIZE+1];
@@ -206,7 +207,7 @@ static const char* rtlsdr_tuner_to_str(enum rtlsdr_tuner tuner_id) {
 // Called by librtlsdr when a chunk of new IQ data is available
 static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     struct InputState    &ctx = *reinterpret_cast<struct InputState*>(user_data);
-    iqsample_t           *iq_buf_ptr;
+    iqsample_t           *iq_buf_ptr = nullptr;
     std::vector<Channel> &channels = ctx.settings.channels;
 
     if (len != RTL_IQ_BUF_SIZE) {
@@ -274,7 +275,7 @@ static void alsa_write_cb(OutputState &ctx) {
     const iqsample_t     *iq_buffer;
     size_t                samples_avail;
     struct timeval        current_time;
-    struct tm            *tm;
+    struct tm             tm;
     char                  tmp_str[256];
     std::vector<Channel> &channels = ctx.settings.channels;
 
@@ -291,11 +292,10 @@ static void alsa_write_cb(OutputState &ctx) {
         }
     }
 
-    // Ok to write more data
     if (ctx.rb_ptr->acquireRead(&iq_buffer, &samples_avail) && samples_avail >= CH_IQ_BUF_SIZE * channels.size()) {
         if (ctx.sql_wait >= 10) {
-            tm = localtime(&current_time.tv_sec);
-            strftime(tmp_str, 100, "%F %T", tm);
+            localtime_r(&current_time.tv_sec, &tm);
+            strftime(tmp_str, 100, "%F %T", &tm);
             if (channels.size() > 1) {
                 fprintf(stdout, "%s:", tmp_str);
             }
@@ -306,9 +306,37 @@ static void alsa_write_cb(OutputState &ctx) {
         unsigned j = 0;
         for (auto &ch : channels) {
             for (unsigned i = 0; i < CH_IQ_BUF_SIZE; ++i) {
+                float s;
                 if (ch.sql_open) {
                     // Mix in this channel to the output buffer if the squelch is open
-                    ctx.audio_buffer_float[i] += std::abs(ch.agc.adjust(iq_buffer[j])); // Demodulate AGC adjusted AM signal
+                    s = std::abs(ch.agc.adjust(iq_buffer[j])); // Demodulate AGC adjusted AM signal
+                    switch (ch.pos) {
+                        case -2:
+                            ctx.audio_buffer_float[i*2] += s;
+                            ctx.audio_buffer_float[i*2+1] += 0.2f*s;
+                            break;
+
+                        case -1:
+                            ctx.audio_buffer_float[i*2] += 0.6f*s;
+                            ctx.audio_buffer_float[i*2+1] += 0.4f*s;
+                            break;
+
+                        case 1:
+                            ctx.audio_buffer_float[i*2] += 0.4f*s;
+                            ctx.audio_buffer_float[i*2+1] += 0.6f*s;
+                            break;
+
+                        case 2:
+                            ctx.audio_buffer_float[i*2] += 0.2f*s;
+                            ctx.audio_buffer_float[i*2+1] += s;
+                            break;
+
+                        default:
+                            // Center
+                            ctx.audio_buffer_float[i*2] += s;
+                            ctx.audio_buffer_float[i*2+1] += s;
+                            break;
+                    }
                 }
                 ctx.fft_in[i] = iq_buffer[j] * ctx.window[i];  // Fill fft buffer
                 ++j;
@@ -402,13 +430,16 @@ static void alsa_write_cb(OutputState &ctx) {
         }
 
         // Common filter for the mixed audio from all channels
-        ctx.audio_filter->filter(ctx.audio_buffer_float, CH_IQ_BUF_SIZE, ctx.audio_buffer_float);
+        ctx.audio_filter->filter(ctx.audio_buffer_float, CH_IQ_BUF_SIZE*2, ctx.audio_buffer_float);
 
         // Convert float to 16 bit signed
-        for (unsigned i = 0; i < CH_IQ_BUF_SIZE; ++i) {
-            if (ctx.audio_buffer_float[i] > 1.0f)       ctx.audio_buffer_s16[i] = 32767;
-            else if (ctx.audio_buffer_float[i] < -1.0f) ctx.audio_buffer_s16[i] = -32767;
-            else ctx.audio_buffer_s16[i] = (int16_t)(ctx.audio_buffer_float[i] * 32767.0f);
+        for (unsigned i = 0; i < CH_IQ_BUF_SIZE*2; ++i) {
+            int16_t s;
+            if (ctx.audio_buffer_float[i] > 1.0f)       s = 32767;
+            else if (ctx.audio_buffer_float[i] < -1.0f) s = -32767;
+            else s = (int16_t)(ctx.audio_buffer_float[i] * 32767.0f);
+
+            ctx.audio_buffer_s16[i] = s;
         }
 
         // Write to sound card
@@ -420,148 +451,6 @@ static void alsa_write_cb(OutputState &ctx) {
             //std::cout << "    frames written real: " << ret << std::endl;
         }
 
-#if 0
-        size_t samples_to_write = std::min(samples_avail, (size_t)512);
-
-        if (samples_to_write != 512) {
-            std::cout << "Error: Did not get 512 samples from ring buffer. Got: " << samples_to_write << std::endl;
-        }
-
-        for (size_t j = 0; j < samples_to_write; j++) {
-            ctx.fft_in[ctx.fft_samples] = iq_buffer[j] * ctx.window[ctx.fft_samples];  // Fill FFT in buffer
-            ctx.fft_samples++;
-            ctx.audio_buffer_float[j] = std::abs(ctx.agc.adjust(iq_buffer[j])); // Demodulate AGC adjusted AM signal
-        }
-        ctx.rb_ptr->commitRead(samples_to_write);
-
-        // Calculate fft. Compensate for scaling? (divide by FFT_SIZE?)
-        //
-        // Contents of fft_out:
-        //
-        // Index                         Contents
-        // --------------------------------------------------------------------
-        // 0                           : DC part
-        // 1           -> FFT_SIZE/2-1 : Positive frequencies in increasing order
-        // FFT_SIZE/2                  : Nyquist component. Common to both the negative and positive parts
-        // FFT_SIZE/2+1 -> FFT_SIZE-1  : Negative frequencies in increasing order
-        //
-        // If the IQ signal is at 110.000MHz and Fs == 2MS/s we can represent
-        // a band between 109.000 and 111.000 MHz. The sub-band 110 -> 111 is
-        // in samples 1:FFT_SIZE/2-1 and the sub-band 109 -> 110 is in samples
-        // FFT_SIZE/2+1:FFT_SIZE-1
-        //
-        // Since our sampling frequency is 16kHz and we are processing IQ,
-        // the "band" we observe is fc +/- 8Khz and every bin represent
-        // 16000/FFT_SIZE (31.25Hz for a fft size of 512). Index 0 is thus
-        // fc, index 1 fc + 31.25 and index FFT_SIZE-1 is fc - 31.25.
-        //
-        // http://www.fftw.org/fftw3.pdf chapter 4.8
-        // https://www.gaussianwaves.com/2015/11/interpreting-fft-results-complex-dft-frequency-bins-and-fftshift
-        //
-        if (ctx.fft_samples == FFT_SIZE) {
-            fftwf_execute(ctx.fft_plan);
-
-            // Energy/power calculations for squelch and spectral imbalance
-            float sig_level = 0.0f;
-            for (unsigned i = 3; i < 91; i++) {
-                // About 2.8kHz +/- Fc
-                sig_level += std::norm(ctx.fft_out[i]);
-                sig_level += std::norm(ctx.fft_out[FFT_SIZE - i]);
-            }
-            // Including DC seem to increase base level with ~5dB
-            //sig_level += std::norm(ctx.fft_out[0]);
-            sig_level /= 176;
-
-            float ref_level_hi = 0.0f;
-            float ref_level_lo = 0.0f;
-            for (unsigned i = 112; i < 157; i++) {
-                // About 3.5kHz to 4.9kHz
-                ref_level_hi += std::norm(ctx.fft_out[i]) * passband_shape[i];
-                ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]) * passband_shape[FFT_SIZE - i];
-                //ref_level_hi += std::norm(ctx.fft_out[i]);
-                //ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]);
-            }
-            ref_level_hi /= 45;
-            ref_level_lo /= 45;
-            float noise_level = (ref_level_hi + ref_level_lo) / 2;
-
-            // Determine spectral imbalance (indicating frequency offset between signal and receiver fqs)
-            float lo_energy = 0.0f;
-            float hi_energy = 0.0f;
-            for (unsigned i = 1; i < FFT_SIZE/2; i++) {
-                hi_energy += std::norm(ctx.fft_out[i]);
-                lo_energy += std::norm(ctx.fft_out[i+FFT_SIZE/2]);
-            }
-
-            ctx.lo_energy[ctx.energy_idx] = lo_energy / 255;
-            ctx.hi_energy[ctx.energy_idx] = hi_energy / 255;
-            if (++ctx.energy_idx == 10) ctx.energy_idx = 0;
-
-            // Calculate SNR
-            float snr = 10 * std::log10(sig_level / noise_level);
-
-            // Convert levels to dB
-            sig_level    = 10 * std::log10(sig_level);
-            ref_level_hi = 10 * std::log10(ref_level_hi);
-            ref_level_lo = 10 * std::log10(ref_level_lo);
-
-            if (snr > ctx.settings.sql_level) {
-                ctx.sql_open = true;
-            } else {
-                ctx.sql_open = false;
-            }
-
-            if (++ctx.sql_wait >= 10) {
-                lo_energy = 0.0f;
-                hi_energy = 0.0f;
-                for (unsigned i = 0; i < 10; ++i) {
-                    lo_energy += ctx.lo_energy[i];
-                    hi_energy += ctx.hi_energy[i];
-                }
-
-                lo_energy /= 10;
-                hi_energy /= 10;
-
-                float imbalance = hi_energy - lo_energy;
-
-                fprintf(stdout, "%s %s. [lo|mid|hi|SNR|imbalance]: %6.2f|%6.2f|%6.2f|%6.2f|%6.2f\n",
-                        ctx.settings.channel.c_str(), ctx.sql_open ? "  open":"closed",
-                        ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
-
-                ctx.sql_wait = 0;
-            }
-
-            ctx.fft_samples = 0;
-        }
-
-        // Final audio filter
-        ctx.audio_filter->filter(ctx.audio_buffer_float, samples_to_write, ctx.audio_buffer_float);
-
-        int16_t sample_s16;
-        for (size_t j = 0; j < samples_to_write; j++) {
-            // Calculate S16 sample
-            if (ctx.audio_buffer_float[j] > 1.0f) {
-                sample_s16 = 32767;
-            } else if (ctx.audio_buffer_float[j] < -1.0f) {
-                sample_s16 = -32767;
-            } else {
-                sample_s16 = (int16_t)(ctx.audio_buffer_float[j] * 32767.0f);
-            }
-            ctx.audio_buffer_s16[j] = sample_s16;
-        }
-
-        if (ctx.sql_open) {
-            ret = snd_pcm_writei(ctx.pcm_handle, ctx.audio_buffer_s16, samples_to_write);
-        } else {
-            ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, samples_to_write);
-        }
-        if (ret < 0) {
-            std::cerr << "Error: Failed to write audio samples: " << snd_strerror(ret) << std::endl;
-            snd_pcm_prepare(ctx.pcm_handle);
-        } else {
-            //std::cout << "    frames written real: " << ret << std::endl;
-        }
-#endif
     } else {
         // Underrrun
         std::cerr << "Warning: Unable to read samples. Ring buffer empty. Writing " << CH_IQ_BUF_SIZE << " samples of silence" << std::endl;
@@ -592,7 +481,7 @@ static snd_pcm_t *open_alsa_dev(const std::string &device_name) {
     pcm_access = SND_PCM_ACCESS_RW_INTERLEAVED;  // Channel samples are interleaved
     pcm_sample_rate     = 16000;                 // 16kHz
     pcm_sample_format   = SND_PCM_FORMAT_S16;    // Signed 16 bit samples
-    num_channels        = 1;                     // Mono
+    num_channels        = 2;                     // Mono
     pcm_period          = 512;                   // Play chunks of this many frames (512/16000 -> 32ms)
     pcm_buffer_size     = pcm_period * 8;        // Playback buffer is 8 periods, i.e. 256ms
     pcm_note_threshold  = pcm_period;            // Notify us when we can write at least this number of frames
@@ -704,7 +593,7 @@ static void alsa_worker(struct OutputState &output_state) {
     std::cout << "Starting ALSA thread" << std::endl;
     cout_lock.clear();
 
-    for (int i = 0; i < CH_IQ_BUF_SIZE; i++) {
+    for (int i = 0; i < CH_IQ_BUF_SIZE*2; i++) {  // Stereo
         ctx.silence[i] = 0;
         ctx.audio_buffer_float[i] = 0.0f;
         ctx.audio_buffer_s16[i] = 0;
@@ -772,7 +661,7 @@ static void alsa_worker(struct OutputState &output_state) {
         std::cout << ")" << std::endl;
     }
 
-    FIR flt(coeff_bpam_channel);
+    FIR2 flt(coeff_bpam_channel);
     flt.setGain(ctx.settings.lf_gain);
 
     gettimeofday(&current_time, NULL);
@@ -928,6 +817,31 @@ uint32_t parse_fq(const std::string &str, bool aeronautical = false) {
 }
 
 
+// Get audio position for a channel given a channel index and total number of
+// channels. Number of audio positions must be odd, typically 3 or 5
+static int get_audio_pos(unsigned channel_no, unsigned num_channels) {
+    unsigned num_positions = 5;
+    unsigned half = num_channels / 2;
+    unsigned odd = (num_channels % 2) == 0 ? 0 : 1;
+    float    tmp;
+    int      pos = 0;
+
+    if (channel_no < num_channels) {
+        if (channel_no < half) {
+            tmp = (float)(channel_no * num_positions) / (float)num_channels;
+            pos = floorf(tmp) - num_positions/2;
+        } else if (channel_no == half && odd) {
+            pos = 0;
+        } else {
+            tmp = (float)((num_channels-1 - channel_no)*num_positions) / (float)num_channels;
+            pos = num_positions/2 - floorf(tmp);
+        }
+    }
+
+    return pos;
+}
+
+
 // Parses the command line and fills the settings object. Checks that the
 // options and arguments are within limits. Returns 0 on success or < 0 on
 // parse/value error or if help was requested
@@ -1060,9 +974,10 @@ gain and 18dB squelch:
                         // are valid aeronautical and that we have at least one
                         // channel. Sort the vector and determine what tuner
                         // frequency to use (truncated to nearest 100kHz)
-                        std::sort(settings.channels.begin(), settings.channels.end());
-                        std::string lo_ch = (settings.channels.begin())->name;
-                        std::string hi_ch = (--settings.channels.end())->name;
+                        std::vector<Channel> tmp_channels = settings.channels;
+                        std::sort(tmp_channels.begin(), tmp_channels.end());
+                        std::string lo_ch = (tmp_channels.begin())->name;
+                        std::string hi_ch = (--tmp_channels.end())->name;
 
                         uint32_t lo_fq = parse_fq(lo_ch, fq_type);
                         uint32_t hi_fq = parse_fq(hi_ch, fq_type);
@@ -1096,6 +1011,8 @@ gain and 18dB squelch:
 }
 
 
+// Given a channel and tuner center frequency, return how many 8.33kHz steps
+// the channel is with respect to the tuner center
 static int channel_to_offset(const std::string &channel, int32_t tuner_fq) {
     int32_t fq_base;
     int32_t fq_diff;
@@ -1124,10 +1041,6 @@ static int channel_to_offset(const std::string &channel, int32_t tuner_fq) {
     offset_diff = (fq_diff / 100000)*12;
     offset = offset_diff + sub_offset->second;
 
-    //std::cout << "Tuner fq: " << tuner_fq << ", channel: " << channel << ", offset: " <<
-    //sub_offset->second << ", offset_diff: " << offset_diff <<
-    //", real_offset: "  << offset << std::endl;
-
     return offset;
 }
 
@@ -1144,20 +1057,8 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Print settings
-    std::cout << "The folowing settings were given:" << std::endl;
-    std::cout << "    RTL device: " << settings.rtl_device << std::endl;
-    std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
-    std::cout << "    RF gain: " << settings.rf_gain << "dB" << std::endl;
-    std::cout << "    LF (audio) gain: " << settings.lf_gain << "dB" << std::endl;
-    std::cout << "    Squelch level: " << settings.sql_level << "dB" << std::endl;
-    std::cout << "    ALSA device: " << settings.audio_device << std::endl;
-    std::cout << "    Tuner frequency: " << settings.tuner_fq << "Hz" << std::endl;
-    std::cout << "    Channels:";
-    for (auto &ch : settings.channels) std::cout << " " << ch.name;
-    std::cout << std::endl;
-
-    // Setup the channels with "tuner", down sampler and AGC
+    // Setup the channels with "tuner", down sampler, AGC and audio position
+    unsigned ch_idx = 0;
     for (auto &ch : settings.channels) {
         std::vector<iqsample_t> translator;
 
@@ -1176,10 +1077,26 @@ int main(int argc, char** argv) {
             { 5, lp_ds_80k_16k }
         });
 
+        ch.agc.setReference(1.0f);
         ch.agc.setAttack(1.0f);
         ch.agc.setDecay(0.01f);
-        ch.agc.setReference(1.0f);
+
+        ch.pos = get_audio_pos(ch_idx, settings.channels.size());
+        ++ch_idx;
     }
+
+    // Print settings
+    std::cout << "The folowing settings were given:" << std::endl;
+    std::cout << "    RTL device: " << settings.rtl_device << std::endl;
+    std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
+    std::cout << "    RF gain: " << settings.rf_gain << "dB" << std::endl;
+    std::cout << "    LF (audio) gain: " << settings.lf_gain << "dB" << std::endl;
+    std::cout << "    Squelch level: " << settings.sql_level << "dB" << std::endl;
+    std::cout << "    ALSA device: " << settings.audio_device << std::endl;
+    std::cout << "    Tuner frequency: " << settings.tuner_fq << "Hz" << std::endl;
+    std::cout << "    Channels:";
+    for (auto &ch : settings.channels) std::cout << " " << ch.name << "(" << ch.pos << ")";
+    std::cout << std::endl;
 
     RB<iqsample_t> iq_rb(CH_IQ_BUF_SIZE * settings.channels.size() * 8); // 8 chunks or 256ms
 
