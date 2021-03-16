@@ -74,4 +74,60 @@ private:
     float               gain_;    // Filter gain in dB
 };
 
+
+// Stereo version. ALSA interleaved samples assumed
+class FIR2 {
+public:
+    FIR2(void) = default;
+    FIR2(const std::vector<float> c) : c_(c), c_adj_(c), bufr_(c.size(), 0.0f), bufl_(c.size(), 0.0f), size_(c.size()), pos_(0), gain_(0.0f) {}
+
+    // Filter data from in and write to out. in and out may point to the same array
+    void filter(const float *in, unsigned in_len, float *out) {
+        for (auto sample = in; sample != in + in_len; sample += 2) {
+            // Write in sample to internal ring buffer.
+            bufr_[pos_] = *sample;
+            bufl_[pos_] = *(sample+1);
+
+            // Advance and wrap around if necessary
+            if (++pos_ == size_) pos_ = 0;
+
+            // Calculate out sample
+            *out = 0.0f;
+            *(out+1) = 0.0f;
+            for (unsigned i = 0; i < size_; ++i) {
+                *out += c_adj_[i] * bufr_[pos_];
+                *(out+1) += c_adj_[i] * bufl_[pos_];
+                if (++pos_ == size_) pos_ = 0;
+            }
+
+            out+=2;
+        }
+    }
+
+    // Set filter gain (in dB)
+    void setGain(float gain) {
+        gain_ = gain;
+
+        auto c = c_.begin();
+        auto c_adj = c_adj_.begin();
+        while (c != c_.end()) {
+            *c_adj = *c * std::pow(10.0f, gain_/20.0f);;
+            ++c;
+            ++c_adj;
+        }
+    }
+
+    // Get filter gain (in dB)
+    float gain(void) const { return gain_; }
+
+private:
+    std::vector<float>  c_;        // FIR coefficients
+    std::vector<float>  c_adj_;    // FIR coefficients adjusted for gain
+    std::vector<float>  bufr_;     // Ring buffer delay line right
+    std::vector<float>  bufl_;     // Ring buffer delay line left
+    unsigned            size_;     // Buffer/coefficient size
+    unsigned            pos_;      // Position in ring buffer
+    float               gain_;     // Filter gain in dB
+};
+
 #endif // FIR_HPP
