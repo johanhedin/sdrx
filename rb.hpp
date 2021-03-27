@@ -49,6 +49,10 @@ public:
         acquired_write_len_(0), acquired_read_len_(0) {}
     ~RB(void) {}
 
+    RB() = delete;
+    RB(const RB&) = delete;
+    RB& operator=(const RB&) = delete;
+
     bool acquireWrite(T **buf, size_t items_requested) {
         const size_t rd_ptr = read_ptr_.load(std::memory_order_acquire);
         const size_t wr_ptr = write_ptr_.load(std::memory_order_relaxed);
