@@ -22,6 +22,7 @@
 #define RB_HPP
 
 #include <atomic>
+#include <memory>
 
 // Lock-free thread safe Single Producer, Single Consumer ring buffer with
 // continuous write and read.
