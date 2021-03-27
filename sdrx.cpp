@@ -117,6 +117,8 @@ static uint32_t rtl_samples;
 static uint32_t rtl_callbacks;
 static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 
+// Convenient type for the ring buffer
+using rb_t = RB<iqsample_t>;
 
 // Datatype to represent one channel in the IQ spectra
 class Channel {
@@ -159,7 +161,7 @@ public:
 #define LEVEL_SIZE 10
 struct InputState {
     rtlsdr_dev_t   *rtl_device;              // RTL device
-    RB<iqsample_t> *rb_ptr;                  // Input -> Output buffer
+    rb_t           *rb_ptr;                  // Input -> Output buffer
     Settings        settings;                // System wide settings
     unsigned char   iq_buf[RTL_IQ_BUF_SIZE]; // Jump buffer to handle Pi4 with 5.x kernel
 };
@@ -167,7 +169,7 @@ struct InputState {
 
 struct OutputState {
     snd_pcm_t         *pcm_handle;               // ALSA PCM device
-    RB<iqsample_t>    *rb_ptr;                   // Input -> Output buffer
+    rb_t              *rb_ptr;                   // Input -> Output buffer
     struct timeval     last_stat_time;
     int16_t            silence[CH_IQ_BUF_SIZE*2];            // Stereo
     float              audio_buffer_float[CH_IQ_BUF_SIZE*2]; // Stereo
@@ -1098,7 +1100,7 @@ int main(int argc, char** argv) {
     for (auto &ch : settings.channels) std::cout << " " << ch.name << "(" << ch.pos << ")";
     std::cout << std::endl;
 
-    RB<iqsample_t> iq_rb(CH_IQ_BUF_SIZE * settings.channels.size() * 8); // 8 chunks or 256ms
+    rb_t iq_rb(CH_IQ_BUF_SIZE * settings.channels.size() * 8); // 8 chunks or 256ms
 
     struct InputState input_state;
     input_state.settings   = settings;
