@@ -120,11 +120,13 @@ static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 // Convenient type for the ring buffer
 using rb_t = RB<iqsample_t>;
 
+using sql_state_t = enum { SQL_CLOSED, SQL_OPEN };
+
 // Datatype to represent one channel in the IQ spectra
 class Channel {
 public:
     Channel(const std::string &name, float sql_level = 9.0f)
-    : name(name), sql_level(sql_level), sql_open(false), pos(0) {}
+    : name(name), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0) {}
 
     bool operator<(const Channel &rhv) { return name < rhv.name; }
     bool operator==(const Channel &rhv) { return name == rhv.name; }
@@ -132,12 +134,13 @@ public:
     bool operator<(const char *rhv) { return name < rhv; }
     bool operator==(const char *rhv) { return name == rhv; }
 
-    std::string             name;         // Channel name, e.g "118.105"
-    MSD                     msd;          // Multi stage down sampler with tuner
-    AGC                     agc;          // AGC
-    float                   sql_level;    // Squelch level for the channel
-    bool                    sql_open;     // Squelch open/close state
-    int                     pos;          // Audio position. 0 == center
+    std::string    name;           // Channel name, e.g "118.105"
+    MSD            msd;            // Multi stage down sampler with tuner
+    AGC            agc;            // AGC
+    float          sql_level;      // Squelch level for the channel
+    sql_state_t    sql_state;      // Squelch state (open/closed)
+    sql_state_t    sql_state_prev; // Previous squelch state (open/closed)
+    int            pos;            // Audio position. 0 == center
 };
 
 
@@ -308,10 +311,51 @@ static void alsa_write_cb(OutputState &ctx) {
         unsigned j = 0;
         for (auto &ch : channels) {
             for (unsigned i = 0; i < CH_IQ_BUF_SIZE; ++i) {
-                float s;
-                if (ch.sql_open) {
-                    // Mix in this channel to the output buffer if the squelch is open
-                    s = std::abs(ch.agc.adjust(iq_buffer[j])); // Demodulate AGC adjusted AM signal
+                // Should we always run IQ samples through the AGC even if the squelsh is not open?
+                iqsample_t agc_adj_sample = ch.agc.adjust(iq_buffer[j]); // AGC adjusted IQ sample
+                if (ch.sql_state == SQL_OPEN) {
+                    // AM demodulator
+                    float s = std::abs(agc_adj_sample);
+
+                    // If the squelsh has just opend, ramp up the audio
+                    if (ch.sql_state_prev == SQL_CLOSED) {
+                        s = ramp_up[i] * s;
+                    }
+
+                    // Mix this channel into the output buffer
+                    switch (ch.pos) {
+                        case -2:
+                            ctx.audio_buffer_float[i*2] += s;
+                            ctx.audio_buffer_float[i*2+1] += 0.2f*s;
+                            break;
+
+                        case -1:
+                            ctx.audio_buffer_float[i*2] += 0.6f*s;
+                            ctx.audio_buffer_float[i*2+1] += 0.4f*s;
+                            break;
+
+                        case 1:
+                            ctx.audio_buffer_float[i*2] += 0.4f*s;
+                            ctx.audio_buffer_float[i*2+1] += 0.6f*s;
+                            break;
+
+                        case 2:
+                            ctx.audio_buffer_float[i*2] += 0.2f*s;
+                            ctx.audio_buffer_float[i*2+1] += s;
+                            break;
+
+                        default:
+                            // Center
+                            ctx.audio_buffer_float[i*2] += s;
+                            ctx.audio_buffer_float[i*2+1] += s;
+                            break;
+                    }
+                } else if (ch.sql_state_prev == SQL_OPEN) {
+                    // Ramp down
+                    float s = std::abs(agc_adj_sample);
+                    s = ramp_down[i] * s;
+
+                    // Mix this channel into the output buffer
                     switch (ch.pos) {
                         case -2:
                             ctx.audio_buffer_float[i*2] += s;
@@ -343,6 +387,8 @@ static void alsa_write_cb(OutputState &ctx) {
                 ctx.fft_in[i] = iq_buffer[j] * ctx.window[i];  // Fill fft buffer
                 ++j;
             }
+            ch.sql_state_prev = ch.sql_state;
+
             fftwf_execute(ctx.fft_plan);
             // **** Calculate sql for channel here. Start
 
@@ -373,9 +419,9 @@ static void alsa_write_cb(OutputState &ctx) {
             // Calculate SNR
             float snr = 10 * std::log10(sig_level / noise_level);
             if (snr > ch.sql_level) {
-                ch.sql_open = true;
+                ch.sql_state = SQL_OPEN;
             } else {
-                ch.sql_open = false;
+                ch.sql_state = SQL_CLOSED;
             }
 
             // Determine spectral imbalance (indicating frequency offset between signal and receiver fqs)
@@ -410,11 +456,11 @@ static void alsa_write_cb(OutputState &ctx) {
 
                 if (channels.size() == 1) {
                     fprintf(stdout, "%s: %s %s. [lo|mid|hi|SNR|imbalance]: %6.2f|%6.2f|%6.2f|%6.2f|%6.2f",
-                            tmp_str, ch.name.c_str(), ch.sql_open ? "  open":"closed",
+                            tmp_str, ch.name.c_str(), ch.sql_state == SQL_OPEN ? "  open":"closed",
                             ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
                 } else {
                     if (snr < 1.0f) snr = 0.0f;
-                    if (ch.sql_open) {
+                    if (ch.sql_state == SQL_OPEN) {
                         fprintf(stdout, "  \033[103m\033[30m%s(%5.2f)\033[0m", ch.name.c_str(), snr);
                     } else {
                         fprintf(stdout, "  %s(%5.2f)", ch.name.c_str(), snr);
