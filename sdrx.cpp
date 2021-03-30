@@ -179,7 +179,6 @@ struct InputState {
 struct OutputState {
     snd_pcm_t         *pcm_handle;               // ALSA PCM device
     rb_t              *rb_ptr;                   // Input -> Output buffer
-    struct timeval     last_stat_time;
     int16_t            silence[CH_IQ_BUF_SIZE*2];            // Stereo
     float              audio_buffer_float[CH_IQ_BUF_SIZE*2]; // Stereo
     int16_t            audio_buffer_s16[CH_IQ_BUF_SIZE*2];   // Stereo
@@ -240,20 +239,24 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     meta.lvl_min = 0.0f;
     meta.lvl_avg = 0.0f;
     meta.lvl_max = -100.0f;
+
+    // Loop over all IQ samples and collect min, avg and max levels. We use
+    // IQ scals from -1.0 to 1.0. To calculate dbFS we can use:
+    //
+    //   dBFS = 20 * log10(abs(iq_sample))
+    //
+    // or more efficent:
+    //
+    //   dBFS = 10 * log10(std::norm(iq_sample))
+    //
     for (unsigned i = 0; i < RTL_IQ_BUF_SIZE; i += 2) {
-        iqsample_t tmp_sample(((float)buf[i])   / 127.5f - 1.0f, ((float)buf[i+1])   / 127.5f - 1.0f);
+        iqsample_t tmp_sample(((float)ctx.iq_buf[i])   / 127.5f - 1.0f, ((float)ctx.iq_buf[i+1])   / 127.5f - 1.0f);
         float lvl = 10 * std::log10(std::norm(tmp_sample));
         if (lvl < meta.lvl_min) meta.lvl_min = lvl;
         if (lvl > meta.lvl_max) meta.lvl_max = lvl;
         meta.lvl_avg += lvl;
     }
     meta.lvl_avg /= (RTL_IQ_BUF_SIZE/2);
-
-    //
-    // We use a ADC scale from -1.0 to 1.0. To calculate dBFS we can use:
-    //
-    // dBFS = 10 * log10(i*i + q*q);
-    //
 
     // Acquire IQ ring buffer
     if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, &metadata_ptr)) {
@@ -263,6 +266,7 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
             iq_buf_ptr += CH_IQ_BUF_SIZE;
         }
 
+        // Store IQ metadata in the chunk
         *metadata_ptr = meta;
 
         if (!ctx.rb_ptr->commitWrite()) {
@@ -296,6 +300,7 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
 }
 
 
+// Render a dBFS level for a IQ sample as a ASCII bargraph
 static void render_bargraph(float level, char *buf) {
     int lvl = (int)level;
 
@@ -306,8 +311,6 @@ static void render_bargraph(float level, char *buf) {
     int base = tmp_level/7;
     int rest = tmp_level - base * 7;
 
-    //snprintf(buf, 65, "\033[32m\033[100m");
-    //buf += 11;
     snprintf(buf, 65, "\033[32m");
     buf += 5;
     for (int i = 0; i < 7; i++) {
@@ -339,32 +342,27 @@ static void render_bargraph(float level, char *buf) {
 }
 
 
-// Called when the sound card wants another period
+// Called when the sound card wants another period, i.e. every 32 ms
 static void alsa_write_cb(OutputState &ctx) {
-    int                   ret;
-    const iqsample_t     *iq_buffer;
+    int                    ret;
+    const iqsample_t      *iq_buffer;
     const struct Metadata *metadata_ptr = nullptr;
-    struct timeval        current_time;
-    struct tm             tm;
-    char                  tmp_str[256];
-    char                  bar[65];
-    std::vector<Channel> &channels = ctx.settings.channels;
+    struct tm              tm;
+    char                   tmp_str[256];
+    char                   bar[65];
+    std::vector<Channel>  &channels = ctx.settings.channels;
 
-    gettimeofday(&current_time, NULL);
     ret = snd_pcm_avail_update(ctx.pcm_handle);
     if (ret < 0) {
         std::cerr << "ALSA Error pcm_avail: " << snd_strerror(ret) << std::endl;
         //snd_pcm_prepare(ctx.pcm_handle);
         // What to do here? Restart device? Just return?
-    } else {
-        if (current_time.tv_sec > ctx.last_stat_time.tv_sec + 1) {
-            //fprintf(stdout, "ALSA available space: %d\n", ret);
-            ctx.last_stat_time = current_time;
-        }
     }
 
     if (ctx.rb_ptr->acquireRead(&iq_buffer, &metadata_ptr)) {
         if (ctx.sql_wait >= 10) {
+            struct timeval current_time;
+            gettimeofday(&current_time, NULL);
             localtime_r(&current_time.tv_sec, &tm);
             strftime(tmp_str, 100, "%T", &tm);
             if (channels.size() > 1) {
@@ -597,7 +595,7 @@ static snd_pcm_t *open_alsa_dev(const std::string &device_name) {
     pcm_access = SND_PCM_ACCESS_RW_INTERLEAVED;  // Channel samples are interleaved
     pcm_sample_rate     = 16000;                 // 16kHz
     pcm_sample_format   = SND_PCM_FORMAT_S16;    // Signed 16 bit samples
-    num_channels        = 2;                     // Mono
+    num_channels        = 2;                     // "Stereo"
     pcm_period          = 512;                   // Play chunks of this many frames (512/16000 -> 32ms)
     pcm_buffer_size     = pcm_period * 8;        // Playback buffer is 8 periods, i.e. 256ms
     pcm_note_threshold  = pcm_period;            // Notify us when we can write at least this number of frames
@@ -702,7 +700,6 @@ static void alsa_worker(struct OutputState &output_state) {
     unsigned int       num_poll_descs = 0;
     unsigned short     revents;
     struct timeval     current_time;
-    struct timeval     last_stat_time;
     struct OutputState ctx = output_state;
 
     while (cout_lock.test_and_set(std::memory_order_acquire));
@@ -781,10 +778,8 @@ static void alsa_worker(struct OutputState &output_state) {
     flt.setGain(ctx.settings.lf_gain);
 
     gettimeofday(&current_time, NULL);
-    last_stat_time = current_time;
 
     ctx.pcm_handle     = pcm_handle;
-    ctx.last_stat_time = last_stat_time;
     ctx.audio_filter   = &flt;
     ctx.fft_plan       = fftwf_plan_dft_1d(FFT_SIZE,
                                            reinterpret_cast<fftwf_complex*>(ctx.fft_in),
@@ -1165,7 +1160,7 @@ int main(int argc, char** argv) {
     int              ret;
     struct sigaction sigact;
     uint32_t         sample_rate = RTL_IQ_SAMPLING_FQ;
-    uint32_t         bw = 300000;
+    uint32_t         bw = 600000;
     Settings         settings;
 
     // Parse command line. Exit if incomplete or if help was requested
