@@ -3,7 +3,7 @@ all: sdrx
 rtl_device.o: rtl_device.hpp rtl_device.cpp
 	g++ -c -g -Wall -std=c++17 -I. rtl_device.cpp
 
-sdrx: coeffs.hpp iqsample.hpp msd.hpp rb.hpp fir.hpp agc.hpp sdrx.cpp
+sdrx: coeffs.hpp iqsample.hpp msd.hpp crb.hpp fir.hpp agc.hpp sdrx.cpp
 	g++ -o sdrx -O2 -Wall -std=c++17 -I. sdrx.cpp -lpopt -lpthread -lusb-1.0 -lrtlsdr -lasound -lm -lfftw3f
 
 dts: dts.cpp rtl_device.o

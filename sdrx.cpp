@@ -54,7 +54,7 @@
 // Local includes
 #include "coeffs.hpp"
 #include "msd.hpp"
-#include "rb.hpp"
+#include "crb.hpp"
 #include "fir.hpp"
 #include "agc.hpp"
 
@@ -117,8 +117,14 @@ static uint32_t rtl_samples;
 static uint32_t rtl_callbacks;
 static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 
+struct Metadata {
+    float lvl_min;
+    float lvl_avg;
+    float lvl_max;
+};
+
 // Convenient type for the ring buffer
-using rb_t = RB<iqsample_t>;
+using rb_t = CRB<iqsample_t, Metadata>;
 
 using sql_state_t = enum { SQL_CLOSED, SQL_OPEN };
 
@@ -214,6 +220,8 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     struct InputState    &ctx = *reinterpret_cast<struct InputState*>(user_data);
     iqsample_t           *iq_buf_ptr = nullptr;
     std::vector<Channel> &channels = ctx.settings.channels;
+    struct Metadata      *metadata_ptr = nullptr;
+    struct Metadata       meta;
 
     if (len != RTL_IQ_BUF_SIZE) {
         std::cerr << "Error: Unexpected number of IQ bytes received from dongle: " <<
@@ -229,6 +237,18 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     // Copy to tmp buf to overcome slow access to data on Pi with kernel 5.x
     memcpy(ctx.iq_buf, buf, RTL_IQ_BUF_SIZE);
 
+    meta.lvl_min = 0.0f;
+    meta.lvl_avg = 0.0f;
+    meta.lvl_max = -100.0f;
+    for (unsigned i = 0; i < RTL_IQ_BUF_SIZE; i += 2) {
+        iqsample_t tmp_sample(((float)buf[i])   / 127.5f - 1.0f, ((float)buf[i+1])   / 127.5f - 1.0f);
+        float lvl = 10 * std::log10(std::norm(tmp_sample));
+        if (lvl < meta.lvl_min) meta.lvl_min = lvl;
+        if (lvl > meta.lvl_max) meta.lvl_max = lvl;
+        meta.lvl_avg += lvl;
+    }
+    meta.lvl_avg /= (RTL_IQ_BUF_SIZE/2);
+
     //
     // We use a ADC scale from -1.0 to 1.0. To calculate dBFS we can use:
     //
@@ -236,14 +256,16 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     //
 
     // Acquire IQ ring buffer
-    if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, CH_IQ_BUF_SIZE * channels.size())) {
+    if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, &metadata_ptr)) {
         // Channelize the IQ data and write output into ring buffer
         for (auto &ch : channels) {
             ch.msd.decimate(ctx.iq_buf, len, iq_buf_ptr);
             iq_buf_ptr += CH_IQ_BUF_SIZE;
         }
 
-        if (!ctx.rb_ptr->commitWrite(CH_IQ_BUF_SIZE * channels.size())) {
+        *metadata_ptr = meta;
+
+        if (!ctx.rb_ptr->commitWrite()) {
             std::cerr << "Error: Unable to commit ring buffer write" << std::endl;
         }
     } else {
@@ -274,14 +296,58 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
 }
 
 
+static void render_bargraph(float level, char *buf) {
+    int lvl = (int)level;
+
+    if (lvl < -64) lvl = -56;
+    if (lvl > 0) lvl = 0;
+
+    int tmp_level = lvl + 56;
+    int base = tmp_level/7;
+    int rest = tmp_level - base * 7;
+
+    //snprintf(buf, 65, "\033[32m\033[100m");
+    //buf += 11;
+    snprintf(buf, 65, "\033[32m");
+    buf += 5;
+    for (int i = 0; i < 7; i++) {
+        if (i < base) {
+            snprintf(buf, 65, "\u2588");
+            buf += 3;
+        } else if (i == base) {
+            if (rest == 0) {
+                snprintf(buf, 65, " ");
+                buf += 1;
+            } else {
+                switch (rest) {
+                    case 1: snprintf(buf, 9, "\u258f"); break;
+                    case 2: snprintf(buf, 9, "\u258e"); break;
+                    case 3: snprintf(buf, 9, "\u258d"); break;
+                    case 4: snprintf(buf, 9, "\u258c"); break;
+                    case 5: snprintf(buf, 9, "\u258b"); break;
+                    case 6: snprintf(buf, 9, "\u258a"); break;
+                    case 7: snprintf(buf, 9, "\u2589"); break;
+                }
+                buf += 3;
+            }
+        } else {
+            snprintf(buf, 65, " ");
+            buf += 1;
+        }
+    }
+    snprintf(buf, 65, "\033[0m");
+}
+
+
 // Called when the sound card wants another period
 static void alsa_write_cb(OutputState &ctx) {
     int                   ret;
     const iqsample_t     *iq_buffer;
-    size_t                samples_avail;
+    const struct Metadata *metadata_ptr = nullptr;
     struct timeval        current_time;
     struct tm             tm;
     char                  tmp_str[256];
+    char                  bar[65];
     std::vector<Channel> &channels = ctx.settings.channels;
 
     gettimeofday(&current_time, NULL);
@@ -297,12 +363,14 @@ static void alsa_write_cb(OutputState &ctx) {
         }
     }
 
-    if (ctx.rb_ptr->acquireRead(&iq_buffer, &samples_avail) && samples_avail >= CH_IQ_BUF_SIZE * channels.size()) {
+    if (ctx.rb_ptr->acquireRead(&iq_buffer, &metadata_ptr)) {
         if (ctx.sql_wait >= 10) {
             localtime_r(&current_time.tv_sec, &tm);
-            strftime(tmp_str, 100, "%F %T", &tm);
+            strftime(tmp_str, 100, "%T", &tm);
             if (channels.size() > 1) {
-                fprintf(stdout, "%s:", tmp_str);
+                // Printout IQ sample level as dBFS
+                render_bargraph(metadata_ptr->lvl_avg, bar);
+                fprintf(stdout, "%s: Level[%s\033[1;30m%5.1f\033[0m]", tmp_str, bar, metadata_ptr->lvl_avg);
             }
         }
 
@@ -461,16 +529,16 @@ static void alsa_write_cb(OutputState &ctx) {
                 } else {
                     if (snr < 1.0f) snr = 0.0f;
                     if (ch.sql_state == SQL_OPEN) {
-                        fprintf(stdout, "  \033[103m\033[30m%s(%5.2f)\033[0m", ch.name.c_str(), snr);
+                        fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
                     } else {
-                        fprintf(stdout, "  %s(%5.2f)", ch.name.c_str(), snr);
+                        fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
                     }
                 }
             }
             // **** Calculate sql for channel here. End
         }
 
-        ctx.rb_ptr->commitRead(CH_IQ_BUF_SIZE * channels.size());
+        ctx.rb_ptr->commitRead();
 
         if (++ctx.sql_wait > 10) {
             ctx.sql_wait = 0;
@@ -1146,7 +1214,7 @@ int main(int argc, char** argv) {
     for (auto &ch : settings.channels) std::cout << " " << ch.name << "(" << ch.pos << ")";
     std::cout << std::endl;
 
-    rb_t iq_rb(CH_IQ_BUF_SIZE * settings.channels.size() * 8); // 8 chunks or 256ms
+    rb_t iq_rb(CH_IQ_BUF_SIZE * settings.channels.size(), 8); // 8 chunks or 256ms
 
     struct InputState input_state;
     input_state.settings   = settings;
