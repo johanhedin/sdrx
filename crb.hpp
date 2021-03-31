@@ -184,23 +184,17 @@ public:
 
 private:
     static const size_t ALING_LEN = 64; // Typical cache line size
-    class Chunk {
+    class alignas(64) Chunk {
     public:
-        unsigned char         align_buf1_[ALING_LEN];
         std::unique_ptr<T[]>  buf_;
         M                     m_;
-        unsigned char         align_buf2_[ALING_LEN];
     };
 
     // Variables used by both threads
-    std::vector<Chunk>         chunks_;
-    unsigned char              align_buf1_[ALING_LEN];
-    std::atomic<size_t>        write_ptr_;  // Write pointer
-    unsigned char              align_buf2_[ALING_LEN];
-    std::atomic<size_t>        read_ptr_;   // Read pointer
-    unsigned char              align_buf3_[ALING_LEN];
-    size_t                     end_ptr_;    // Current end of buffer. Used for wrap around. Not needed to be atomic since write_ptr_ will fence
-    unsigned char              align_buf4_[ALING_LEN];
+    alignas(64) std::vector<Chunk>   chunks_;
+    alignas(64) std::atomic<size_t>  write_ptr_;  // Write pointer
+    alignas(64) std::atomic<size_t>  read_ptr_;   // Read pointer
+    alignas(64) size_t               end_ptr_;    // Current end of buffer for wrap around. Atomic not needed since write_ptr_ will fence
 
     // Variables used only by the writing thread
     const size_t capacity_;            // Capacity. Const and can not be changed. +1 from requested to accommodate for sentinel
