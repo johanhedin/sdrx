@@ -391,7 +391,7 @@ static void alsa_write_cb(OutputState &ctx) {
                     // Mix this channel into the output buffer
                     switch (ch.pos) {
                         case -2:
-                            ctx.audio_buffer_float[i*2] += s;
+                            ctx.audio_buffer_float[i*2] += 0.8f*s;
                             ctx.audio_buffer_float[i*2+1] += 0.2f*s;
                             break;
 
@@ -407,13 +407,13 @@ static void alsa_write_cb(OutputState &ctx) {
 
                         case 2:
                             ctx.audio_buffer_float[i*2] += 0.2f*s;
-                            ctx.audio_buffer_float[i*2+1] += s;
+                            ctx.audio_buffer_float[i*2+1] += 0.8f*s;
                             break;
 
                         default:
                             // Center
-                            ctx.audio_buffer_float[i*2] += s;
-                            ctx.audio_buffer_float[i*2+1] += s;
+                            ctx.audio_buffer_float[i*2] += 0.5f*s;
+                            ctx.audio_buffer_float[i*2+1] += 0.5f*s;
                             break;
                     }
                 } else if (ch.sql_state_prev == SQL_OPEN) {
@@ -424,7 +424,7 @@ static void alsa_write_cb(OutputState &ctx) {
                     // Mix this channel into the output buffer
                     switch (ch.pos) {
                         case -2:
-                            ctx.audio_buffer_float[i*2] += s;
+                            ctx.audio_buffer_float[i*2] += 0.8f*s;
                             ctx.audio_buffer_float[i*2+1] += 0.2f*s;
                             break;
 
@@ -440,13 +440,13 @@ static void alsa_write_cb(OutputState &ctx) {
 
                         case 2:
                             ctx.audio_buffer_float[i*2] += 0.2f*s;
-                            ctx.audio_buffer_float[i*2+1] += s;
+                            ctx.audio_buffer_float[i*2+1] += 0.8f*s;
                             break;
 
                         default:
                             // Center
-                            ctx.audio_buffer_float[i*2] += s;
-                            ctx.audio_buffer_float[i*2+1] += s;
+                            ctx.audio_buffer_float[i*2] += 0.5f*s;
+                            ctx.audio_buffer_float[i*2+1] += 0.5f*s;
                             break;
                     }
                 }
