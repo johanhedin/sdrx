@@ -365,11 +365,8 @@ static void alsa_write_cb(OutputState &ctx) {
             gettimeofday(&current_time, NULL);
             localtime_r(&current_time.tv_sec, &tm);
             strftime(tmp_str, 100, "%T", &tm);
-            if (channels.size() > 1) {
-                // Printout IQ sample level as dBFS
-                render_bargraph(metadata_ptr->lvl_avg, bar);
-                fprintf(stdout, "%s: Level[%s\033[1;30m%5.1f\033[0m]", tmp_str, bar, metadata_ptr->lvl_avg);
-            }
+            render_bargraph(metadata_ptr->lvl_avg, bar);
+            fprintf(stdout, "%s: Level[%s\033[1;30m%5.1f\033[0m]", tmp_str, bar, metadata_ptr->lvl_avg);
         }
 
         // Zero out the output audio buffer
@@ -521,9 +518,13 @@ static void alsa_write_cb(OutputState &ctx) {
                 float imbalance = hi_energy - lo_energy;
 
                 if (channels.size() == 1) {
-                    fprintf(stdout, "%s: %s %s. [lo|mid|hi|SNR|imbalance]: %6.2f|%6.2f|%6.2f|%6.2f|%6.2f",
-                            tmp_str, ch.name.c_str(), ch.sql_state == SQL_OPEN ? "  open":"closed",
-                            ref_level_lo, sig_level, ref_level_hi, snr, imbalance);
+                    if (ch.sql_state == SQL_OPEN) {
+                        fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f|%5.1f|%5.1f|%5.1f|%6.2f\033[0m] (SNR|low|mid|hig|imbalance)",
+                                ch.name.c_str(), snr, ref_level_lo, sig_level, ref_level_hi, imbalance);
+                    } else {
+                        fprintf(stdout, "  %s[\033[1;30m%4.1f|%5.1f|%5.1f|%5.1f|%6.2f\033[0m] (SNR|low|mid|hig|imbalance)",
+                                ch.name.c_str(), snr, ref_level_lo, sig_level, ref_level_hi, imbalance);
+                    }
                 } else {
                     if (snr < 1.0f) snr = 0.0f;
                     if (ch.sql_state == SQL_OPEN) {

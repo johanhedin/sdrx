@@ -87,28 +87,33 @@ the current upper limit is probably at six channels.
 Output in single channel mode
 ====
 Besides playing audio when the squelch is open, `sdrx` write signal power
-measurements to the console while running.
+measurements to the console while running at approximately three times a
+second.
 
 A typical output look like this:
 
     $ ./sdrx -r 45 118.105
     ...
-    16:44:07 118.105 closed. [lo|mid|hi|SNR|imbalance]: -22.54|-22.55|-23.44|  0.42|  0.00
-    16:44:07 118.105 closed. [lo|mid|hi|SNR|imbalance]: -22.14|-22.97|-22.21| -0.80|  0.00
-    16:44:07 118.105 closed. [lo|mid|hi|SNR|imbalance]: -21.10|-22.25|-22.81| -0.38|  0.00
-    16:44:08 118.105   open. [lo|mid|hi|SNR|imbalance]: -21.36| 16.48|-21.72| 38.01|-12.28
-    16:44:08 118.105   open. [lo|mid|hi|SNR|imbalance]: -22.73| 16.61|-21.57| 38.72|-30.74
-    16:44:08 118.105   open. [lo|mid|hi|SNR|imbalance]: -21.79| 16.90|-24.18| 39.72|-30.66
+    10:57:00: Level[XX    -37.2] 118.105[ 0.0|-22.5|-22.6|-23.4|  0.00] (SNR|low|mid|hig|imbalance)
+    10:57:01: Level[XX    -39.6] 118.105[ 0.0|-22.1|-22.9|-22.2|  0.00] (SNR|low|mid|hig|imbalance)
+    10:57:01: Level[XX    -39.5] 118.105[ 0.0|-21.1|-22.3|-22.8|  0.00] (SNR|low|mid|hig|imbalance)
+    10:57:01: Level[XXXX  -27.5] 118.105[38.0|-21.4| 16.5|-21.7|-12.28] (SNR|low|mid|hig|imbalance)
+    10:57:02: Level[XXXX  -27.5] 118.105[38.7|-22.7| 16.6|-21.6|-30.74] (SNR|low|mid|hig|imbalance)
+    10:57:02: Level[XXXX  -27.5] 118.105[39.7|-21.8| 16.9|-24.2|-30.66] (SNR|low|mid|hig|imbalance)
     ...
 
+Open squelch is indicated by the channel name getting a yellow background.
+**Level** is IQ sample level in dB (dBFS) and can be used to see if the receiver is
+oversteered or not.
+
 **mid** is the power level in dB for the center band, i.e fc +/- 2.8kHz and
-**lo** and **hi** are the power levels for the bands fc - 3.5-4.9kHz and
+**low** and **hig** are the power levels for the bands fc - 3.5-4.9kHz and
 fc + 3.5-4.9kHz.
 
 The noise floor is estimated as the power just outside of where the modulated
-audio resides (i.e. the **lo** and **hi** measurements). **SNR** is the
+audio resides (i.e. the **low** and **hig** measurements). **SNR** is the
 difference between "signal power" and "noise power" and is checked against the
-wanted squelch level to determine if audio is played or not.
+desired squelch level to determine if audio is played or not.
 
 **imbalance** is a measure of how "off" the receiver is compared to the frequency
 that the transmitter is using. If it is negative, you are tuned above the
@@ -127,15 +132,17 @@ the left and right speaker in a audio panorama. This will create the sense of a
 set of speakers, one per channel, in front of the listener.
 
 Together with the visual presentation in the terminal, this will increase the
-awareness of what channels that are active.
+awareness of what channels that are active. The channels will be placed in the
+panorma based on their order on the command line.
 
-Output in the terminal looks something like this:
+Output in the terminal looks about the same as for signle channel but only the
+SNR is shown for the channels:
 
     $ ./sdrx -r 40 118.105 118.280 118.405
     ...
-    10:57:00: Level[XX    -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
-    10:57:01: Level[XX    -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
-    10:57:01: Level[XX    -27.5] 118.105[ 0.0] 118.205[ 1.0] 118.280[ 0.0] 118.405[ 0.0]
+    10:57:00: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
+    10:57:01: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
+    10:57:01: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 1.0] 118.280[ 0.0] 118.405[ 0.0]
     10:57:01: Level[XXXX  -27.5] 118.105[ 1.3] 118.205[ 0.0] 118.280[27.0] 118.405[ 0.0]
     10:57:02: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.5] 118.405[ 0.0]
     10:57:02: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.9] 118.405[ 0.0]
@@ -148,12 +155,7 @@ Output in the terminal looks something like this:
     10:57:04: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.5] 118.405[ 0.0]
     10:57:05: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[27.9] 118.405[ 0.0]
     10:57:05: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.8] 118.405[ 0.0]
-    10:57:05: Level[XX    -27.5] 118.105[ 1.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
-    10:57:06: Level[XX    -27.5] 118.105[ 1.8] 118.205[ 0.0] 118.280[ 1.2] 118.405[ 0.0]
-    10:57:06: Level[XX    -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
+    10:57:05: Level[XX    -39.6] 118.105[ 1.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
+    10:57:06: Level[XX    -39.6] 118.105[ 1.8] 118.205[ 0.0] 118.280[ 1.2] 118.405[ 0.0]
+    10:57:06: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
     ...
-
-Channels with open squelch will have the background color set to yellow. The
-number in brackets after every channel is the signal level above the noise
-floor (same as SNR for single mode as explained above). Level is IQ sample level
-in dB (dBFS) and can be used to see if the receiver is oversteered or not.
