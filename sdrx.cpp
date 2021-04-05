@@ -110,17 +110,13 @@
 #define CH_IQ_BUF_SIZE       512
 #define FFT_SIZE             CH_IQ_BUF_SIZE
 
-static int quit = 0;
-static struct timeval last_stat_calc;
-static uint32_t rtl_bytes;
-static uint32_t rtl_samples;
-static uint32_t rtl_callbacks;
+static bool run = true;
 static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 
+// Metadata associated with one chunk of IQ data (32ms at the moment)
 struct Metadata {
-    float lvl_min;
-    float lvl_avg;
-    float lvl_max;
+    struct timeval ts;       // Timestamp for the IQ chunk (from the OS)
+    float          pwr_dbfs; // Power dBFS (ref. full scale sine wave)
 };
 
 // Convenient type for the ring buffer
@@ -197,7 +193,7 @@ struct OutputState {
 
 static void signal_handler(int signo) {
     std::cout << "Signal received. Stopping..." << std::endl;
-    quit = 1;
+    run = false;
 }
 
 
@@ -228,7 +224,7 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
         return;
     }
 
-    if (quit) {
+    if (!run) {
         rtlsdr_cancel_async(ctx.rtl_device);
         return;
     }
@@ -236,27 +232,22 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     // Copy to tmp buf to overcome slow access to data on Pi with kernel 5.x
     memcpy(ctx.iq_buf, buf, RTL_IQ_BUF_SIZE);
 
-    meta.lvl_min = 0.0f;
-    meta.lvl_avg = 0.0f;
-    meta.lvl_max = -100.0f;
+    // Prepare chunk metadata
+    gettimeofday(&meta.ts, nullptr);
+    float pwr_rms = 0.0f;
 
-    // Loop over all IQ samples and collect min, avg and max levels. We use
-    // IQ scals from -1.0 to 1.0. To calculate dbFS we can use:
-    //
-    //   dBFS = 20 * log10(abs(iq_sample))
-    //
-    // or more efficent:
-    //
-    //   dBFS = 10 * log10(std::norm(iq_sample))
-    //
+    // Calculate average power in the chunk by squaring the amplitude RMS.
+    // ampl_rms = sqrt( ( sum( abs(iq_sample)^2 ) ) / N )
     for (unsigned i = 0; i < RTL_IQ_BUF_SIZE; i += 2) {
-        iqsample_t tmp_sample(((float)ctx.iq_buf[i])   / 127.5f - 1.0f, ((float)ctx.iq_buf[i+1])   / 127.5f - 1.0f);
-        float lvl = 10 * std::log10(std::norm(tmp_sample));
-        if (lvl < meta.lvl_min) meta.lvl_min = lvl;
-        if (lvl > meta.lvl_max) meta.lvl_max = lvl;
-        meta.lvl_avg += lvl;
+        iqsample_t iq_sample(((float)ctx.iq_buf[i])   / 127.5f - 1.0f, ((float)ctx.iq_buf[i+1])   / 127.5f - 1.0f);
+        float ampl_squared = std::norm(iq_sample);
+        pwr_rms += ampl_squared;
     }
-    meta.lvl_avg /= (RTL_IQ_BUF_SIZE/2);
+    pwr_rms = pwr_rms / (RTL_IQ_BUF_SIZE/2);
+
+    // Calculate power dBFS with full scale sine wave as reference (amplitude
+    // of 1/sqrt(2) or power 1/2 or -3 dB).
+    meta.pwr_dbfs = 10 * std::log10(pwr_rms) - 3.0f;
 
     // Acquire IQ ring buffer
     if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, &metadata_ptr)) {
@@ -276,27 +267,6 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
         // Overrun
         std::cerr << "Warning: Unable to write samples. Ring buffer full" << std::endl;
     }
-
-    struct timeval current_time;
-    gettimeofday(&current_time, NULL);
-    rtl_bytes += len;
-    rtl_samples += (len >> 1);
-    rtl_callbacks++;
-
-    // Output stats every STAT_INTERVAL seconds
-    if (current_time.tv_sec > last_stat_calc.tv_sec + STAT_INTERVAL) {
-        //double elapsed_time = (double)(current_time.tv_sec*1000000+current_time.tv_usec - (last_stat_calc.tv_sec*1000000+last_stat_calc.tv_usec));
-        //double rtl_data_rate = ((double)rtl_bytes)/(elapsed_time/1000000);
-        //double rtl_callback_rate = ((double)rtl_callbacks)/(elapsed_time/1000000);
-        //double rtl_sample_rate = ((double)rtl_samples)/(elapsed_time/1000000);
-        //printf("RTL buf len: %" PRIu32 ", RTL rates/s: %.4f bytes, %.2f callbacks, %.2f samples\n",
-        //       len, rtl_data_rate, rtl_callback_rate, rtl_sample_rate);
-
-        rtl_bytes = 0;
-        rtl_callbacks = 0;
-        rtl_samples = 0;
-        last_stat_calc = current_time;
-    }
 }
 
 
@@ -311,9 +281,18 @@ static void render_bargraph(float level, char *buf) {
     int base = tmp_level/7;
     int rest = tmp_level - base * 7;
 
-    snprintf(buf, 65, "\033[32m");
+    snprintf(buf, 65, "\033[32m"); // Green
     buf += 5;
     for (int i = 0; i < 7; i++) {
+        if (i == 5) {
+            snprintf(buf, 65, "\033[33m"); // Yellow(/brown)
+            buf += 5;
+        }
+        if (i == 6) {
+            snprintf(buf, 65, "\033[31m"); // Red
+            buf += 5;
+        }
+
         if (i < base) {
             snprintf(buf, 65, "\u2588");
             buf += 3;
@@ -365,8 +344,8 @@ static void alsa_write_cb(OutputState &ctx) {
             gettimeofday(&current_time, NULL);
             localtime_r(&current_time.tv_sec, &tm);
             strftime(tmp_str, 100, "%T", &tm);
-            render_bargraph(metadata_ptr->lvl_avg, bar);
-            fprintf(stdout, "%s: Level[%s\033[1;30m%5.1f\033[0m]", tmp_str, bar, metadata_ptr->lvl_avg);
+            render_bargraph(metadata_ptr->pwr_dbfs, bar);
+            fprintf(stdout, "%s: Level[%s\033[1;30m%5.1f\033[0m]", tmp_str, bar, metadata_ptr->pwr_dbfs);
         }
 
         // Zero out the output audio buffer
@@ -499,10 +478,11 @@ static void alsa_write_cb(OutputState &ctx) {
             ctx.hi_energy[ctx.energy_idx] = hi_energy / 255;
             if (++ctx.energy_idx == 10) ctx.energy_idx = 0;
 
-            // Convert levels to dB
-            sig_level    = 10 * std::log10(sig_level);
-            ref_level_hi = 10 * std::log10(ref_level_hi);
-            ref_level_lo = 10 * std::log10(ref_level_lo);
+            // Convert levels to dB. Division by 512 is for compensating for
+            // the FFT gain (number of points, N)
+            sig_level    = 10 * std::log10(sig_level/512);
+            ref_level_hi = 10 * std::log10(ref_level_hi/512);
+            ref_level_lo = 10 * std::log10(ref_level_lo/512);
 
             if (ctx.sql_wait >= 10) {
                 lo_energy = 0.0f;
@@ -805,7 +785,7 @@ static void alsa_worker(struct OutputState &output_state) {
     // We can use ALSAs internal event loop instead of our own. Maybe ALSA
     // uses threads under the hood as well?
 
-    while (!quit) {
+    while (run) {
         // Block until a descriptor indicates activity or 1s of inactivity
         ret = poll(poll_descs, num_poll_descs, 1000000);
         if (ret < 0) {
@@ -854,7 +834,7 @@ static void dongle_worker(struct InputState &input_state) {
     std::cout << "Starting dongle thread for device: " << input_state.settings.rtl_device << std::endl;
     cout_lock.clear();
 
-    while (!quit) {
+    while (run) {
         sleep(1);
     }
 
@@ -1277,7 +1257,6 @@ int main(int argc, char** argv) {
     sigaction(SIGTERM, &sigact, NULL);
     sigaction(SIGQUIT, &sigact, NULL);
     sigaction(SIGPIPE, &sigact, NULL);
-    quit = 0;
 
     struct OutputState output_state;
     output_state.rb_ptr   = &iq_rb;
@@ -1286,10 +1265,6 @@ int main(int argc, char** argv) {
     std::thread alsa_thread(alsa_worker, std::ref(output_state));
     std::thread dongle_thread(dongle_worker, std::ref(input_state));
 
-    rtl_bytes = 0;
-    rtl_samples = 0;
-    rtl_callbacks = 0;
-    gettimeofday(&last_stat_calc, NULL);
     rtlsdr_reset_buffer(input_state.rtl_device);
 
     // RTL_IQ_BUF_SIZE is the size of the callback buffer. This will become len
@@ -1297,11 +1272,7 @@ int main(int argc, char** argv) {
     ret = rtlsdr_read_async(input_state.rtl_device, iq_cb, &input_state, 4, RTL_IQ_BUF_SIZE);
     if (ret < 0) {
         std::cerr << "Error: rtlsdr_read_async returned: " << ret << std::endl;
-        return(0);
-    }
-
-    while (!quit) {
-        sleep(1);
+        run = false;
     }
 
     dongle_thread.join();
