@@ -274,12 +274,12 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
 static void render_bargraph(float level, char *buf) {
     int lvl = (int)level;
 
-    if (lvl < -64) lvl = -56;
+    if (lvl < -56) lvl = -56;
     if (lvl > 0) lvl = 0;
 
     int tmp_level = lvl + 56;
-    int base = tmp_level/7;
-    int rest = tmp_level - base * 7;
+    int base = tmp_level/8;
+    int rest = tmp_level - base * 8;
 
     snprintf(buf, 65, "\033[32m"); // Green
     buf += 5;
@@ -449,8 +449,8 @@ static void alsa_write_cb(OutputState &ctx) {
             float ref_level_lo = 0.0f;
             for (unsigned i = 112; i < 157; i++) {
                 // About 3.5kHz to 4.9kHz
-                ref_level_hi += std::norm(ctx.fft_out[i]) * passband_shape[i];
-                ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]) * passband_shape[FFT_SIZE - i];
+                ref_level_hi += std::norm(ctx.fft_out[i] * passband_shape[i]);
+                ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i] * passband_shape[FFT_SIZE - i]);
                 //ref_level_hi += std::norm(ctx.fft_out[i]);
                 //ref_level_lo += std::norm(ctx.fft_out[FFT_SIZE - i]);
             }
@@ -480,9 +480,9 @@ static void alsa_write_cb(OutputState &ctx) {
 
             // Convert levels to dB. Division by 512 is for compensating for
             // the FFT gain (number of points, N)
-            sig_level    = 10 * std::log10(sig_level/512);
-            ref_level_hi = 10 * std::log10(ref_level_hi/512);
-            ref_level_lo = 10 * std::log10(ref_level_lo/512);
+            sig_level    = 10 * std::log10(sig_level/512.0f);
+            ref_level_hi = 10 * std::log10(ref_level_hi/512.0f);
+            ref_level_lo = 10 * std::log10(ref_level_lo/512.0f);
 
             if (ctx.sql_wait >= 10) {
                 lo_energy = 0.0f;
