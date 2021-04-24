@@ -987,32 +987,30 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
             // Ignore given options and just print the extended help
             poptPrintHelp(popt_ctx, stderr, 0);
             std::cerr << R"(
-sdrx is a simple software defined narrow band AM receiver using a RTL-SDR
+sdrx is a software defined narrow band AM receiver that is using a RTL-SDR
 dongle as its hadware backend. It is mainly designed for use in the 118 to
 138 MHz airband. The program is run from the command line and the channels to
-listen to are given as arguments in standard six digit aeronautical notation.
-Both the legacy 25kHz channel separation and the new 8.33kHz channel separation
-notations are supported, i.e. 118.275 and 118.280 both mean the frequency
-118.275 MHz.
+listen to are given as arguments in the standard six digit aeronautical
+notation. Both the legacy 25kHz channel separation and the new 8.33kHz channel
+separation notations are supported, i.e. 118.275 and 118.280 both mean the
+frequency 118.275 MHz.
 
-If multiple channels are given, they must all be within 1MHz of bandwidth.
+If multiple channels are given, they must all fit within 1MHz of bandwidth.
 
-The squelch is adaptive with respect to the current noise floor and the squelch
-level is given as a SNR value in dB. Audio is played using ALSA.
+The squelch is adaptive with respect to the current per channel noise floor and
+the squelch level is given as a SNR value in dB. Audio is played using ALSA.
 
-Audio gain and squelch level should normally not be set since the defaults
-work well.
+Audio gain and squelch can normally be left as is since the defaults work well.
 
 Examples:
 
-Listen to the channel 122.450 with 40dB of RF gain and 8dB of audio gain:
+Listen to the channel 122.450 with 40dB of RF gain and 3dB of audio gain:
 
     $ sdrx --rf-gain 40 --lf-gain 8 122.450
 
-Listen to the channels 118.105 and 118.505 with 34dB of RF gain, 12dB of audio
-gain and 18dB squelch:
+Listen to the channels 118.105 and 118.505 with 34dB of RF gain and 5dB squelch:
 
-    $ sdrx --rf-gain 34 --lf-gain 12 --sql-level 18 118.105 118.505
+    $ sdrx --rf-gain 34 --sql-level 5 118.105 118.505
 )"
             << std::endl;
             ret = -1;
