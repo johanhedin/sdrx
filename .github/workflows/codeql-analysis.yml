@@ -60,7 +60,7 @@ jobs:
     #    uses a compiled language
 
     - run: |
-       sudo apt-get install -y g++-8 cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev
+       sudo apt-get install -y g++-8 cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev
        make
        make dts
     #   make bootstrap
