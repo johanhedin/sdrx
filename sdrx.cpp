@@ -755,7 +755,7 @@ static void alsa_worker(struct OutputState &output_state) {
         std::cout << ")" << std::endl;
     }
 
-    FIR2 flt(coeff_bpam_channel);
+    FIR2 flt(coeff_bp4am_channel);
     flt.setGain(ctx.settings.lf_gain);
 
     gettimeofday(&current_time, NULL);
