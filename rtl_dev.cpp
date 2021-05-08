@@ -7,7 +7,7 @@
 
 #include <rtl-sdr.h>
 
-#include "rtl_device.hpp"
+#include "rtl_dev.hpp"
 
 #define MIN_FQ 45000000
 #define MAX_FQ 1700000000

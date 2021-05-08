@@ -22,7 +22,7 @@
 #include <chrono>
 #include <iostream>
 
-#include "rtl_device.hpp"
+#include "rtl_dev.hpp"
 #include "airspy_dev.hpp"
 
 int main(int argc, char **argv) {

@@ -1,6 +1,6 @@
 
-#ifndef RTLDEVCIE_HPP
-#define RTLDEVCIE_HPP
+#ifndef RTLDEV_HPP
+#define RTLDEV_HPP
 
 #include <cstdint>
 #include <string>
@@ -44,4 +44,4 @@ private:
     static void        data_cb_(unsigned char *data, uint32_t data_len, void *ctx);
 };
 
-#endif // RTLDEVCIE_HPP
+#endif // RTLDEV_HPP
