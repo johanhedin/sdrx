@@ -23,15 +23,19 @@
 #include <iostream>
 
 #include "rtl_device.hpp"
+#include "airspy_dev.hpp"
 
 int main(int argc, char **argv) {
-    RtlDevice dev0(0), dev1(1);
-    unsigned i = 0;
+    std::cout << "Available RTL devices..." << std::endl;
+    RtlDev::list();
 
-    std::cout << "Listing available devices..." << std::endl;
-    RtlDevice::list();
+    std::cout << "Available Airspy devices..." << std::endl;
+    AirspyDev::list();
 
+    /*
     std::cout << "Starting..." << std::endl;
+
+    RtlDev dev0(0), dev1(1);
 
     std::cout << "Opening devices..." << std::endl;
     dev0.open();
@@ -42,6 +46,7 @@ int main(int argc, char **argv) {
     dev1.start();
 
     std::cout << "Sleep some..." << std::endl;
+    unsigned i = 0;
     while (i < 5) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         i++;
@@ -56,6 +61,7 @@ int main(int argc, char **argv) {
     dev0.close();
 
     std::cout << "Done" << std::endl;
+    */
 
     return 0;
 }

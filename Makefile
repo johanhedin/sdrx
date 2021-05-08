@@ -1,15 +1,17 @@
 all: sdrx
 
 rtl_device.o: rtl_device.hpp rtl_device.cpp
-	g++ -c -g -Wall -std=c++17 -I. rtl_device.cpp
+	g++ -Wall -std=c++17 -O2 -I. -c rtl_device.cpp
+
+airspy_dev.o: airspy_dev.hpp airspy_dev.cpp
+	g++ -Wall -std=c++17 -O2 -I. -c airspy_dev.cpp
 
 sdrx: coeffs.hpp iqsample.hpp msd.hpp crb.hpp fir.hpp agc.hpp sdrx.cpp
-	g++ -o sdrx -O2 -Wall -std=c++17 -I. sdrx.cpp -lpopt -lpthread -lusb-1.0 -lrtlsdr -lasound -lm -lfftw3f
+	g++ -Wall -std=c++17 -O2 -I. -o sdrx sdrx.cpp -lpopt -lpthread -lusb-1.0 -lrtlsdr -lasound -lm -lfftw3f
 
-dts: dts.cpp rtl_device.o
-	g++ -o dts -g -Wall -std=c++17 -I. dts.cpp rtl_device.o -lrtlsdr -lpthread
+dts: dts.cpp rtl_device.o airspy_dev.o
+	g++ -Wall -std=c++17 -O2 -I. -o dts dts.cpp rtl_device.o airspy_dev.o -lpthread -lusb-1.0 -lrtlsdr -lairspy
 
 clean:
-	rm -f *.o
-	rm -f sdrx dts
+	rm -f *.o sdrx dts
 
