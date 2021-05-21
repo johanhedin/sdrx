@@ -1,0 +1,3 @@
+[submodule "libairspy"]
+	path = libairspy
+	url = https://github.com/airspy/airspyone_host.git
