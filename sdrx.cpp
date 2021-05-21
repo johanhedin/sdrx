@@ -328,7 +328,7 @@ static void alsa_write_cb(OutputState &ctx) {
     const struct Metadata *metadata_ptr = nullptr;
     struct tm              tm;
     char                   tmp_str[256];
-    char                   bar[65];
+    char                   bar[71];
     std::vector<Channel>  &channels = ctx.settings.channels;
 
     ret = snd_pcm_avail_update(ctx.pcm_handle);
