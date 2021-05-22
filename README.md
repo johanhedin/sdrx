@@ -1,14 +1,14 @@
 sdrx
 ====
 
-![C/C++ CI](https://github.com/johanhedin/sdrx/workflows/C/C++%20CI/badge.svg)
+![Build](https://github.com/johanhedin/sdrx/workflows/C/C++%20CI/badge.svg)
 ![CodeQL](https://github.com/johanhedin/sdrx/workflows/CodeQL/badge.svg)
 
-`sdrx` is a software defined narrow band AM airband receiver that uses a
-RTL-SDR USB dongle as it's hardware part. It's main purpose is to act as a test
-bench for different SDR implementation aspects as translation, down sampling,
-filtering, demodulation, interaction between clock domains, threading, audio
-processing and so on. `sdrx` is written in C++17 and is tested on a x86_64
+`sdrx` is a software defined narrow band multi channel AM airband receiver that
+uses a RTL-SDR USB dongle as it's hardware part. It's main purpose is to act as
+a test bench for different SDR implementation aspects as translation, down
+sampling, filtering, demodulation, interaction between clock domains, threading,
+audio processing and so on. `sdrx` is written in C++17 and is tested on a x86_64
 machine running Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running
 Raspberry Pi OS. Audio is played using ALSA.
 
@@ -19,25 +19,25 @@ less powerfull Raspberry Pi models. YMMV.
 
 Build requirements
 ====
-Besides git, gcc and the standard set of development tools, `sdrx` depend on
-the following libraries. They, and their development parts, need to be
+Besides git, gcc, cmake and the standard set of development tools, `sdrx` depend
+on the following libraries. They, and their development parts, need to be
 installed on your machine in order to build and run `sdrx`:
 
+ * libpopt
  * libusb-1.0
  * librtlsdr
  * libasound
  * libfftw
- * libpopt
 
 On Fedora they can be installed with:
 
-    $ sudo dnf install gcc-c++ cmake git libusbx-devel rtl-sdr-devel alsa-lib-devel \
-                       fftw-devel fftw-libs-single popt-devel
+    $ sudo dnf install git gcc-c++ cmake popt-devel libusbx-devel rtl-sdr-devel \
+                       alsa-lib-devel fftw-devel fftw-libs-single
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
-    $ sudo apt-get install g++-8 cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev \
-                           libfftw3-dev libfftw3-single3 libpopt-dev
+    $ sudo apt-get install git g++-8 cmake libpopt-dev libusb-1.0-0-dev librtlsdr-dev \
+                           libasound2-dev libfftw3-dev libfftw3-single3
 
 
 Download and build
