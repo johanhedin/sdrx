@@ -192,7 +192,7 @@ struct OutputState {
 
 
 static void signal_handler(int signo) {
-    std::cout << "Signal received. Stopping..." << std::endl;
+    std::cout << "Signal '" << strsignal(signo) << "' received. Stopping...\n";
     run = false;
 }
 
