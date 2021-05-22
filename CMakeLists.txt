@@ -26,12 +26,15 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -O2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 
 #message(STATUS "CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 
 add_executable(sdrx sdrx.cpp)
 
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR})
+target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
 
 target_link_libraries(sdrx m)
+target_link_libraries(sdrx airspy-static)
 
 find_package(POPT REQUIRED)
 if (POPT_FOUND)
