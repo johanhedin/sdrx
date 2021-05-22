@@ -32,7 +32,6 @@ add_executable(sdrx sdrx.cpp)
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR})
 
 target_link_libraries(sdrx m)
-target_link_libraries(sdrx rtlsdr)
 
 find_package(POPT REQUIRED)
 if (POPT_FOUND)
@@ -63,3 +62,9 @@ if (ALSA_FOUND)
     include_directories(${ALSA_INCLUDE_DIRS})
     target_link_libraries (sdrx ${ALSA_LIBRARIES})
 endif(ALSA_FOUND)
+
+find_package(RTLSDR REQUIRED)
+if (RTLSDR_FOUND)
+    include_directories(${RTLSDR_INCLUDE_DIRS})
+    target_link_libraries (sdrx ${RTLSDR_LIBRARIES})
+endif(RTLSDR_FOUND)
