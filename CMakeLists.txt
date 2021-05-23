@@ -25,17 +25,26 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 
-#message(STATUS "CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+# Add submodule libairspy (airspyone_host) as a subdirectory to our project.
+# The EXCLUDE_FROM_ALL option allows us to cherry pick the airspy-static
+# target later on since we are only interested in libairspy and not the host
+# tools
 add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 
 add_executable(sdrx sdrx.cpp)
+add_executable(dts EXCLUDE_FROM_ALL dts.cpp rtl_dev.cpp airspy_dev.cpp)
 
+# Add our project root and the linked libairspy as include directories
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR})
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
+target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR})
+target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
 
 target_link_libraries(sdrx m)
 target_link_libraries(sdrx airspy-static)
+target_link_libraries(dts airspy-static)
 
+# Look for all required packages
 find_package(POPT REQUIRED)
 if (POPT_FOUND)
     include_directories(${POPT_INCLUDE_DIRS})
@@ -46,6 +55,7 @@ find_package(Threads REQUIRED)
 if (Threads_FOUND)
     include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
     target_link_libraries (sdrx Threads::Threads)
+    target_link_libraries (dts Threads::Threads)
 endif(Threads_FOUND)
 
 find_package(FFTW REQUIRED)
@@ -58,6 +68,7 @@ find_package(LIBUSB REQUIRED)
 if (LIBUSB_FOUND)
     include_directories(${LIBUSB_INCLUDE_DIRS})
     target_link_libraries (sdrx ${LIBUSB_LIBRARIES})
+    target_link_libraries (dts ${LIBUSB_LIBRARIES})
 endif(LIBUSB_FOUND)
 
 find_package(ALSA REQUIRED)
@@ -70,4 +81,5 @@ find_package(RTLSDR REQUIRED)
 if (RTLSDR_FOUND)
     include_directories(${RTLSDR_INCLUDE_DIRS})
     target_link_libraries (sdrx ${RTLSDR_LIBRARIES})
+    target_link_libraries (dts ${RTLSDR_LIBRARIES})
 endif(RTLSDR_FOUND)
