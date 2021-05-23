@@ -1,5 +1,5 @@
 //
-// Test for future RTL and Airspy Device classes
+// Test for future RTL and Airspy device classes
 //
 // @author Johan Hedin
 // @date   2021-05-23
@@ -42,7 +42,6 @@ int main(int argc, char **argv) {
     bool             list_devices = false;
     bool             run_test = false;
     std::string      serial;
-    int              ret = 0;
 
     // Collect command line arguments
     if (argc > 1) {
@@ -126,46 +125,24 @@ int main(int argc, char **argv) {
 
             RtlDev *dev = new RtlDev(serial);
 
-            ret = dev->open();
-            if (ret != RTLDEV_OK) {
-                std::cerr << "Error: Unable to open device " << serial <<
-                            ", ret == " << ret << " (" << RtlDev::errStr(ret) << ")\n";
-                delete dev;
-                return 1;
-            }
-
-            ret = dev->start();
-
+            dev->start();
             while (run) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
-
-            ret = dev->stop();
-            ret = dev->close();
+            dev->stop();
 
             delete dev;
         } else if (AirspyDev::present(serial)) {
             std::cout << "Running test with Airspy device " << serial << std::endl;
-            //AirspyDev *dev = new AirspyDev(serial, 2500000);
-            AirspyDev *dev = new AirspyDev(serial, 3000000);
-            //AirspyDev *dev = new AirspyDev(serial, 10000000);
+            uint32_t fs = 3000000;
 
-            ret = dev->open();
-            if (ret != AIRSPYDEV_OK) {
-                std::cerr << "Error: Unable to open device " << serial <<
-                            ", ret == " << ret << " (" << AirspyDev::errStr(ret) << ")\n";
-                delete dev;
-                return 1;
-            }
+            AirspyDev *dev = new AirspyDev(serial, fs);
 
-            ret = dev->start();
-
+            dev->start();
             while (run) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
-
-            ret = dev->stop();
-            ret = dev->close();
+            dev->stop();
 
             delete dev;
         } else {
