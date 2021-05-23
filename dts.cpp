@@ -1,8 +1,8 @@
 //
-// Test for future RTL Device class
+// Test for future RTL and Airspy Device classes
 //
 // @author Johan Hedin
-// @date   2021-01-13
+// @date   2021-05-23
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -22,46 +22,160 @@
 #include <chrono>
 #include <iostream>
 
+#include <string.h>
+#include <signal.h>
+
 #include "rtl_dev.hpp"
 #include "airspy_dev.hpp"
 
+static bool run = true;
+
+
+static void signal_handler(int signo) {
+    std::cout << "Signal '" << strsignal(signo) << "' received. Stopping...\n";
+    run = false;
+}
+
+
 int main(int argc, char **argv) {
-    std::cout << "Available RTL devices..." << std::endl;
-    RtlDev::list();
+    struct sigaction sigact;
+    bool             list_devices = false;
+    bool             run_test = false;
+    std::string      serial;
+    int              ret = 0;
 
-    std::cout << "Available Airspy devices..." << std::endl;
-    AirspyDev::list();
-
-    /*
-    std::cout << "Starting..." << std::endl;
-
-    RtlDev dev0(0), dev1(1);
-
-    std::cout << "Opening devices..." << std::endl;
-    dev0.open();
-    dev1.open();
-
-    std::cout << "Starting devices..." << std::endl;
-    dev0.start();
-    dev1.start();
-
-    std::cout << "Sleep some..." << std::endl;
-    unsigned i = 0;
-    while (i < 5) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        i++;
+    // Collect command line arguments
+    if (argc > 1) {
+        std::string arg = argv[1];
+        if (arg == "--list" || arg == "-l") {
+            list_devices = true;
+        } else if ((arg == "--test" || arg == "-t") && argc > 2) {
+            serial = argv[2];
+            run_test = true;
+        }
     }
 
-    std::cout << "Stopping devices..." << std::endl;
-    dev1.stop();
-    dev0.stop();
+    // List devices and then exit
+    if (list_devices) {
+        std::cout << "Available RTL devices..." << std::endl;
+        std::vector<RtlDev::Info> rtl_devices = RtlDev::list();
+        for (auto &dev : rtl_devices) {
+            std::cout << "    " << dev.index  << ", " << dev.serial;
+            if (dev.available) {
+                if (dev.supported) {
+                    std::cout << ", sample rates =";
+                    bool first = true;
+                    for (auto &rate : dev.sample_rates) {
+                        if (first) {
+                            std::cout << " " << rate;
+                            first = false;
+                        } else {
+                            std::cout << ", " << rate;
+                        }
+                    }
 
-    std::cout << "Closing devices..." << std::endl;
-    dev1.close();
-    dev0.close();
+                    std::cout << ", description = " << dev.description << std::endl;
+                } else {
+                    std::cout << " (unsupported tuner and/or crystal fq)\n";
+                }
+            } else {
+                std::cout << " (in use)\n";
+            }
+        }
 
-    std::cout << "Done" << std::endl;
-    */
+        std::cout << "Available Airspy devices..." << std::endl;
+        std::vector<AirspyDev::Info> airspy_devices = AirspyDev::list();
+        for (auto &dev : airspy_devices) {
+            std::cout << "    " << dev.index  << ", " << dev.serial;
+            if (dev.available) {
+                if (dev.supported) {
+                    std::cout << ", sample rates =";
+                    bool first = true;
+                    for (auto &rate : dev.sample_rates) {
+                        if (first) {
+                            std::cout << " " << rate;
+                            first = false;
+                        } else {
+                            std::cout << ", " << rate;
+                        }
+                    }
+
+                    std::cout << ", description = " << dev.description << std::endl;
+                } else {
+                    std::cout << " (unsupported model and/or sample rate)\n";
+                }
+            } else {
+                std::cout << " (in use)\n";
+            }
+        }
+
+        return 0;
+    }
+
+    if (run_test) {
+        sigact.sa_handler = signal_handler;
+        sigemptyset(&sigact.sa_mask);
+        sigact.sa_flags = 0;
+        sigaction(SIGINT, &sigact, NULL);
+        sigaction(SIGTERM, &sigact, NULL);
+        sigaction(SIGQUIT, &sigact, NULL);
+        sigaction(SIGPIPE, &sigact, NULL);
+
+        if (RtlDev::present(serial)) {
+            std::cout << "Running test with RTL device " << serial << std::endl;
+
+            RtlDev *dev = new RtlDev(serial);
+
+            ret = dev->open();
+            if (ret != RTLDEV_OK) {
+                std::cerr << "Error: Unable to open device " << serial <<
+                            ", ret == " << ret << " (" << RtlDev::errStr(ret) << ")\n";
+                delete dev;
+                return 1;
+            }
+
+            ret = dev->start();
+
+            while (run) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            }
+
+            ret = dev->stop();
+            ret = dev->close();
+
+            delete dev;
+        } else if (AirspyDev::present(serial)) {
+            std::cout << "Running test with Airspy device " << serial << std::endl;
+            //AirspyDev *dev = new AirspyDev(serial, 2500000);
+            AirspyDev *dev = new AirspyDev(serial, 3000000);
+            //AirspyDev *dev = new AirspyDev(serial, 10000000);
+
+            ret = dev->open();
+            if (ret != AIRSPYDEV_OK) {
+                std::cerr << "Error: Unable to open device " << serial <<
+                            ", ret == " << ret << " (" << AirspyDev::errStr(ret) << ")\n";
+                delete dev;
+                return 1;
+            }
+
+            ret = dev->start();
+
+            while (run) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            }
+
+            ret = dev->stop();
+            ret = dev->close();
+
+            delete dev;
+        } else {
+            std::cerr << "Error: No device with serial " << serial << " found.\n";
+        }
+
+        return 0;
+    }
+
+    std::cout << "Usage: dts [--list,-l] [--test,-t <serial>]\n";
 
     return 0;
 }
