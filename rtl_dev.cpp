@@ -1,3 +1,22 @@
+//
+// Device class for a RTL dongle
+//
+// @author Johan Hedin
+// @date   2021-05-23
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include <cassert>
 #include <chrono>
@@ -21,25 +40,18 @@
 
 RtlDev::RtlDev(const std::string &serial, uint32_t fs, int xtal_corr)
 : serial_(serial), fs_(fs), xtal_corr_(xtal_corr), fq_(DEFAULT_FQ),
-  gain_(DEFAULT_GAIN), dev_(nullptr), run_(false), counter_(0)  {}
+  gain_(DEFAULT_GAIN), dev_(nullptr), run_(false), counter_(0), state_(State::IDLE)  {}
 
 
 RtlDev::~RtlDev(void) {
     assert(run_ == false);
-    assert(dev_ == nullptr);
-}
-
-
-int RtlDev::open(void) {
-    assert(dev_ == nullptr);
-
-    return open_();
 }
 
 
 int RtlDev::start() {
-    assert(dev_ != nullptr);
-    assert(run_ == false);
+    if (run_) return RTLDEV_ALREADY_STARTED;
+
+    state_ = State::STARTING;
     run_ = true;
     worker_thread_ = std::thread(worker_, std::ref(*this));
 
@@ -48,23 +60,10 @@ int RtlDev::start() {
 
 
 int RtlDev::stop() {
-    assert(run_ == true);
+    if (!run_) return RTLDEV_ALREADY_STOPPED;
+
     run_ = false;
     worker_thread_.join();
-
-    return RTLDEV_OK;
-}
-
-
-int RtlDev::close(void) {
-    assert(run_ == false);
-
-    // Device might have bailed out in the worker thread so we only call
-    // rtlsdr_close if device is still open
-    if (dev_ != nullptr) {
-        rtlsdr_close((rtlsdr_dev_t*)dev_);
-        dev_ = nullptr;
-    }
 
     return RTLDEV_OK;
 }
@@ -75,6 +74,7 @@ int RtlDev::setFq(uint32_t fq) {
 
     fq_ = fq;
 
+    // Potential race here if the worker thread is restarting the device...
     if (dev_) {
         rtlsdr_set_center_freq((rtlsdr_dev_t*)dev_, fq_);
     }
@@ -88,6 +88,7 @@ int RtlDev::setTunerGain(float gain) {
 
     gain_ = gain;
 
+    // Potential race here if the worker thread is restarting the device...
     if (dev_) {
         rtlsdr_set_tuner_gain((rtlsdr_dev_t*)dev_, (int)(gain_ * 10.0f));
     }
@@ -102,23 +103,25 @@ void RtlDev::worker_(RtlDev &self) {
     int ret;
 
     while (self.run_) {
-        rtlsdr_reset_buffer((rtlsdr_dev_t*)self.dev_);
-        ret = rtlsdr_read_async((rtlsdr_dev_t*)self.dev_, RtlDev::data_cb_, &self, RTL_NUM_IQ_BUFFERS, RTL_IQ_BUF_SIZE);
-        if (ret < 0 && self.run_ && self.serial_.length() != 0) {
-            std::cerr << "Device " << self.serial_ << " disappeared. Trying to reopen...\n";
+        ret = self.open_();
+        if (ret == RTLDEV_OK) {
+            std::cerr << "Device " << self.serial_ << " opended successfully\n";
+            rtlsdr_reset_buffer((rtlsdr_dev_t*)self.dev_);
+            self.state_ = State::RUNNING;
+            rtlsdr_read_async((rtlsdr_dev_t*)self.dev_, RtlDev::data_cb_, &self, RTL_NUM_IQ_BUFFERS, RTL_IQ_BUF_SIZE);
             rtlsdr_close((rtlsdr_dev_t*)self.dev_);
             self.dev_ = nullptr;
-
-            do {
+            if (self.run_) {
+                std::cerr << "Device " << self.serial_ << " disappeared. Trying to reopen...\n";
+                self.state_ = State::RESTARTING;
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                ret = self.open_();
-            } while (self.run_ && ret != RTLDEV_OK);
-
-            if (self.run_ && ret == RTLDEV_OK) {
-                std::cerr << "Device " << self.serial_ << " reopended successfully\n";
             }
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
     }
+
+    self.state_ = State::IDLE;
 }
 
 
@@ -153,6 +156,7 @@ void RtlDev::data_cb_(unsigned char *, uint32_t , void *ctx) {
     RtlDev &self = *reinterpret_cast<RtlDev*>(ctx);
 
     if (!self.run_) {
+        self.state_ = State::STOPPING;
         rtlsdr_cancel_async((rtlsdr_dev_t*)self.dev_);
         return;
     }

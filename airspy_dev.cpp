@@ -1,3 +1,22 @@
+//
+// Device class for a Airspy R2 or Mini dongle
+//
+// @author Johan Hedin
+// @date   2021-05-23
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include <cassert>
 #include <chrono>
@@ -24,53 +43,32 @@
 
 AirspyDev::AirspyDev(const std::string &serial, uint32_t fs)
 : serial_(serial), fs_(fs), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
-  dev_(nullptr), run_(false), counter_(0)  {}
+  dev_(nullptr), run_(false), counter_(0), state_(State::IDLE)  {}
 
 
 AirspyDev::~AirspyDev(void) {
-    assert(dev_ == nullptr);
     assert(run_ == false);
-}
-
-
-int AirspyDev::open(void) {
-    assert(dev_ == nullptr);
-
-    return AIRSPYDEV_OK;
-    //return open_();
 }
 
 
 int AirspyDev::start() {
-    //assert(dev_ != nullptr);
-    assert(run_ == false);
+    if (run_) return AIRSPYDEV_ALREADY_STARTED;
+
+    state_ = State::STARTING;
     run_ = true;
     worker_thread_ = std::thread(worker_, std::ref(*this));
 
-    return 0;
+    return AIRSPYDEV_OK;
 }
 
 
 int AirspyDev::stop() {
-    assert(run_ == true);
+    if (!run_) return AIRSPYDEV_ALREADY_STOPPED;
+
     run_ = false;
     worker_thread_.join();
 
-    return 0;
-}
-
-
-int AirspyDev::close(void) {
-    assert(run_ == false);
-
-    // Device might have bailed out in the worker thread so we just close
-    // if device is still open
-    if (dev_) {
-        airspy_close((struct airspy_device*)dev_);
-        dev_ = nullptr;
-    }
-
-    return 0;
+    return AIRSPYDEV_OK;
 }
 
 
@@ -81,6 +79,7 @@ int AirspyDev::setFq(uint32_t fq) {
 
     fq_ = fq;
 
+    // Potential race here if the worker thread is restarting the device...
     if (dev_) {
         ret = airspy_set_freq((struct airspy_device*)dev_, fq_);
         if (ret != AIRSPY_SUCCESS) {
@@ -104,111 +103,37 @@ int AirspyDev::setTunerGain(float gain) {
 void AirspyDev::worker_(AirspyDev &self) {
     int ret;
 
-    std::cerr << "worker_: Enter...\n";
-    ret = self.open_();
-    if (ret != AIRSPYDEV_OK) {
-        std::cerr << "worker_: self.open_ returned " << ret << std::endl;
-        std::cerr << "worker_: Exit.\n";
-        return;
-    }
-
-    ret = airspy_start_rx((struct airspy_device*)self.dev_,
-                    reinterpret_cast<airspy_sample_block_cb_fn>(AirspyDev::data_cb_),
-                    &self);
-
     while (self.run_) {
-        if (airspy_is_streaming((struct airspy_device*)self.dev_) == AIRSPY_TRUE) {
-            //std::cerr << "worker_: streaming...\n";
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
+        ret = self.open_();
+        if (ret == AIRSPYDEV_OK) {
+            std::cerr << "Device " << self.serial_ << " opended successfully\n";
 
-    fprintf(stderr, "worker_: while loop exited.\n");
+            ret = airspy_start_rx((struct airspy_device*)self.dev_,
+                                  reinterpret_cast<airspy_sample_block_cb_fn>(AirspyDev::data_cb_),
+                                  &self);
+            if (ret == AIRSPY_SUCCESS) {
+                self.state_ = State::RUNNING;
+                while (self.run_ && airspy_is_streaming((struct airspy_device*)self.dev_) == AIRSPY_TRUE) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+                airspy_stop_rx((struct airspy_device*)self.dev_);
 
-    // Only call airspy_stop_rx if still streaming
-    if (airspy_is_streaming((struct airspy_device*)self.dev_) == AIRSPY_TRUE) {
-        fprintf(stderr, "worker_: calling airspy_stop_rx...\n");
-        ret = airspy_stop_rx((struct airspy_device*)self.dev_);
-        if (ret == AIRSPY_SUCCESS) {
-            fprintf(stderr, "worker_: airspy_stop_rx returned %d (%s)\n", ret, airspy_error_name((airspy_error)ret));
-        } else {
-            fprintf(stderr, "worker_: airspy_stop_rx returned %d (%s)\n", ret, airspy_error_name((airspy_error)ret));
-        }
-    }
-
-    std::cout << "worker_: calling airspy_close...\n";
-
-    ret = airspy_close((struct airspy_device*)self.dev_);
-    if (ret == AIRSPY_SUCCESS) {
-        fprintf(stderr, "worker_: airspy_close returned %d (%s)\n", ret, airspy_error_name((airspy_error)ret));
-    } else {
-        fprintf(stderr, "worker_: airspy_close returned %d (%s)\n", ret, airspy_error_name((airspy_error)ret));
-    }
-    self.dev_ = nullptr;
-
-    std::cerr << "worker_: Exit.\n";
-
-    /*
-    while (self.run_) {
-        ret = airspy_start_rx((struct airspy_device*)self.dev_,
-                            reinterpret_cast<airspy_sample_block_cb_fn>(AirspyDev::data_cb_),
-                            &self);
-        if (ret == AIRSPY_SUCCESS) {
-            while (self.run_ && airspy_is_streaming((struct airspy_device*)self.dev_) == AIRSPY_TRUE) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                if (self.run_) {
+                    self.state_ = State::RESTARTING;
+                    std::cerr << "Device " << self.serial_ << " disappeared. Trying to reopen...\n";
+                }
             }
 
-            if (self.run_) {
-                std::cerr << "Device " << self.serial_ << " disappeared. Trying to reopen...\n";
-            }
-
-            ret = airspy_stop_rx((struct airspy_device*)self.dev_);
-            if (ret != AIRSPY_SUCCESS) {
-                std::cerr << "Error: airspy_stop_rx returned: " << ret << "(" << airspy_error_name((airspy_error)ret) << ")\n";
-            }
-        } else {
-            std::cerr << "Error: airspy_start_rx returned: " << ret << "(" << airspy_error_name((airspy_error)ret) << ")\n";
-        }
-
-        //airspy_close((struct airspy_device*)self.dev_);
-        self.dev_ = nullptr;
-
-        std::cerr << "Kalle!\n";
-
-        ret = AIRSPYDEV_ERROR;
-        while (self.run_ && ret != AIRSPYDEV_OK) {
-            std::cerr << "Tut!!\n";
+            airspy_close((struct airspy_device*)self.dev_);
+            self.dev_ = nullptr;
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            ret = self.open_();
-        }
 
-        if (self.run_ && ret == AIRSPYDEV_OK) {
-            std::cerr << "Device " << self.serial_ << " reopended successfully\n";
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         }
     }
-    */
-}
 
-
-
-int AirspyDev::data_cb_(void *t) {
-    airspy_transfer_t *transfer = reinterpret_cast<airspy_transfer_t*>(t);
-    AirspyDev &self = *reinterpret_cast<AirspyDev*>(transfer->ctx);
-
-    // If we should stop, return -1
-    if (!self.run_) {
-        //airspy_stop_rx((struct airspy_device*)self.dev_);
-        return 0;
-    }
-
-    if (++self.counter_ == 60) {
-        std::cerr << "data_cb_: device = " << self.serial_ << ", sample_count = " <<
-                     transfer->sample_count << ", dropped_samples = " << transfer->dropped_samples << std::endl;
-        self.counter_ = 0;
-    }
-
-    // Return 0 to continue or != 0 to stop
-    return 0;
+    self.state_ = State::IDLE;
 }
 
 
@@ -216,10 +141,12 @@ int AirspyDev::open_(void) {
     int      ret = AIRSPYDEV_OK;
     uint64_t serial;
 
-    assert(dev_ == nullptr);
-
-    ret = sscanf(serial_.c_str(), "%" SCNx64, &serial);
-    if (ret != 1) return AIRSPYDEV_INVALID_SERIAL;
+    if (serial_.length() != 0) {
+        ret = sscanf(serial_.c_str(), "%" SCNx64, &serial);
+        if (ret != 1) return AIRSPYDEV_INVALID_SERIAL;
+    } else {
+        serial = 0;
+    }
 
     ret = airspy_open_sn((struct airspy_device**)&dev_, serial);
     if (ret == AIRSPY_SUCCESS) {
@@ -227,7 +154,14 @@ int AirspyDev::open_(void) {
         if (ret == AIRSPY_SUCCESS) {
             ret = airspy_set_samplerate((struct airspy_device*)dev_, fs_);
             if (ret == AIRSPY_SUCCESS) {
-                ret = AIRSPYDEV_OK;
+                ret = airspy_set_freq((struct airspy_device*)dev_, fq_);
+                if (ret == AIRSPY_SUCCESS) {
+                    ret = AIRSPYDEV_OK;
+                } else {
+                    airspy_close((struct airspy_device*)dev_);
+                    dev_ = nullptr;
+                    ret = AIRSPYDEV_INVALID_FS;
+                }
             } else {
                 airspy_close((struct airspy_device*)dev_);
                 dev_ = nullptr;
@@ -243,6 +177,25 @@ int AirspyDev::open_(void) {
     }
 
     return ret;
+}
+
+
+int AirspyDev::data_cb_(void *t) {
+    airspy_transfer_t *transfer = reinterpret_cast<airspy_transfer_t*>(t);
+    AirspyDev &self = *reinterpret_cast<AirspyDev*>(transfer->ctx);
+
+    if (!self.run_) {
+        return 0;
+    }
+
+    if (++self.counter_ == 40) {
+        std::cerr << "data_cb_: device = " << self.serial_ << ", sample_count = " <<
+                     transfer->sample_count << ", dropped_samples = " << transfer->dropped_samples << std::endl;
+        self.counter_ = 0;
+    }
+
+    // Return 0 to continue or != 0 to stop
+    return 0;
 }
 
 
