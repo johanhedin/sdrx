@@ -1,8 +1,8 @@
 sdrx
 ====
 
-[![Build](https://github.com/johanhedin/sdrx/actions/workflows/c-cpp.yml/badge.svg)]
-[![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)]
+[![Build](https://github.com/johanhedin/sdrx/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/c-cpp.yml)
+[![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml)
 
 `sdrx` is a software defined narrow band multi channel AM airband receiver that
 uses a RTL-SDR USB dongle as it's hardware part. It's main purpose is for
