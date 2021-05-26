@@ -19,7 +19,14 @@ jobs:
       run: sudo apt-get install -y g++-8 cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev
 
     - name: Build sdrx
-      run: make
+      uses: ashutoshvarma/action-cmake-build@master
+      with:
+        build-dir: ${{ runner.workspace }}/build
+        build-type: Debug
+        parallel: 4
+
+#    - name: Build sdrx
+#      run: make
 
         #    - name: Build dts
         #      run: make dts
