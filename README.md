@@ -45,13 +45,11 @@ On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
 Download and build
 ====
-The easiest way to get `sdrx` is to clone the GitHub repo. Note that `sdrx`
-requires latest libairspy and it is inlcuded as a submodule. A special step
-is thus required to check out evertything properly:
+The easiest way to get `sdrx` is to clone the GitHub repo (note that `sdrx`
+requires latest libairspy and that it is inlcuded as a submodule):
 
-    $ git clone https://github.com/johanhedin/sdrx.git
+    $ git clone --recurse-submodules https://github.com/johanhedin/sdrx.git
     $ cd sdrx
-    $ git submodule update --init
 
 and then build with cmake:
 
