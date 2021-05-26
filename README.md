@@ -1,12 +1,12 @@
 sdrx
 ====
 
-![Build](https://github.com/johanhedin/sdrx/workflows/C/C++%20CI/badge.svg)
-![CodeQL](https://github.com/johanhedin/sdrx/workflows/CodeQL/badge.svg)
+[![Build](https://github.com/johanhedin/sdrx/actions/workflows/c-cpp.yml/badge.svg)]
+[![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)]
 
 `sdrx` is a software defined narrow band multi channel AM airband receiver that
-uses a RTL-SDR USB dongle as it's hardware part. It's main purpose is to act as
-a test bench for different SDR implementation aspects as translation, down
+uses a RTL-SDR USB dongle as it's hardware part. It's main purpose is for
+experiment with different SDR implementation aspects as translation, down
 sampling, filtering, demodulation, interaction between clock domains, threading,
 audio processing and so on. `sdrx` is written in C++17 and is tested on a x86_64
 machine running Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running
@@ -15,6 +15,8 @@ Raspberry Pi OS. Audio is played using ALSA.
 A RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
 is used for development. The program may be incompatible with other dongles and
 less powerfull Raspberry Pi models. YMMV.
+
+Support for Airspy R2 and Airspy Mini is worked on.
 
 
 Build requirements
@@ -26,35 +28,44 @@ installed on your machine in order to build and run `sdrx`:
  * libpopt
  * libusb-1.0
  * librtlsdr
+ * libairspy
  * libasound
  * libfftw
 
 On Fedora they can be installed with:
 
-    $ sudo dnf install git gcc-c++ cmake popt-devel libusbx-devel rtl-sdr-devel \
-                       alsa-lib-devel fftw-devel fftw-libs-single
+    $ sudo dnf install git gcc-c++ cmake popt-devel libusbx-devel rtl-sdr-devel alsa-lib-devel \
+                       fftw-devel fftw-libs-single airspyone_host
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
-    $ sudo apt-get install git g++-8 cmake libpopt-dev libusb-1.0-0-dev librtlsdr-dev \
-                           libasound2-dev libfftw3-dev libfftw3-single3
+    $ sudo apt-get install git g++-8 cmake libpopt-dev libusb-1.0-0-dev librtlsdr-dev libasound2-dev \
+                           libfftw3-dev libfftw3-single3 libairspy0
 
 
 Download and build
 ====
-The easiest way to get `sdrx` is to clone the GitHub repo:
+The easiest way to get `sdrx` is to clone the GitHub repo. Note that `sdrx`
+requires latest libairspy and it is inlcuded as a submodule. A special step
+is thus required to check out evertything properly:
 
     $ git clone https://github.com/johanhedin/sdrx.git
-
-and then build with:
-
     $ cd sdrx
+    $ git submodule update --init
+
+and then build with cmake:
+
+    $ mkdir build
+    $ cd build
+    $ cmake ../
     $ make
 
 To keep up to date with changes, simply run:
 
     $ cd sdrx
     $ git pull --ff-only
+    $ git submodule update
+    $ cd build
     $ make
 
 
@@ -64,7 +75,7 @@ Using
 sole argument. Besides the channel, some options are available and can be
 listed with --help:
 
-    $ cd sdrx
+    $ cd sdrx/build
     $ ./sdrx --help
     $ ./sdrx --rf-gain 30 122.455
 
@@ -78,7 +89,7 @@ Support for multiple channels are available as well. Just list the channels as
 arguments (due to the fixed sampling frequency used, they must fit inside a
 1MHz band):
 
-    $ ./sdrs --rf-gain 40 118.105 118.280 118.405 118.505
+    $ ./sdrx --rf-gain 40 118.105 118.280 118.405 118.505
 
 The more channels you list, the more processing power will be used. For a Pi 4,
 the current upper limit is probably at six channels.
