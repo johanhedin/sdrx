@@ -6,7 +6,7 @@ sdrx
 
 `sdrx` is a software defined narrow band multi channel AM airband receiver that
 uses a RTL-SDR USB dongle as it's hardware part. It's main purpose is for
-experiment with different SDR implementation aspects as translation, down
+experimenting with different SDR implementation aspects as translation, down
 sampling, filtering, demodulation, interaction between clock domains, threading,
 audio processing and so on. `sdrx` is written in C++17 and is tested on a x86_64
 machine running Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running
@@ -46,7 +46,8 @@ On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 Download and build
 ====
 The easiest way to get `sdrx` is to clone the GitHub repo (note that `sdrx`
-requires latest libairspy and that it is inlcuded as a submodule):
+requires latest libairspy and librtlsdr and that both are inlcuded as
+submodules):
 
     $ git clone --recurse-submodules https://github.com/johanhedin/sdrx.git
     $ cd sdrx
