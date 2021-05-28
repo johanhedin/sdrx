@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.10)
 # Run with make VERBOSE=1 to see how things are build
 #
 
+#
+# Check here for how to use external project: https://github.com/ogdf/ogdf/issues/22
+#
+
 project(Sdrx CXX)
 
 # We use C++17 stuff
@@ -11,13 +15,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Import our local modules
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 
 # Default build type is Debug. Run cmake with -DCMAKE_BUILD_TYPE=Release to
 # build in release mode
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
-endif()
+    message(STATUS "Build type not specified, defaulting to debug. Change with -DCMAKE_BUILD_TYPE=Release")
+endif(NOT CMAKE_BUILD_TYPE)
 
 # Our compiler flags. We run with optimization even in debug mode to be able
 # to run in "real time"
@@ -31,18 +36,32 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 # tools
 add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 
+# Add submodule librtlsdr as a subdirectory to our project.
+# The EXCLUDE_FROM_ALL option will allow us to cherry pich the rtlsdr_static
+# target later on since we are only interested in librtlsdr and not the other
+# tools. We also enable the DETACH_KERNEL_DRIVER option.
+option(DETACH_KERNEL_DRIVER "" ON)
+add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
+
 add_executable(sdrx sdrx.cpp)
 add_executable(dts EXCLUDE_FROM_ALL dts.cpp rtl_dev.cpp airspy_dev.cpp)
 
-# Add our project root and the linked libairspy as include directories
+# Add our project root and the linked libairspy/librtlsdr as include directories
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR})
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
+target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
+
 target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR})
 target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
+target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
 
 target_link_libraries(sdrx m)
 target_link_libraries(sdrx airspy-static)
+target_link_libraries(sdrx rtlsdr_static)
+
+target_link_libraries(dts m)
 target_link_libraries(dts airspy-static)
+target_link_libraries(dts rtlsdr_static)
 
 # Look for all required packages
 find_package(POPT REQUIRED)
@@ -77,9 +96,9 @@ if (ALSA_FOUND)
     target_link_libraries (sdrx ${ALSA_LIBRARIES})
 endif(ALSA_FOUND)
 
-find_package(RTLSDR REQUIRED)
-if (RTLSDR_FOUND)
-    include_directories(${RTLSDR_INCLUDE_DIRS})
-    target_link_libraries (sdrx ${RTLSDR_LIBRARIES})
-    target_link_libraries (dts ${RTLSDR_LIBRARIES})
-endif(RTLSDR_FOUND)
+#find_package(RTLSDR REQUIRED)
+#if (RTLSDR_FOUND)
+#    include_directories(${RTLSDR_INCLUDE_DIRS})
+#    target_link_libraries (sdrx ${RTLSDR_LIBRARIES})
+#    target_link_libraries (dts ${RTLSDR_LIBRARIES})
+#endif(RTLSDR_FOUND)
