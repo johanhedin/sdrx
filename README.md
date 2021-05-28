@@ -13,8 +13,8 @@ machine running Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running
 Raspberry Pi OS. Audio is played using ALSA.
 
 A RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
-is used for development. The program may be incompatible with other dongles and
-less powerfull Raspberry Pi models. YMMV.
+is used for development. The program may be incompatible with other RTL dongles
+and less powerfull Raspberry Pi models. YMMV.
 
 Support for Airspy R2 and Airspy Mini is worked on.
 
@@ -45,9 +45,9 @@ On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
 Download and build
 ====
-The easiest way to get `sdrx` is to clone the GitHub repo (note that `sdrx`
-requires latest libairspy and librtlsdr and that both are inlcuded as
-submodules):
+The easiest way to get `sdrx` is to clone the GitHub repo. Since `sdrx` depend
+on the latest libairspy and librtlsdr, these projects are included as
+submodules at the moment:
 
     $ git clone --recurse-submodules https://github.com/johanhedin/sdrx.git
     $ cd sdrx
@@ -63,8 +63,19 @@ To keep up to date with changes, simply run:
 
     $ cd sdrx
     $ git pull --ff-only
-    $ git submodule update
+    $ git submodule update --init --recursive
     $ cd build
+    $ cmake ../
+    $ make
+
+The arguments to `git submodule update` will assure that newly added submodules
+are checked out properly. For existing submodules, they are a no-op. If the
+build fails after a update, try to remove all files inside the build directory
+and start over:
+
+    $ cd build
+    $ rm -rf *
+    $ cmake ../
     $ make
 
 
