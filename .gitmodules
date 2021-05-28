@@ -1,3 +1,6 @@
 [submodule "libairspy"]
 	path = libairspy
 	url = https://github.com/airspy/airspyone_host.git
+[submodule "librtlsdr"]
+	path = librtlsdr
+	url = https://github.com/johanhedin/librtlsdr.git
