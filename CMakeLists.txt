@@ -37,7 +37,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 
 # Add submodule librtlsdr as a subdirectory to our project.
-# The EXCLUDE_FROM_ALL option will allow us to cherry pich the rtlsdr_static
+# The EXCLUDE_FROM_ALL option will allow us to cherry pick the rtlsdr_static
 # target later on since we are only interested in librtlsdr and not the other
 # tools. We also enable the DETACH_KERNEL_DRIVER option.
 option(DETACH_KERNEL_DRIVER "" ON)
