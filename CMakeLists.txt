@@ -25,7 +25,9 @@ if(NOT CMAKE_BUILD_TYPE)
 endif(NOT CMAKE_BUILD_TYPE)
 
 # Our compiler flags. We run with optimization even in debug mode to be able
-# to run in "real time"
+# to run in "real time".
+# Extra flags for reporting around vectorization are:
+#   -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=7
 set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O2")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2")
