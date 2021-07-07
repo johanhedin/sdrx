@@ -16,7 +16,7 @@ A RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
 is used for development. The program may be incompatible with other RTL dongles
 and less powerfull Raspberry Pi models. YMMV.
 
-Support for Airspy R2 and Airspy Mini is worked on.
+Support for Airspy R2 and Airspy Mini is being worked on.
 
 
 Build requirements
