@@ -108,6 +108,9 @@ void AirspyDev::worker_(AirspyDev &self) {
         if (ret == AIRSPYDEV_OK) {
             std::cerr << "Device " << self.serial_ << " opended successfully\n";
 
+            self.num_samples_ = 0;
+            self.counter_ = 0;
+
             ret = airspy_start_rx((struct airspy_device*)self.dev_,
                                   reinterpret_cast<airspy_sample_block_cb_fn>(AirspyDev::data_cb_),
                                   &self);
@@ -188,10 +191,25 @@ int AirspyDev::data_cb_(void *t) {
         return 0;
     }
 
+    if (self.num_samples_ == 0) {
+        self.t1_ = std::chrono::system_clock::now();
+    }
+
+    self.num_samples_ += transfer->sample_count;
+
     if (++self.counter_ == 40) {
-        std::cerr << "data_cb_: device = " << self.serial_ << ", sample_count = " <<
-                     transfer->sample_count << ", dropped_samples = " << transfer->dropped_samples << std::endl;
+        self.t2_ = std::chrono::system_clock::now();
+
+        // Calculate saples per time unit
+        unsigned elapes_time_us = std::chrono::duration_cast<std::chrono::microseconds>(self.t2_ - self.t1_).count();
+        double samples_per_second = (double)(self.num_samples_-65536) / (double)elapes_time_us;
+
+        std::cerr << "data_cb_: device = " << self.serial_ <<
+                     ", sample_count = " << transfer->sample_count <<
+                     ", dropped_samples = " << transfer->dropped_samples <<
+                     ", rate = " << samples_per_second << " MS/s" << std::endl;
         self.counter_ = 0;
+        self.num_samples_ = 0;
     }
 
     // Return 0 to continue or != 0 to stop

@@ -25,6 +25,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <chrono>
 
 
 enum airspy_dev_return_values {
@@ -96,6 +97,9 @@ private:
     static int     data_cb_(void *transfer);
     unsigned       counter_;
     State          state_;
+    std::chrono::time_point<std::chrono::system_clock> t1_;
+    std::chrono::time_point<std::chrono::system_clock> t2_;
+    unsigned       num_samples_;
 };
 
 #endif // AIRSPY_DEV_HPP
