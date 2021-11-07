@@ -62,7 +62,7 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string&) {
 RtlDev::RtlDev(const std::string &serial, SampleRate fs, int xtal_corr)
 : serial_(serial), fs_(fs), xtal_corr_(xtal_corr), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
   lna_gain_idx_(DEFAULT_LNA_GAIN_IDX), mix_gain_idx_(DEFAULT_MIX_GAIN_IDX), vga_gain_idx_(DEFAULT_VGA_GAIN_IDX),
-  dev_(nullptr), run_(false), state_(State::IDLE) { }
+  dev_(nullptr), run_(false), state_(State::IDLE), user_data_(nullptr) { }
 
 
 RtlDev::~RtlDev(void) {
@@ -312,7 +312,7 @@ void RtlDev::data_cb_(unsigned char *data, uint32_t data_len, void *ctx) {
     }
 
     // Emit data
-    self.data(self.iq_buffer_, iq_pos, self.fs_);
+    self.data(self.iq_buffer_, iq_pos, self.fs_, self.user_data_);
 }
 
 

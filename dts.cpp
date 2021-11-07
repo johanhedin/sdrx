@@ -48,7 +48,7 @@ static void signal_handler(int signo) {
 }
 
 
-static void on_data(const iqsample_t *, unsigned data_len, SampleRate) {
+static void on_data(const iqsample_t *, unsigned data_len, SampleRate, void*) {
     if (callback_counter == 0) {
         ts1 = std::chrono::system_clock::now();
     } else {

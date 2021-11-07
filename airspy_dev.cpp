@@ -99,7 +99,7 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string& serial
 AirspyDev::AirspyDev(const std::string &serial, SampleRate fs)
 : serial_(serial), fs_(fs), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
   lna_gain_idx_(DEFAULT_LNA_GAIN_IDX), mix_gain_idx_(DEFAULT_MIX_GAIN_IDX), vga_gain_idx_(DEFAULT_VGA_GAIN_IDX),
-  dev_(nullptr), run_(false), state_(State::IDLE), part_pos_(0), block_size_(0), iq_pos_(0) {
+  dev_(nullptr), run_(false), state_(State::IDLE), part_pos_(0), block_size_(0), iq_pos_(0), user_data_(nullptr) {
       if (sample_rate_to_uint(fs_) * 4 % 125) {
           std::cerr << "Error: Requested sample rate " << sample_rate_to_str(fs_) << "MS/s is not evenly divisible by 31.25\n";
       }
@@ -341,7 +341,7 @@ int AirspyDev::data_cb_(void *t) {
         self.iq_pos_++;
         if (self.iq_pos_ == self.block_size_) {
             // IQ buffer ready to be dispatched. Emit data
-            self.data(&self.iq_buffer_[self.part_pos_], self.block_size_, self.fs_);
+            self.data(&self.iq_buffer_[self.part_pos_], self.block_size_, self.fs_, self.user_data_);
 
 
             if (self.part_pos_ == 0) {

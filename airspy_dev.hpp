@@ -62,6 +62,8 @@ public:
     AirspyDev(const std::string &serial, SampleRate fs);
     ~AirspyDev(void);
 
+    void setUserData(void *user_data) { user_data_ = user_data; }
+
     // Start up the instance asynchronous. This function will return
     // immediately and the internal thread will start looking for the
     // device requested in the constructor and start it. The getState()
@@ -78,7 +80,7 @@ public:
     // Data signal. One block represents 32ms of data irrespectively of the
     // sampling frequency. Data len will ofcourse vary. 32ms bocks equals
     // a callback frequency of 31.25Hz
-    sigc::signal<void(const iqsample_t*, unsigned, SampleRate)> data;
+    sigc::signal<void(const iqsample_t*, unsigned, SampleRate, void*)> data;
 
     State getState(void) { return state_; }
 
@@ -117,6 +119,7 @@ private:
     unsigned       part_pos_;
     unsigned       block_size_;
     unsigned       iq_pos_;
+    void          *user_data_;
 };
 
 #endif // AIRSPY_DEV_HPP
