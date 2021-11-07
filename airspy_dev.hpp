@@ -2,7 +2,7 @@
 // Device class for a Airspy R2 or Mini dongle
 //
 // @author Johan Hedin
-// @date   2021-05-23
+// @date   2021
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,7 +25,11 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <chrono>
+
+#include <sigc++/sigc++.h>
+
+#include "common_dev.hpp"
+#include "iqsample.hpp"
 
 
 enum airspy_dev_return_values {
@@ -33,10 +37,10 @@ enum airspy_dev_return_values {
     AIRSPYDEV_ERROR                 =  -1,
     AIRSPYDEV_NO_DEVICE_FOUND       =  -2,
     AIRSPYDEV_UNABLE_TO_OPEN_DEVICE =  -3,
-    AIRSPYDEV_INVALID_FQ            =  -4,
-    AIRSPYDEV_INVALID_GAIN          =  -5,
-    AIRSPYDEV_INVALID_SERIAL        =  -6,
-    AIRSPYDEV_INVALID_FS            =  -7,
+    AIRSPYDEV_INVALID_SAMPLE_RATE   =  -4,
+    AIRSPYDEV_INVALID_FQ            =  -5,
+    AIRSPYDEV_INVALID_GAIN          =  -6,
+    AIRSPYDEV_INVALID_SERIAL        =  -7,
     AIRSPYDEV_ALREADY_STARTED       =  -8,
     AIRSPYDEV_ALREADY_STOPPED       =  -9
 };
@@ -47,24 +51,34 @@ public:
     enum class State { IDLE, STARTING, RUNNING, RESTARTING, STOPPING };
 
     struct Info {
-        unsigned              index;
-        std::string           serial;
-        bool                  available;
-        bool                  supported;
-        std::string           description;
-        std::vector<uint32_t> sample_rates;
+        unsigned                index;
+        std::string             serial;
+        bool                    available;
+        bool                    supported;
+        std::string             description;
+        std::vector<SampleRate> sample_rates;
     };
 
-    AirspyDev(const std::string &serial, uint32_t fs);
+    AirspyDev(const std::string &serial, SampleRate fs);
     ~AirspyDev(void);
 
     // Start up the instance asynchronous. This function will return
-    // immediately and the internal thread will start looking for the requested
-    // device
+    // immediately and the internal thread will start looking for the
+    // device requested in the constructor and start it. The getState()
+    // member function can be used to monitor the progress.
     int start(void);
 
     int setFq(uint32_t fq = 100000000);
-    int setTunerGain(float gain = 30.0f);
+    int setGain(float gain = 30.0f);
+
+    int setLnaGain(unsigned idx);
+    int setMixGain(unsigned idx);
+    int setVgaGain(unsigned idx);
+
+    // Data signal. One block represents 32ms of data irrespectively of the
+    // sampling frequency. Data len will ofcourse vary. 32ms bocks equals
+    // a callback frequency of 31.25Hz
+    sigc::signal<void(const iqsample_t*, unsigned, SampleRate)> data;
 
     State getState(void) { return state_; }
 
@@ -72,11 +86,11 @@ public:
     // is stopped and the Airspy device is fully closed
     int stop(void);
 
-    // Get a list of available devices by serial number
+    // Get a list of available devices
     static std::vector<AirspyDev::Info> list(void);
 
     // Check if a given device is present on the USB bus
-    static bool present(const std::string &serial);
+    static bool isPresent(const std::string &serial);
 
     // Convert error code to string
     static std::string errStr(int ret);
@@ -86,20 +100,23 @@ public:
 
 private:
     std::string    serial_;
-    uint32_t       fs_;
+    SampleRate     fs_;
     uint32_t       fq_;
     float          gain_;
+    unsigned       lna_gain_idx_;
+    unsigned       mix_gain_idx_;
+    unsigned       vga_gain_idx_;
     void          *dev_;
     bool           run_;
     std::thread    worker_thread_;
     int            open_(void);
     static void    worker_(AirspyDev &self);
     static int     data_cb_(void *transfer);
-    unsigned       counter_;
     State          state_;
-    std::chrono::time_point<std::chrono::system_clock> t1_;
-    std::chrono::time_point<std::chrono::system_clock> t2_;
-    unsigned       num_samples_;
+    iqsample_t     iq_buffer_[320000*2]; // Largest buffer for 10MS/s. Times twice
+    unsigned       part_pos_;
+    unsigned       block_size_;
+    unsigned       iq_pos_;
 };
 
 #endif // AIRSPY_DEV_HPP
