@@ -9,7 +9,7 @@ uses a RTL-SDR USB dongle as it's hardware part. It's main purpose is for
 experimenting with different SDR implementation aspects as translation, down
 sampling, filtering, demodulation, interaction between clock domains, threading,
 audio processing and so on. `sdrx` is written in C++17 and is tested on a x86_64
-machine running Fedora 33 and on a Raspberry Pi 4 Model B 4GiB running
+machine running Fedora 34 and on a Raspberry Pi 4 Model B 4GiB running
 Raspberry Pi OS. Audio is played using ALSA.
 
 A RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
@@ -31,16 +31,17 @@ installed on your machine in order to build and run `sdrx`:
  * libairspy
  * libasound
  * libfftw
+ * libsigc++20
 
 On Fedora they can be installed with:
 
     $ sudo dnf install git gcc-c++ cmake popt-devel libusbx-devel rtl-sdr-devel alsa-lib-devel \
-                       fftw-devel fftw-libs-single airspyone_host
+                       fftw-devel fftw-libs-single airspyone_host libsigc++20-devel
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
     $ sudo apt-get install git g++-8 cmake libpopt-dev libusb-1.0-0-dev librtlsdr-dev libasound2-dev \
-                           libfftw3-dev libfftw3-single3 libairspy0
+                           libfftw3-dev libfftw3-single3 libairspy0 libsigc++-2.0-dev
 
 
 Download and build
@@ -90,14 +91,14 @@ listed with --help:
     $ ./sdrx --rf-gain 30 122.455
 
 The defaults for audio gain and squelsh level should be good as is. RF gain
-can be adjusted according to the local radio environment. Also note that `sdrx`
+can be adjusted according to the local signal environment. Also note that `sdrx`
 use quite narrow filters so if your dongle does not have a TCXO, take your
 time to find out the proper frequency correction and supply that with the
 --fq-corr option.
 
 Support for multiple channels are available as well. Just list the channels as
-arguments (due to the fixed sampling frequency used, they must fit inside a
-1MHz band):
+arguments (due to the fixed sampling frequency currently used, they must fit
+inside a 1MHz band):
 
     $ ./sdrx --rf-gain 40 118.105 118.280 118.405 118.505
 
@@ -134,7 +135,7 @@ fc + 3.5-4.9kHz.
 The noise floor is estimated as the power just outside of where the modulated
 audio resides (i.e. the **low** and **hig** measurements). **SNR** is the
 difference between "signal power" and "noise power" and is checked against the
-desired squelch level to determine if audio is played or not.
+desired squelch level to determine if the squelsh should be open or not.
 
 **imbalance** is a measure of how "off" the receiver is compared to the frequency
 that the transmitter is using. If it is negative, you are tuned above the
