@@ -45,7 +45,7 @@ add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 option(DETACH_KERNEL_DRIVER "" ON)
 add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
 
-add_executable(sdrx sdrx.cpp)
+add_executable(sdrx sdrx.cpp rtl_dev.cpp airspy_dev.cpp)
 add_executable(dts EXCLUDE_FROM_ALL dts.cpp rtl_dev.cpp airspy_dev.cpp)
 
 # Add our project root and the linked libairspy/librtlsdr as include directories
