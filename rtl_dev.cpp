@@ -259,22 +259,34 @@ int RtlDev::open_(void) {
     fs = sample_rate_to_uint(fs_);
 
     ret = rtlsdr_set_center_freq((rtlsdr_dev_t*)dev_, fq_);
-    if (ret < 0) goto error;
+    if (ret < 0) {
+        std::cerr << "Error: Unable to set frequency.\n";
+        goto error;
+    }
 
-    ret = rtlsdr_set_freq_correction((rtlsdr_dev_t*)dev_, xtal_corr_);
-    if (ret < 0) goto error;
+    if (xtal_corr_ != 0) {
+        ret = rtlsdr_set_freq_correction((rtlsdr_dev_t*)dev_, xtal_corr_);
+        if (ret < 0) {
+            std::cerr << "Error: Unable to set correction: " << xtal_corr_ << ".\n";
+            goto error;
+        }
+    }
 
-    //rtlsdr_set_tuner_gain((rtlsdr_dev_t*)dev_, (int)(gain_ * 10.0f));
     ret = rtlsdr_set_tuner_gain_ext((rtlsdr_dev_t*)dev_, lna_gain_idx_, mix_gain_idx_, vga_gain_idx_);
-    if (ret < 0) goto error;
+    if (ret < 0) {
+        std::cerr << "Error: Unable to set gain.\n";
+        goto error;
+    }
 
     ret = rtlsdr_set_sample_rate((rtlsdr_dev_t*)dev_, fs);
-    if (ret < 0) goto error;
+    if (ret < 0) {
+        std::cerr << "Error: Unable to set sample rate.\n";
+        goto error;
+    }
 
     goto ok;
 
 error:
-    std::cerr << "Error: Unable to set fq/correction/gain or sample rate.\n";
     rtlsdr_close((rtlsdr_dev_t*)dev_);
     dev_ = nullptr;
 
