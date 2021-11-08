@@ -53,6 +53,44 @@ public:
 
     // Translate and down sample. If in_len is a multiple of m, you don't need
     // out_len since you know how many out samples that are to be output.
+    void decimate(const iqsample_t *in, unsigned in_len, iqsample_t *out, unsigned *out_len = nullptr) {
+        unsigned   sample_pos = 0;
+        iqsample_t sample;
+
+        if (out_len) *out_len = 0;
+
+        while (sample_pos < in_len) {
+            // Tune if translating vector is supplied
+            if (translator_.size() != 0) {
+                sample = translator_[trans_pos_] * in[sample_pos];
+                if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
+            } else {
+                sample = in[sample_pos];
+            }
+
+            auto stage_iter = stages_.begin();
+            while (stage_iter != stages_.end()) {
+                if (stage_iter->addSample(sample)) {
+                    // The stage produced a out sample
+                    sample = stage_iter->calculateOutput();
+                } else {
+                    // The stage need more samples
+                    break;
+                }
+                ++stage_iter;
+            }
+
+            if (stage_iter == stages_.end()) {
+                // Write out sample
+                *(out++) = sample;
+                if (out_len) *out_len += 1;
+            }
+            ++sample_pos;
+        }
+    }
+
+    // Translate and down sample. If in_len is a multiple of m, you don't need
+    // out_len since you know how many out samples that are to be output.
     void decimate(const unsigned char *in, unsigned in_len, iqsample_t *out, unsigned *out_len = nullptr) {
         unsigned   sample_pos = 0;
         iqsample_t sample;
