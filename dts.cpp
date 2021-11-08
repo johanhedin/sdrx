@@ -127,6 +127,7 @@ Write some more here...)"
             // All good. Settings inside variables
             if (tmp_rate) {
                 fs = str_to_sample_rate(std::string(tmp_rate));
+                free(tmp_rate);
             }
 
             if (tmp_serial) {
