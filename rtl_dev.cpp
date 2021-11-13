@@ -137,7 +137,7 @@ int RtlDev::setGain(float gain) {
     mix_gain_idx_ = mix_gain_idx;
     vga_gain_idx_ = vga_gain_idx;
 
-    std::cout << "gain = " << gain_ << " -> lna = " << lna_gain_idx_ << ", mix = " << mix_gain_idx_ << ", vga = " << vga_gain_idx_ << std::endl;
+    //std::cout << "gain = " << gain_ << " -> lna = " << lna_gain_idx_ << ", mix = " << mix_gain_idx_ << ", vga = " << vga_gain_idx_ << std::endl;
 
     if (dev_ && state_ == State::RUNNING) {
         ret = rtlsdr_set_tuner_gain_ext((rtlsdr_dev_t*)dev_, lna_gain_idx_, mix_gain_idx_, vga_gain_idx_);
@@ -305,10 +305,11 @@ void RtlDev::data_cb_(unsigned char *data, uint32_t data_len, void *ctx) {
 
     // Stopping streaming is requested in the ctrl thread but done here
     if (!self.run_) {
-        //self.state_ = State::STOPPING; set in stop()
         rtlsdr_cancel_async((rtlsdr_dev_t*)self.dev_);
         return;
     }
+
+    // TODO: Use jump buffer until we fix the zero-copy thing in librtlsdr
 
     // Convert RTL packed 8-bit IQ data into our complex float IQ buffer
     // (range -1.0 -> 1.0)

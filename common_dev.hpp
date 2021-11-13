@@ -105,7 +105,7 @@ static inline SampleRate uint_to_sample_rate(uint32_t value) {
 }
 
 
-// The three gain settings available in the R820T(2) tuner, LNA, Mixer and VGA.
+// The three gain settings available in the R820T(2) tuner; LNA, Mixer and VGA.
 // The index (0..15) in the array represent the register value.
 // Values from http://steve-m.de/projects/rtl-sdr/gain_measurement/r820t
 static const float lna_gain_steps[] = { 0.0f, 0.9f, 1.3f, 4.0f, 3.8f, 1.3f, 3.1f, 2.2f, 2.6f, 3.1f, 2.6f, 1.4f, 1.9f, 0.5f, 3.5f, 1.3f };

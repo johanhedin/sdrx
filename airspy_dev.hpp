@@ -62,7 +62,7 @@ public:
     AirspyDev(const std::string &serial, SampleRate fs);
     ~AirspyDev(void);
 
-    void setUserData(void *user_data) { user_data_ = user_data; }
+    void setUserData(void *user_data = nullptr) { user_data_ = user_data; }
 
     // Start up the instance asynchronous. This function will return
     // immediately and the internal thread will start looking for the
