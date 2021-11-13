@@ -2,7 +2,7 @@
 // Software Defined Receiver.
 //
 // @author Johan Hedin
-// @date   2021-01-13
+// @date   2021
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -47,9 +47,8 @@
 
 // Libs that we use
 #include <popt.h>
-#include <rtl-sdr.h>
-#include <alsa/asoundlib.h>
 #include <fftw3.h>
+#include <alsa/asoundlib.h>
 
 // Local includes
 #include "coeffs.hpp"
@@ -57,6 +56,8 @@
 #include "crb.hpp"
 #include "fir.hpp"
 #include "agc.hpp"
+#include "rtl_dev.hpp"
+
 
 // Usefull notes:
 // libusb and threads: http://libusb.sourceforge.net/api-1.0/libusb_mtasync.html
@@ -69,11 +70,7 @@
 #define AERONAUTICAL_CHANNEL true
 #define NORMAL_FQ            false
 
-// Interval in seconds between statistics output
-#define STAT_INTERVAL  5
-
-
-// Sampling, down sampling, latency, audio and IQ buffer sizes
+// Sampling, down sampling, latency, audio and IQ buffer sizes for RTL dongles
 //
 // A sample frequency that is evenly divided with the TCXO clock is advicable.
 // The dongle clock runs at 28.8MHz. This gives "nice" IQ sampling frequencies
@@ -102,7 +99,7 @@
 // have 512*75 samples before the down sampler. Since one sample occupy two
 // bytes from the dongle we need to set the librtlsdr buffer size to 512*75*2.
 //
-#define RTL_IQ_SAMPLING_FQ   1200000
+//#define RTL_IQ_SAMPLING_FQ   1200000
 #define MAX_CH_OFFSET        500000   // 500Khz
 #define DOWNSAMPLING_FACTOR  75
 #define RTL_IQ_BUF_SIZE      (512 * DOWNSAMPLING_FACTOR * 2)  // callback frequency is 31.25Hz or 32ms
@@ -119,10 +116,12 @@ struct Metadata {
     float          pwr_dbfs; // Power dBFS (ref. full scale sine wave)
 };
 
+
 // Convenient type for the ring buffer
 using rb_t = CRB<iqsample_t, Metadata>;
 
 using sql_state_t = enum { SQL_CLOSED, SQL_OPEN };
+
 
 // Datatype to represent one channel in the IQ spectra
 class Channel {
@@ -146,26 +145,23 @@ public:
 };
 
 
-// Datatype to hold the sdrx settins
+// Datatype to hold sdrx global settings
 class Settings {
 public:
-    Settings(void) : rtl_device(0), fq_corr(0), rf_gain(30.0f), lf_gain(0.0f),
-                     sql_level(9.0f), audio_device("default"), tuner_fq(0)
-                     {}
-    int         rtl_device;   // RTL-SDR device to use (in id form)
-    int         fq_corr;      // Frequency correction in ppm
-    float       rf_gain;      // RF gain in dB
-    float       lf_gain;      // LF (audio gain) in dB
-    float       sql_level;    // Squelch level in dB (over noise level)
-    std::string audio_device; // ALSA device to use for playback
-    uint32_t    tuner_fq;     // Tuner frequency
+    Settings(void) : fq_corr(0), rf_gain(30.0f), lf_gain(0.0f), sql_level(9.0f),
+     audio_device("default"), tuner_fq(0) {}
+    std::string          rtl_device_str;
+    int                  fq_corr;      // Frequency correction in ppm
+    float                rf_gain;      // RF gain in dB
+    float                lf_gain;      // LF (audio gain) in dB
+    float                sql_level;    // Squelch level in dB (over noise level)
+    std::string          audio_device; // ALSA device to use for playback
+    uint32_t             tuner_fq;     // Tuner frequency
     std::vector<Channel> channels;     // String representations of the channels to listen to
 };
 
 
-#define LEVEL_SIZE 10
 struct InputState {
-    rtlsdr_dev_t   *rtl_device;              // RTL device
     rb_t           *rb_ptr;                  // Input -> Output buffer
     Settings        settings;                // System wide settings
     unsigned char   iq_buf[RTL_IQ_BUF_SIZE]; // Jump buffer to handle Pi4 with 5.x kernel
@@ -187,6 +183,8 @@ struct OutputState {
     std::vector<float> hi_energy;
     std::vector<float> lo_energy;
     unsigned           energy_idx;
+    bool               samples_received;
+    bool               running;
     Settings           settings;
 };
 
@@ -197,40 +195,13 @@ static void signal_handler(int signo) {
 }
 
 
-static const char* rtlsdr_tuner_to_str(enum rtlsdr_tuner tuner_id) {
-    switch (tuner_id) {
-        case RTLSDR_TUNER_E4000:  return "E4000";
-        case RTLSDR_TUNER_FC0012: return "FC0012";
-        case RTLSDR_TUNER_FC0013: return "FC0013";
-        case RTLSDR_TUNER_FC2580: return "FC2580";
-        case RTLSDR_TUNER_R820T:  return "R820T(2)";
-        case RTLSDR_TUNER_R828D:  return "R828D";
-        default:                  return "Unknown";
-    }
-}
-
-
-// Called by librtlsdr when a chunk of new IQ data is available
-static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
+// Called by the new Device class
+static void data_cb(const iqsample_t *data, unsigned data_len, SampleRate, void *user_data) {
     struct InputState    &ctx = *reinterpret_cast<struct InputState*>(user_data);
     iqsample_t           *iq_buf_ptr = nullptr;
     std::vector<Channel> &channels = ctx.settings.channels;
     struct Metadata      *metadata_ptr = nullptr;
     struct Metadata       meta;
-
-    if (len != RTL_IQ_BUF_SIZE) {
-        std::cerr << "Error: Unexpected number of IQ bytes received from dongle: " <<
-                     len << ". " << RTL_IQ_BUF_SIZE << " expected." << std::endl;
-        return;
-    }
-
-    if (!run) {
-        rtlsdr_cancel_async(ctx.rtl_device);
-        return;
-    }
-
-    // Copy to tmp buf to overcome slow access to data on Pi with kernel 5.x
-    memcpy(ctx.iq_buf, buf, RTL_IQ_BUF_SIZE);
 
     // Prepare chunk metadata
     gettimeofday(&meta.ts, nullptr);
@@ -238,9 +209,8 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
 
     // Calculate average power in the chunk by squaring the amplitude RMS.
     // ampl_rms = sqrt( ( sum( abs(iq_sample)^2 ) ) / N )
-    for (unsigned i = 0; i < RTL_IQ_BUF_SIZE; i += 2) {
-        iqsample_t iq_sample(((float)ctx.iq_buf[i])   / 127.5f - 1.0f, ((float)ctx.iq_buf[i+1])   / 127.5f - 1.0f);
-        float ampl_squared = std::norm(iq_sample);
+    for (unsigned i = 0; i < data_len; i++) {
+        float ampl_squared = std::norm(data[i]);
         pwr_rms += ampl_squared;
     }
     pwr_rms = pwr_rms / (RTL_IQ_BUF_SIZE/2);
@@ -253,7 +223,8 @@ static void iq_cb(unsigned char *buf, uint32_t len, void *user_data) {
     if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, &metadata_ptr)) {
         // Channelize the IQ data and write output into ring buffer
         for (auto &ch : channels) {
-            ch.msd.decimate(ctx.iq_buf, len, iq_buf_ptr);
+            //ch.msd.decimate(ctx.iq_buf, len, iq_buf_ptr);
+            ch.msd.decimate(data, data_len, iq_buf_ptr);
             iq_buf_ptr += CH_IQ_BUF_SIZE;
         }
 
@@ -338,7 +309,11 @@ static void alsa_write_cb(OutputState &ctx) {
         // What to do here? Restart device? Just return?
     }
 
+    //std::cerr << "här!\n";
+    ctx.running = true;
+
     if (ctx.rb_ptr->acquireRead(&iq_buffer, &metadata_ptr)) {
+        ctx.samples_received = true;
         if (ctx.sql_wait >= 10) {
             struct timeval current_time;
             gettimeofday(&current_time, NULL);
@@ -548,7 +523,10 @@ static void alsa_write_cb(OutputState &ctx) {
 
     } else {
         // Underrrun
-        std::cerr << "Warning: Unable to read samples. Ring buffer empty. Writing " << CH_IQ_BUF_SIZE << " samples of silence" << std::endl;
+        if (ctx.samples_received) {
+            // Only write warning after we have started receiving samples
+            std::cerr << "Warning: Unable to read samples. Ring buffer empty. Writing " << CH_IQ_BUF_SIZE << " samples of silence" << std::endl;
+        }
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, CH_IQ_BUF_SIZE);
         if (ret < 0) {
             std::cerr << "Error: Failed to write underrun silence: " << snd_strerror(ret) << std::endl;
@@ -674,14 +652,14 @@ static void close_alsa_dev(snd_pcm_t *dev) {
 }
 
 
-static void alsa_worker(struct OutputState &output_state) {
+static void alsa_worker(struct OutputState &ctx) {
     int                ret;
     snd_pcm_t         *pcm_handle = nullptr;
     struct pollfd     *poll_descs = nullptr;
     unsigned int       num_poll_descs = 0;
     unsigned short     revents;
     struct timeval     current_time;
-    struct OutputState ctx = output_state;
+    //struct OutputState ctx = output_state;
 
     while (cout_lock.test_and_set(std::memory_order_acquire));
     std::cout << "Starting ALSA thread" << std::endl;
@@ -819,27 +797,15 @@ static void alsa_worker(struct OutputState &output_state) {
 
     fftwf_destroy_plan(ctx.fft_plan);
 
+    // Final cleanup needed to make valgrind happy
+    fftwf_cleanup();
+
     close_alsa_dev(pcm_handle);
 
     free(poll_descs);
 
     while (cout_lock.test_and_set(std::memory_order_acquire));
     std::cout << "ALSA thread stopped" << std::endl;
-    cout_lock.clear();
-}
-
-
-static void dongle_worker(struct InputState &input_state) {
-    while (cout_lock.test_and_set(std::memory_order_acquire));
-    std::cout << "Starting dongle thread for device: " << input_state.settings.rtl_device << std::endl;
-    cout_lock.clear();
-
-    while (run) {
-        sleep(1);
-    }
-
-    while (cout_lock.test_and_set(std::memory_order_acquire));
-    std::cout << "Dongle thread stopped" << std::endl;
     cout_lock.clear();
 }
 
@@ -943,13 +909,16 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     char         *audio_device = nullptr;
     int           print_help = 0;
     int           normal_fq_fmt = 0;
+    char         *device = nullptr;
+    int           list_devices = 0;
 
     struct poptOption options_table[] = {
-        { "rtl-dev",   'd', POPT_ARG_INT,    &settings.rtl_device, 0, "RTL-SDR device ID to use. Defaults to 0 if not set", "RTLDEVEID" },
+        { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and quit", nullptr },
+        { "device",    'd', POPT_ARG_STRING, &device, 0, "serial for device to use. Defaults to first available if not set", "SERIAL" },
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm. Defaults to 0 if not set", "FQCORR" },
-        { "rf-gain",   'r', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
-        { "lf-gain",   'l', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio gain in dB. Defaults to 0 if not set", "LFGAIN" },
-        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over noise. Defaults to 9 if not set", "SQLLEVEL" },
+        { "gain",      'g', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
+        { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume in dB relative to system. Defaults to 0 if not set", "VOLUME" },
+        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current noise floor. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
@@ -983,48 +952,62 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         // Options parsed without error
         ret = 0;
 
+        // Collect and free string argument if given
+        if (audio_device) {
+            settings.audio_device = audio_device;
+            free(audio_device);
+        }
+
+        if (device) {
+            settings.rtl_device_str = device;
+            free(device);
+        }
+
         if (print_help) {
             // Ignore given options and just print the extended help
             poptPrintHelp(popt_ctx, stderr, 0);
             std::cerr << R"(
-sdrx is a software defined narrow band AM receiver that is using a RTL-SDR
-dongle as its hadware backend. It is mainly designed for use in the 118 to
-138 MHz airband. The program is run from the command line and the channels to
-listen to are given as arguments in the standard six digit aeronautical
-notation. Both the legacy 25kHz channel separation and the new 8.33kHz channel
-separation notations are supported, i.e. 118.275 and 118.280 both mean the
-frequency 118.275 MHz.
+sdrx is a software defined narrow band AM receiver that is using a R820T(2)
+based RTL-SDR dongle as its hadware backend. It is mainly designed for use in
+the 118 to 138 MHz airband. The program is run from the command line and the
+channels to listen to are given as arguments in the standard six digit
+aeronautical notation. Both the legacy 25kHz channel separation and the new
+8.33kHz channel separation notations are supported, i.e. 118.275 and 118.280
+both mean the frequency 118.275 MHz.
 
 If multiple channels are given, they must all fit within 1MHz of bandwidth.
 
-The squelch is adaptive with respect to the current per channel noise floor and
-the squelch level is given as a SNR value in dB. Audio is played using ALSA.
+The squelch is adaptive with respect to the current, per channel, noise floor
+and the squelch level is given as a SNR value in dB. Audio is played using ALSA.
 
-Audio gain and squelch can normally be left as is since the defaults work well.
+Volume and squelch can normally be left as is since the defaults work well.
 
 Examples:
 
-Listen to the channel 122.450 with 40dB of RF gain and 3dB of audio gain:
+List available devices (spurious librtlsdr printouts to stderr may occure):
 
-    $ sdrx --rf-gain 40 --lf-gain 8 122.450
+    $ sdrx --list
 
-Listen to the channels 118.105 and 118.505 with 34dB of RF gain and 5dB squelch:
+or, for a more clean output:
 
-    $ sdrx --rf-gain 34 --sql-level 5 118.105 118.505
+    $ sdrx --list 2>/dev/null
+
+Listen to the channel 122.450 with 40dB of RF gain and +3dB volume. Use
+device with serial "MY-DEVICE":
+
+    $ sdrx --device MY-DEVICE --gain 40 --volume 3 122.450
+
+Listen to the channels 118.105 and 118.505 with 34dB of RF gain and 5dB squelch.
+Use first available device on the system:
+
+    $ sdrx --gain 34 --sql-level 5 118.105 118.505
 )"
             << std::endl;
             ret = -1;
+        } else if(list_devices) {
+            // Listing of devices is done in main
+            ret = -2;
         } else {
-            // Save audio device if it was given
-            if (audio_device) {
-                settings.audio_device = audio_device;
-            }
-
-            // Check that the given option values are within range
-            if (settings.rtl_device < 0) {
-                std::cerr << "Error: Invalid RTL-SDR device ID given: " << settings.rtl_device << std::endl;
-                ret = -1;
-            }
             if (settings.rf_gain < 0.0f || settings.rf_gain > 50.0f) {
                 fprintf(stderr, "Error: Invalid RF gain given: %.4f\n", settings.rf_gain);
                 ret = -1;
@@ -1138,12 +1121,55 @@ static int channel_to_offset(const std::string &channel, int32_t tuner_fq) {
 int main(int argc, char** argv) {
     int              ret;
     struct sigaction sigact;
-    uint32_t         sample_rate = RTL_IQ_SAMPLING_FQ;
-    uint32_t         bw = 600000;
     Settings         settings;
+    RtlDev          *dongle = nullptr;
 
     // Parse command line. Exit if incomplete or if help was requested
-    if (parse_cmd_line(argc, argv, settings) < 0) {
+    ret = parse_cmd_line(argc, argv, settings);
+    if (ret < 0) {
+        if (ret == -2) {
+            // List devices and exit
+            std::cout << "Available devices:\n";
+            std::vector<RtlDev::Info> rtl_devices = RtlDev::list();
+            std::vector<std::string> serials;
+            bool duplicate_serials = false;
+            for (auto &dev : rtl_devices) {
+                if (std::find(serials.begin(), serials.end(), dev.serial) != serials.end()) {
+                    duplicate_serials = true;
+                } else {
+                    serials.push_back(dev.serial);
+                }
+
+                std::cout << "    " << dev.serial;
+                if (dev.available) {
+                    if (dev.supported) {
+                        std::cout << ", Sample rates:";
+                        bool first = true;
+                        for (auto &rate : dev.sample_rates) {
+                            if (first) {
+                                std::cout << " " << sample_rate_to_str(rate) << "MS/s";
+                                first = false;
+                            } else {
+                                std::cout << ", " << sample_rate_to_str(rate) << "MS/s";
+                            }
+                        }
+
+                        std::cout << ". Description: " << dev.description << std::endl;
+                    } else {
+                        std::cout << " (unsupported tuner and/or crystal fq)\n";
+                    }
+                } else {
+                    std::cout << " (in use)\n";
+                }
+            }
+
+            if (duplicate_serials) {
+                std::cout << "Warning: Duplicate serials found. sdrx may show inconsistent behaviour. Please rename using rtl_eeprom.\n";
+            }
+
+            return 0;
+        }
+
         return 1;
     }
 
@@ -1177,10 +1203,10 @@ int main(int argc, char** argv) {
 
     // Print settings
     std::cout << "The folowing settings were given:" << std::endl;
-    std::cout << "    RTL device: " << settings.rtl_device << std::endl;
+    std::cout << "    Device: " << (settings.rtl_device_str.empty() ? "(first available)":settings.rtl_device_str) << std::endl;
     std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
     std::cout << "    RF gain: " << settings.rf_gain << "dB" << std::endl;
-    std::cout << "    LF (audio) gain: " << settings.lf_gain << "dB" << std::endl;
+    std::cout << "    Volume: " << settings.lf_gain << "dB" << std::endl;
     std::cout << "    Squelch level: " << settings.sql_level << "dB" << std::endl;
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
     std::cout << "    Tuner frequency: " << settings.tuner_fq << "Hz" << std::endl;
@@ -1192,61 +1218,13 @@ int main(int argc, char** argv) {
 
     struct InputState input_state;
     input_state.settings   = settings;
-    input_state.rtl_device = nullptr;
     input_state.rb_ptr     = &iq_rb;
 
-    ret = rtlsdr_open(&input_state.rtl_device, settings.rtl_device);
-    if (ret < 0 || input_state.rtl_device == NULL) {
-        std::cerr << "Error: Unable to open device " << settings.rtl_device <<
-                     ". ret = " << ret << std::endl;
-        return 1;
-    }
-
-    std::cout << "RTL-SDR device " << settings.rtl_device << " opend" << std::endl;
-
-    uint32_t rtl2832_clk_fq;
-    uint32_t tuner_clk_fq;
-    rtlsdr_get_xtal_freq(input_state.rtl_device, &rtl2832_clk_fq, &tuner_clk_fq);
-    std::cout << "RTL2832 clock Fq: " << rtl2832_clk_fq << "Hz" << std::endl;
-    std::cout << "Tuner clock Fq: " << tuner_clk_fq << "Hz" << std::endl;
-
-    enum rtlsdr_tuner tuner_type = rtlsdr_get_tuner_type(input_state.rtl_device);
-    std::cout << "Tuner type: " << rtlsdr_tuner_to_str(tuner_type) << std::endl;
-
-    int num_tuner_gains = rtlsdr_get_tuner_gains(input_state.rtl_device, NULL);
-    int *tuner_gains = (int*)calloc(sizeof(int), num_tuner_gains);
-
-    rtlsdr_get_tuner_gains(input_state.rtl_device, tuner_gains);
-    std::cout << "Tuner gain steps (dB):";
-    std::cout.precision(3);
-    std::cout.width(3);
-    for (int i = 0; i < num_tuner_gains; i++) {
-        std::cout << " " << ((float)tuner_gains[i])/10.0f;
-    }
-    std::cout << std::endl;
-    free(tuner_gains);
-    tuner_gains = nullptr;
-
-    std::cout << "Setting up device with ";
-    std::cout << "Fq=" << settings.tuner_fq << "Hz, ";
-    std::cout << "Corr=" << settings.fq_corr << "ppm, ";
-    std::cout << "Bw=" << bw << "Hz, ";
-    std::cout << "Gain=" << settings.rf_gain << "dB, ";
-    std::cout << "Sample rate=" << sample_rate << " samples/s";
-    std::cout << std::endl;
-
-    ret = rtlsdr_set_center_freq(input_state.rtl_device, settings.tuner_fq);
-    ret = rtlsdr_set_freq_correction(input_state.rtl_device, settings.fq_corr);
-    ret = rtlsdr_set_tuner_bandwidth(input_state.rtl_device, bw);
-    ret = rtlsdr_set_tuner_gain(input_state.rtl_device, settings.rf_gain * 10);
-    ret = rtlsdr_set_sample_rate(input_state.rtl_device, sample_rate);
-
-    // Check what happend
-    uint32_t actual_sample_rate = rtlsdr_get_sample_rate(input_state.rtl_device);
-    if (actual_sample_rate != sample_rate) {
-        std::cerr << "Warning: Actual Sample rate: " << actual_sample_rate <<
-                     "samples/s. Program will not work." << std::endl;
-    }
+    dongle = new RtlDev(settings.rtl_device_str, SampleRate::FS01200);
+    dongle->setUserData((void*)&input_state);
+    dongle->setFq(settings.tuner_fq);
+    dongle->setGain(settings.rf_gain);
+    dongle->data.connect(sigc::ptr_fun(data_cb));
 
     sigact.sa_handler = signal_handler;
     sigemptyset(&sigact.sa_mask);
@@ -1257,27 +1235,33 @@ int main(int argc, char** argv) {
     sigaction(SIGPIPE, &sigact, NULL);
 
     struct OutputState output_state;
-    output_state.rb_ptr   = &iq_rb;
-    output_state.settings = settings;
+    output_state.settings         = settings;
+    output_state.rb_ptr           = &iq_rb;
+    output_state.samples_received = false;
+    output_state.running          = false;
 
     std::thread alsa_thread(alsa_worker, std::ref(output_state));
-    std::thread dongle_thread(dongle_worker, std::ref(input_state));
 
-    rtlsdr_reset_buffer(input_state.rtl_device);
+    // Give the output thread up to 2 seconds to start upp
+    while (output_state.running == false && run) {
+        usleep(500000);
+    }
+    usleep(1500000);
 
-    // RTL_IQ_BUF_SIZE is the size of the callback buffer. This will become len
-    // in the data callback.
-    ret = rtlsdr_read_async(input_state.rtl_device, iq_cb, &input_state, 4, RTL_IQ_BUF_SIZE);
-    if (ret < 0) {
-        std::cerr << "Error: rtlsdr_read_async returned: " << ret << std::endl;
-        run = false;
+    ret = dongle->start();
+    if (ret == 0) {
+        while (run) {
+            sleep(1);
+        }
+    } else {
+        std::cerr << "Error: Unable to start dongle, ret = " << ret << "(" << RtlDev::errStr(ret) << ")\n";
     }
 
-    dongle_thread.join();
-    alsa_thread.join();
+    dongle->stop();
 
-    std::cout << "Closing RTL device." << std::endl;
-    rtlsdr_close(input_state.rtl_device);
+    delete dongle;
+
+    alsa_thread.join();
 
     std::cout << "Stopped." << std::endl;
 }
