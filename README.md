@@ -5,16 +5,17 @@ sdrx
 [![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml)
 
 `sdrx` is a software defined narrow band multi channel AM airband receiver that
-uses a RTL-SDR USB dongle as it's hardware part. It's main purpose is for
-experimenting with different SDR implementation aspects as translation, down
-sampling, filtering, demodulation, interaction between clock domains, threading,
-audio processing and so on. `sdrx` is written in C++17 and is tested on a x86_64
-machine running Fedora 34 and on a Raspberry Pi 4 Model B 4GiB running
-Raspberry Pi OS. Audio is played using ALSA.
+uses a R820T(2) based RTL-SDR USB dongle as it's hardware part. It's also a
+project for experimenting with different SDR implementation aspects as
+translation, down sampling, filtering, demodulation, interaction between clock
+domains, threading, audio processing and so on. `sdrx` is written in C++17 and
+is tested on a x86_64 machine running Fedora 35 and on a Raspberry Pi 4 Model
+B 4GiB running Raspberry Pi OS. Audio is played using ALSA.
 
 A RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
-is used for development. The program may be incompatible with other RTL dongles
-and less powerfull Raspberry Pi models. YMMV.
+is used for development. The program only support R820T(2) based dongles and
+may be incompatible with other RTL dongles and less powerfull Raspberry Pi
+models. YMMV.
 
 Support for Airspy R2 and Airspy Mini is being worked on.
 
@@ -26,29 +27,30 @@ on the following libraries. They, and their development parts, need to be
 installed on your machine in order to build and run `sdrx`:
 
  * libpopt
+ * libsigc++20
  * libusb-1.0
+ * libfftw
+ * libasound
  * librtlsdr
  * libairspy
- * libasound
- * libfftw
- * libsigc++20
 
 On Fedora they can be installed with:
 
-    $ sudo dnf install git gcc-c++ cmake popt-devel libusbx-devel rtl-sdr-devel alsa-lib-devel \
-                       fftw-devel fftw-libs-single airspyone_host libsigc++20-devel
+    $ sudo dnf install git gcc-c++ cmake popt-devel libsigc++20-devel libusb1-devel fftw-devel \
+                       fftw-libs-single alsa-lib-devel rtl-sdr-devel airspyone_host-devel
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
-    $ sudo apt-get install git g++-8 cmake libpopt-dev libusb-1.0-0-dev librtlsdr-dev libasound2-dev \
-                           libfftw3-dev libfftw3-single3 libairspy0 libsigc++-2.0-dev
+    $ sudo apt-get install git g++-8 cmake libpopt-dev libsigc++-2.0-dev libusb-1.0-0-dev \
+                           libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy0-dev
 
 
 Download and build
 ====
-The easiest way to get `sdrx` is to clone the GitHub repo. Since `sdrx` depend
-on the latest libairspy and librtlsdr, these projects are included as
-submodules at the moment:
+The easiest way to get `sdrx` is to clone the GitHub repo. `sdrx` depend
+on the latest libairspy and librtlsdr at the moment so these projects are
+included as submodules. With the commands below you will get the submodules
+checked out properly:
 
     $ git clone --recurse-submodules https://github.com/johanhedin/sdrx.git
     $ cd sdrx
@@ -69,10 +71,12 @@ To keep up to date with changes, simply run:
     $ cmake ../
     $ make
 
-The arguments to `git submodule update` will assure that newly added submodules
-are checked out properly. For existing submodules, they are a no-op. If the
-build fails after a update, try to remove all files inside the build directory
-and start over:
+The `--init` and `--recursive` arguments to `git submodule update` will assure
+that newly added submodules are checked out properly. For existing submodules,
+they are a no-op.
+
+If the build for some reason fails after a update, try to remove all files
+inside the build directory and start over:
 
     $ cd build
     $ rm -rf *
@@ -102,8 +106,9 @@ inside a 1MHz band):
 
     $ ./sdrx --rf-gain 40 118.105 118.280 118.405 118.505
 
-The more channels you list, the more processing power will be used. For a Pi 4,
-the current upper limit is probably at six channels.
+The more channels you list, the more processing power will be used. Please
+monitor your system load when running `sdrx`with many channels to get an
+understaning of how much you can load your specific system.
 
 
 Output in single channel mode
