@@ -92,19 +92,27 @@ listed with --help:
 
     $ cd sdrx/build
     $ ./sdrx --help
-    $ ./sdrx --rf-gain 30 122.455
+    $ ./sdrx --gain 30 122.455
 
-The defaults for audio gain and squelsh level should be good as is. RF gain
+The defaults for volume and squelsh level should be good as is. RF gain
 can be adjusted according to the local signal environment. Also note that `sdrx`
 use quite narrow filters so if your dongle does not have a TCXO, take your
 time to find out the proper frequency correction and supply that with the
 --fq-corr option.
 
+If you have multiple devices connected, use `--list` to list them:
+
+    $ ./sdrx --list
+
+Note that to use a specific device, it's serial must be used and you must
+ensure that all devices have unique serials. Use `rtl_eeprom` from the standard
+librtlsdr package to set serials.
+
 Support for multiple channels are available as well. Just list the channels as
 arguments (due to the fixed sampling frequency currently used, they must fit
 inside a 1MHz band):
 
-    $ ./sdrx --rf-gain 40 118.105 118.280 118.405 118.505
+    $ ./sdrx --gain 40 118.105 118.280 118.405 118.505
 
 The more channels you list, the more processing power will be used. Please
 monitor your system load when running `sdrx`with many channels to get an
@@ -119,7 +127,7 @@ second.
 
 A typical output look like this:
 
-    $ ./sdrx -r 45 118.105
+    $ ./sdrx -g 45 118.105
     ...
     10:57:00: Level[XX    -37.2] 118.105[ 0.0|-22.5|-22.6|-23.4|  0.00] (SNR|low|mid|hig|imbalance)
     10:57:01: Level[XX    -39.6] 118.105[ 0.0|-22.1|-22.9|-22.2|  0.00] (SNR|low|mid|hig|imbalance)
@@ -165,7 +173,7 @@ panorma based on their order on the command line.
 Output in the terminal looks about the same as for signle channel but only the
 SNR is shown for the channels:
 
-    $ ./sdrx -r 40 118.105 118.280 118.405
+    $ ./sdrx -g 40 118.105 118.280 118.405
     ...
     10:57:00: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
     10:57:01: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
