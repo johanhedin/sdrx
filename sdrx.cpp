@@ -100,10 +100,10 @@
 // bytes from the dongle we need to set the librtlsdr buffer size to 512*75*2.
 //
 //#define RTL_IQ_SAMPLING_FQ   1200000
-#define MAX_CH_OFFSET        500000   // 500Khz
-#define DOWNSAMPLING_FACTOR  75
-#define RTL_IQ_BUF_SIZE      (512 * DOWNSAMPLING_FACTOR * 2)  // callback frequency is 31.25Hz or 32ms
-#define CH_IQ_SAMPLING_FQ    16000    // RTL_IQ_SAMPLING_FQ / DOWNSAMPLING_FACTOR
+//#define MAX_CH_OFFSET        500000   // 500Khz
+//#define DOWNSAMPLING_FACTOR  75
+//#define RTL_IQ_BUF_SIZE      (512 * DOWNSAMPLING_FACTOR * 2)  // callback frequency is 31.25Hz or 32ms
+//#define CH_IQ_SAMPLING_FQ    16000    // RTL_IQ_SAMPLING_FQ / DOWNSAMPLING_FACTOR
 #define CH_IQ_BUF_SIZE       512
 #define FFT_SIZE             CH_IQ_BUF_SIZE
 
@@ -151,7 +151,7 @@ public:
 class Settings {
 public:
     Settings(void) : fq_corr(0), rf_gain(30.0f), lf_gain(0.0f), sql_level(9.0f),
-     audio_device("default"), tuner_fq(0) {}
+     audio_device("default"), tuner_fq(0), rate(SampleRate::FS01200) {}
     std::string          rtl_device_str;
     int                  fq_corr;      // Frequency correction in ppm
     float                rf_gain;      // RF gain in dB
@@ -160,13 +160,13 @@ public:
     std::string          audio_device; // ALSA device to use for playback
     uint32_t             tuner_fq;     // Tuner frequency
     std::vector<Channel> channels;     // String representations of the channels to listen to
+    SampleRate           rate;         // Sample rate from command line
 };
 
 
 struct InputState {
     rb_t           *rb_ptr;                  // Input -> Output buffer
     Settings        settings;                // System wide settings
-    unsigned char   iq_buf[RTL_IQ_BUF_SIZE]; // Jump buffer to handle Pi4 with 5.x kernel
 };
 
 
@@ -896,11 +896,12 @@ static int get_audio_pos(unsigned channel_no, unsigned num_channels) {
 static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     int           ret = -1;
     poptContext   popt_ctx;
+    int           list_devices = 0;
+    char         *device = nullptr;
     char         *audio_device = nullptr;
+    char         *sample_rate_str = nullptr;
     int           print_help = 0;
     int           normal_fq_fmt = 0;
-    char         *device = nullptr;
-    int           list_devices = 0;
 
     struct poptOption options_table[] = {
         { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and quit", nullptr },
@@ -910,6 +911,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume in dB relative to system. Defaults to 0 if not set", "VOLUME" },
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current noise floor. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
+        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate i MS/s (experimental). Defaults to 1.2 if not set", "RATE" },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
@@ -923,17 +925,17 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         // Error while parsing the options. Print the reason
         switch (ret) {
             case POPT_ERROR_BADOPT:
-                std::cerr << "Error: Unknown option given" << std::endl;
+                std::cerr << "Error: Unknown option given.\n";
                 break;
             case POPT_ERROR_NOARG:
-                std::cerr << "Error: Missing option value" << std::endl;
+                std::cerr << "Error: Missing option value.\n";
                 break;
             case POPT_ERROR_BADNUMBER:
             case POPT_ERROR_OVERFLOW:
-                std::cerr << "Error: Option could not be converted to number" << std::endl;
+                std::cerr << "Error: Option could not be converted to number.\n";
                 break;
             default:
-                std::cerr << "Error: Unknown error in option parsing: " << ret << std::endl;
+                std::cerr << "Error: Unknown error in option parsing, ret = " << ret << ".\n";
                 break;
         }
         poptPrintHelp(popt_ctx, stderr, 0);
@@ -943,14 +945,19 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         ret = 0;
 
         // Collect and free string argument if given
+        if (device) {
+            settings.rtl_device_str = device;
+            free(device);
+        }
+
         if (audio_device) {
             settings.audio_device = audio_device;
             free(audio_device);
         }
 
-        if (device) {
-            settings.rtl_device_str = device;
-            free(device);
+        if (sample_rate_str) {
+            settings.rate = str_to_sample_rate(std::string(sample_rate_str));
+            free(sample_rate_str);
         }
 
         if (print_help) {
@@ -999,11 +1006,15 @@ Use first available device on the system:
             ret = -2;
         } else {
             if (settings.rf_gain < 0.0f || settings.rf_gain > 50.0f) {
-                fprintf(stderr, "Error: Invalid RF gain given: %.4f\n", settings.rf_gain);
+                fprintf(stderr, "Error: Invalid RF gain given: %.4f.\n", settings.rf_gain);
                 ret = -1;
             }
             if (settings.sql_level < -10.0f || settings.sql_level > 50.0f) {
-                fprintf(stderr, "Error: Invalid SQL level given: %.4f\n", settings.sql_level);
+                fprintf(stderr, "Error: Invalid SQL level given: %.4f.\n", settings.sql_level);
+                ret = -1;
+            }
+            if (settings.rate == SampleRate::UNSPECIFIED) {
+                std::cerr << "Error: Invalid sample rate given.\n";
                 ret = -1;
             }
 
@@ -1015,10 +1026,10 @@ Use first available device on the system:
                     uint32_t fq_ret = parse_fq(arg, fq_type);
                     if (fq_ret == 0) {
                         std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") <<
-                                     " given: " << arg << std::endl;
+                                     " given: " << arg << ".\n";
                         ret = -1;
                     } else if (fq_ret < 45000000 || fq_ret > 1800000000) {
-                        std::cerr << "Error: Invalid frequency given: " << fq_ret << "Hz" << std::endl;
+                        std::cerr << "Error: Invalid frequency given: " << fq_ret << "Hz.\n";
                         ret = -1;
                     } else {
                         // Add to channels list if not already present
@@ -1030,7 +1041,7 @@ Use first available device on the system:
 
                 if (settings.channels.size() > 0) {
                     if (settings.channels.size() > 1 && fq_type == NORMAL_FQ) {
-                        std::cerr << "Error: Only one frequency allowed in frequency mode" << std::endl;
+                        std::cerr << "Error: Only one frequency allowed in frequency mode.\n";
                         ret = -1;
                     } else {
                         // If here, we know that all channels in settings.channels
@@ -1047,10 +1058,12 @@ Use first available device on the system:
                         uint32_t mid_fq = lo_fq + (hi_fq - lo_fq) / 2;
                         uint32_t mid_fq_rounded = (mid_fq / 100000) * 100000;
 
+                        uint32_t MAX_CH_OFFSET = sample_rate_to_uint(settings.rate) * 8 / 20;
+
                         // Verify that the requested channels fit
                         if (lo_fq < (mid_fq_rounded - MAX_CH_OFFSET) || hi_fq > (mid_fq_rounded + MAX_CH_OFFSET)) {
                             std::cerr << "Error: Requested channels does not fit inside available IF bandwidth (" <<
-                                         (MAX_CH_OFFSET*2)/1000000 << "MHz)" << std::endl;
+                                         (MAX_CH_OFFSET*2)/1000 << "kHz).\n";
                             ret = -1;
                         }
 
@@ -1058,7 +1071,7 @@ Use first available device on the system:
                     }
                 }
             } else {
-                std::cerr << "Error: No channel given" << std::endl;
+                std::cerr << "Error: No channel given.\n";
                 ret = -1;
             }
 
@@ -1163,6 +1176,53 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Determine lenght of translator based on Fs. N depends on the IQ
+    // sampling fq. Fs * Z / 8333.33333 must be an even number
+    //
+    // Fs(Ms/s)    N
+    // ---------------
+    //  0.96       576
+    //  1.2        144
+    //  1.44      1728
+    //  1.6        192
+    //  1.92      1152
+    //  2.4        288
+    //  2.56      1536
+    //  6.0        720
+    // 10.0       1200
+    int N;
+    std::vector<MSD::Stage> stages;
+
+    switch (settings.rate) {
+        case SampleRate::FS01200:
+            N =  144; stages = std::vector<MSD::Stage>{{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }}; break;
+        case SampleRate::FS01440:
+            N = 1728; break;
+        case SampleRate::FS01600:
+            N =  192; break;
+        case SampleRate::FS01920:
+            N = 1152; break;
+        case SampleRate::FS02400:
+            N =  288; stages = std::vector<MSD::Stage>{{ 2, lp_ds_2400k_1200k },{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }}; break;
+        case SampleRate::FS02500:
+            N =    0; break;
+        case SampleRate::FS02560:
+            N = 1536; break;
+        case SampleRate::FS03000:
+            N =    0; break;
+        case SampleRate::FS06000:
+            N =  720; break;
+        case SampleRate::FS10000:
+            N = 1200; break;
+        default:
+            N =    0; break;
+    }
+
+    if (N == 0 || stages.empty()) {
+        std::cerr << "Error: Sample rate " << sample_rate_to_str(settings.rate) << " MS/s is not supported yet.\n";
+        return 1;
+    }
+
     // Setup the channels with "tuner", down sampler, AGC and audio position
     unsigned ch_idx = 0;
     for (auto &ch : settings.channels) {
@@ -1170,18 +1230,13 @@ int main(int argc, char** argv) {
 
         int ch_offset = channel_to_offset(ch.name, (int32_t)settings.tuner_fq);
         if (ch_offset != 0) {
-            int N = 144;   // This number depends on the IQ sampling fq
             for (int n = 0; n < N; n++) {
-                std::complex<float> e(0.0f, -2.0f * M_PI * n * ch_offset/144.0f);
+                std::complex<float> e(0.0f, -2.0f * M_PI * n * ch_offset/(float)N);
                 translator.push_back(exp(e));
             }
         }
 
-        ch.msd = MSD(translator, std::vector<MSD::Stage>{
-            { 3, lp_ds_1200k_400k },
-            { 5, lp_ds_400k_80k },
-            { 5, lp_ds_80k_16k }
-        });
+        ch.msd = MSD(translator, stages);
 
         ch.agc.setReference(1.0f);
         ch.agc.setAttack(1.0f);
@@ -1195,11 +1250,13 @@ int main(int argc, char** argv) {
     std::cout << "The folowing settings were given:" << std::endl;
     std::cout << "    Device: " << (settings.rtl_device_str.empty() ? "(first available)":settings.rtl_device_str) << std::endl;
     std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
+    std::cout << "    Sampling frequency: " << sample_rate_to_str(settings.rate) << "MS/s" << std::endl;
     std::cout << "    RF gain: " << settings.rf_gain << "dB" << std::endl;
     std::cout << "    Volume: " << settings.lf_gain << "dB" << std::endl;
     std::cout << "    Squelch level: " << settings.sql_level << "dB" << std::endl;
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
-    std::cout << "    Tuner frequency: " << settings.tuner_fq << "Hz" << std::endl;
+    std::cout << "    Tuner center frequency: " << settings.tuner_fq/1000 << " kHz" << std::endl;
+    std::cout << "    Bandwidth: +/-" << (sample_rate_to_uint(settings.rate) * 8 / 20)/1000 << " kHz relative to center frequency" << std::endl;
     std::cout << "    Channels:";
     for (auto &ch : settings.channels) std::cout << " " << ch.name << "(" << ch.pos << ")";
     std::cout << std::endl;
@@ -1210,7 +1267,7 @@ int main(int argc, char** argv) {
     input_state.settings   = settings;
     input_state.rb_ptr     = &iq_rb;
 
-    dongle = new RtlDev(settings.rtl_device_str, SampleRate::FS01200);
+    dongle = new RtlDev(settings.rtl_device_str, settings.rate);
     dongle->setUserData((void*)&input_state);
     dongle->setFq(settings.tuner_fq);
     dongle->setGain(settings.rf_gain);
