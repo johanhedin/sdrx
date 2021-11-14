@@ -122,6 +122,10 @@ int AirspyDev::start() {
     if (std::find(supported_rates.begin(), supported_rates.end(), fs_) == supported_rates.end())
         return AIRSPYDEV_INVALID_SAMPLE_RATE;
 
+    block_info_.rate = fs_;
+    block_info_.pwr = 0.0f;
+    block_info_.ts = std::chrono::system_clock::now();;
+
     state_ = State::STARTING;
     run_ = true;
     worker_thread_ = std::thread(worker_, std::ref(*this));
@@ -324,6 +328,8 @@ int AirspyDev::data_cb_(void *t) {
     AirspyDev &self = *reinterpret_cast<AirspyDev*>(transfer->ctx);
     int sample_pos = 0;
 
+    self.block_info_.ts = std::chrono::system_clock::now();
+
     if (!self.run_) {
         return 0;
     }
@@ -340,8 +346,25 @@ int AirspyDev::data_cb_(void *t) {
 
         self.iq_pos_++;
         if (self.iq_pos_ == self.block_size_) {
-            // IQ buffer ready to be dispatched. Emit data
-            self.data(&self.iq_buffer_[self.part_pos_], self.block_size_, self.fs_, self.user_data_);
+            // IQ buffer ready to be dispatched. Calculate RMS and emit data
+
+            // TODO: Need to compensate self.block_info_.ts for half use of buffer.
+
+            float pwr_rms = 0.0f;
+
+            // Calculate average power in the chunk by squaring the amplitude RMS.
+            // ampl_rms = sqrt( ( sum( abs(iq_sample)^2 ) ) / N )
+            for (unsigned i = 0; i < self.block_size_; i++) {
+                float ampl_squared = std::norm(self.iq_buffer_[self.part_pos_ + i]);
+                pwr_rms += ampl_squared;
+            }
+            pwr_rms = pwr_rms / self.block_size_;
+
+            // Calculate power dBFS with full scale sine wave as reference (amplitude
+            // of 1/sqrt(2) or power 1/2 or -3 dB).
+            self.block_info_.pwr = 10 * std::log10(pwr_rms) - 3.0f;
+
+            self.data(&self.iq_buffer_[self.part_pos_], self.block_size_, self.user_data_, self.block_info_);
 
 
             if (self.part_pos_ == 0) {

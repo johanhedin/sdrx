@@ -80,7 +80,7 @@ public:
     // Data signal. One block represents 32ms of data irrespectively of the
     // sampling frequency. Data len will ofcourse vary. 32ms bocks equals
     // a callback frequency of 31.25Hz
-    sigc::signal<void(const iqsample_t*, unsigned, SampleRate, void*)> data;
+    sigc::signal<void(const iqsample_t*, unsigned, void*, const BlockInfo&)> data;
 
     State getState(void) { return state_; }
 
@@ -97,6 +97,7 @@ public:
     // Convert error code to string
     static std::string errStr(int ret);
 
+    // Instance of this class is not intended to be copied in any way
     RtlDev(const RtlDev&) = delete;
     RtlDev& operator=(const RtlDev&) = delete;
 
@@ -118,6 +119,7 @@ private:
     State          state_;
     iqsample_t     iq_buffer_[81920];   // Largest buffer for 2.56MS/s
     void          *user_data_;
+    BlockInfo      block_info_;
 };
 
 #endif // RTL_DEV_HPP

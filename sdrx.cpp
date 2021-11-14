@@ -112,8 +112,10 @@ static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
 
 // Metadata associated with one chunk of IQ data (32ms at the moment)
 struct Metadata {
-    struct timeval ts;       // Timestamp for the IQ chunk (from the OS)
-    float          pwr_dbfs; // Power dBFS (ref. full scale sine wave)
+    using TimeStamp = std::chrono::time_point<std::chrono::system_clock>;
+
+    TimeStamp ts;       // Timestamp for the IQ chunk (from the OS)
+    float     pwr_dbfs; // Power dBFS (ref. full scale sine wave)
 };
 
 
@@ -196,7 +198,7 @@ static void signal_handler(int signo) {
 
 
 // Called by the new Device class
-static void data_cb(const iqsample_t *data, unsigned data_len, SampleRate, void *user_data) {
+static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, const BlockInfo &block_info) {
     struct InputState    &ctx = *reinterpret_cast<struct InputState*>(user_data);
     iqsample_t           *iq_buf_ptr = nullptr;
     std::vector<Channel> &channels = ctx.settings.channels;
@@ -204,26 +206,14 @@ static void data_cb(const iqsample_t *data, unsigned data_len, SampleRate, void 
     struct Metadata       meta;
 
     // Prepare chunk metadata
-    gettimeofday(&meta.ts, nullptr);
-    float pwr_rms = 0.0f;
-
-    // Calculate average power in the chunk by squaring the amplitude RMS.
-    // ampl_rms = sqrt( ( sum( abs(iq_sample)^2 ) ) / N )
-    for (unsigned i = 0; i < data_len; i++) {
-        float ampl_squared = std::norm(data[i]);
-        pwr_rms += ampl_squared;
-    }
-    pwr_rms = pwr_rms / (RTL_IQ_BUF_SIZE/2);
-
-    // Calculate power dBFS with full scale sine wave as reference (amplitude
-    // of 1/sqrt(2) or power 1/2 or -3 dB).
-    meta.pwr_dbfs = 10 * std::log10(pwr_rms) - 3.0f;
+    meta.pwr_dbfs = block_info.pwr;
+    meta.ts = block_info.ts;
 
     // Acquire IQ ring buffer
     if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, &metadata_ptr)) {
-        // Channelize the IQ data and write output into ring buffer
+        // Channelize the IQ data and write output into ring buffer one
+        // channel after the other
         for (auto &ch : channels) {
-            //ch.msd.decimate(ctx.iq_buf, len, iq_buf_ptr);
             ch.msd.decimate(data, data_len, iq_buf_ptr);
             iq_buf_ptr += CH_IQ_BUF_SIZE;
         }

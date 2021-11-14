@@ -23,21 +23,40 @@
 
 #include <cstdint>
 #include <string>
+#include <chrono>
 
 // Supported sample rates in sdrx. Combination of what work for RTL dongles,
-// Airspy devices and the internals of sdrx
+// Airspy devices and the internals of sdrx (M denotes downsampling factor to
+// get to 16kHz).
 enum class SampleRate {
-    FS01200,             //  1.2  MS/s RTL
-    FS01440,             //  1.44 MS/s RTL
-    FS01600,             //  1.6  MS/s RTL
-    FS01920,             //  1.92 MS/s RTL
-    FS02400,             //  2.4  MS/s RTL
-    FS02500,             //  2.5  MS/s Airspy R2
-    FS02560,             //  2.56 MS/s RTL
-    FS03000,             //  3.0  MS/s Airspy Mini
-    FS06000,             //  6.0  MS/s Airspy Mini (and R2 as alt. fs)
-    FS10000,             // 10.0  MS/s Airspy R2 (and Mini as alt. fs)
+    FS01200,      //  1.2  MS/s RTL, M =  75
+    FS01440,      //  1.44 MS/s RTL, M =  90
+    FS01600,      //  1.6  MS/s RTL, M = 100
+    FS01920,      //  1.92 MS/s RTL, M = 120
+    FS02400,      //  2.4  MS/s RTL, M = 150
+    FS02500,      //  2.5  MS/s Airspy R2
+    FS02560,      //  2.56 MS/s RTL, M = 160
+    FS03000,      //  3.0  MS/s Airspy Mini
+    FS06000,      //  6.0  MS/s Airspy Mini (and R2 as alt. fs), M = 375
+    FS10000,      // 10.0  MS/s Airspy R2 (and Mini as alt. fs), M = 625
     UNSPECIFIED
+};
+
+
+// Struct holding information related to one block of IQ output from a device.
+class BlockInfo {
+public:
+    using TimeStamp = std::chrono::time_point<std::chrono::system_clock>;
+
+    // Sample rate used
+    SampleRate rate;
+
+    // Average signal power in the block expressed as dBFS relative to a
+    // full scale sine wave
+    float      pwr;
+
+    // Timestamp (set by the host) for the last sample in the block
+    TimeStamp  ts;
 };
 
 
@@ -108,8 +127,8 @@ static inline SampleRate uint_to_sample_rate(uint32_t value) {
 // The three gain settings available in the R820T(2) tuner; LNA, Mixer and VGA.
 // The index (0..15) in the array represent the register value.
 // Values from http://steve-m.de/projects/rtl-sdr/gain_measurement/r820t
-static const float lna_gain_steps[] = { 0.0f, 0.9f, 1.3f, 4.0f, 3.8f, 1.3f, 3.1f, 2.2f, 2.6f, 3.1f, 2.6f, 1.4f, 1.9f, 0.5f, 3.5f, 1.3f };
+static const float lna_gain_steps[] = { 0.0f, 0.9f, 1.3f, 4.0f, 3.8f, 1.3f, 3.1f, 2.2f, 2.6f, 3.1f, 2.6f, 1.4f, 1.9f, 0.5f, 3.5f,  1.3f };
 static const float mix_gain_steps[] = { 0.0f, 0.5f, 1.0f, 1.0f, 1.9f, 0.9f, 1.0f, 2.5f, 1.7f, 1.0f, 0.8f, 1.6f, 1.3f, 0.6f, 0.3f, -0.8f };
-static const float vga_gain_steps[] = { 0.0f, 2.6f, 2.6f, 3.0f, 4.2f, 3.5f, 2.4f, 1.3f, 1.4f, 3.2f, 3.6f, 3.4f, 3.5f, 3.7f, 3.5f, 3.6f };
+static const float vga_gain_steps[] = { 0.0f, 2.6f, 2.6f, 3.0f, 4.2f, 3.5f, 2.4f, 1.3f, 1.4f, 3.2f, 3.6f, 3.4f, 3.5f, 3.7f, 3.5f,  3.6f };
 
 #endif // COMMON_DEV_HPP

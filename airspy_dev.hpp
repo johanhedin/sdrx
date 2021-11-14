@@ -80,7 +80,7 @@ public:
     // Data signal. One block represents 32ms of data irrespectively of the
     // sampling frequency. Data len will ofcourse vary. 32ms bocks equals
     // a callback frequency of 31.25Hz
-    sigc::signal<void(const iqsample_t*, unsigned, SampleRate, void*)> data;
+    sigc::signal<void(const iqsample_t*, unsigned, void*, const BlockInfo&)> data;
 
     State getState(void) { return state_; }
 
@@ -97,6 +97,7 @@ public:
     // Convert error code to string
     static std::string errStr(int ret);
 
+    // Instance of this class is not intended to be copied in any way
     AirspyDev(const AirspyDev&) = delete;
     AirspyDev& operator=(const AirspyDev&) = delete;
 
@@ -120,6 +121,7 @@ private:
     unsigned       block_size_;
     unsigned       iq_pos_;
     void          *user_data_;
+    BlockInfo      block_info_;
 };
 
 #endif // AIRSPY_DEV_HPP
