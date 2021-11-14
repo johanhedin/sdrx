@@ -2,7 +2,7 @@
 // Definition of coefficients for different FIR downsampling and audio filters.
 //
 // @author Johan Hedin
-// @date   2021-04-28
+// @date   2021
 //
 // Some of the coefficients are taken from svxlink:
 // https://github.com/sm0svx/svxlink.
@@ -56,12 +56,42 @@
 // https://www.earlevel.com/main/2016/12/08/filter-frequency-response-grapher
 
 
+// Coefficients for a low pass filter of order 8 for first stage downsampling
+// of 8-bit samples at 2400kS/s to 1200kS/s (M = 2). Care band is between 0 and
+// 5kHz and reject band is between 600kHz and 1200kHz. Attenuation is better
+// than 55dB above 600Khz. Attenuation in the band 0 to 10kHz is negligible
+// (< 0.07dB @ 10kHz).
+//
+// pkg load signal;
+// fs = 2400;
+// f = [ 0 5 600 fs/2 ];
+// a = [ 1 1 0 0 ];
+// w = [ 1 1 ];
+// b = remez(8, f/(fs/2), a, w, 'bandpass', 100);
+//
+// % Plot with (fq axis is in kHz)
+// points = 4096;
+// plot((-0.5:1/points:0.5-1/points)*fs, 20*log10(abs(fftshift(fft(b, points)))), 'b-'); grid on; axis([0 fs/2 -100 5]);
+static const std::vector<float> lp_ds_2400k_1200k = {
+     0.0138439214677835f,
+     0.0553765419256809f,
+     0.1245976758676005f,
+     0.1938188098095203f,
+     0.2232377726886660f,
+     0.1938188098095203f,
+     0.1245976758676005f,
+     0.0553765419256809f,
+     0.0138439214677835f
+};
+
+
 // Coefficients for a low pass filter of order 12 for first stage downsampling
 // of 8-bit samples at 1200kS/s to 400kS/s (M = 3). Care band is between 0 and
 // 5kHz and reject band is between 200kHz and 600kHz. Attenuation is better
 // than 51dB above 200Khz. Attenuation in the band 0 to 10kHz is negligible
 // (< 0.07dB @ 10kHz).
 //
+// pkg load signal;
 // fs = 1200;
 // f = [ 0 5 200 fs/2 ];
 // a = [ 1 1 0 0 ];
