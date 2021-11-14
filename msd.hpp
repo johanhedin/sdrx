@@ -1,9 +1,8 @@
 //
 // Multi-Stage translating down sampler for tuning and decimating a IQ stream
-// from a RTL dongle.
 //
 // @author Johan Hedin
-// @date   2021-01-13
+// @date   2021
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -86,50 +85,6 @@ public:
                 if (out_len) *out_len += 1;
             }
             ++sample_pos;
-        }
-    }
-
-    // Translate and down sample. If in_len is a multiple of m, you don't need
-    // out_len since you know how many out samples that are to be output.
-    void decimate(const unsigned char *in, unsigned in_len, iqsample_t *out, unsigned *out_len = nullptr) {
-        unsigned   sample_pos = 0;
-        iqsample_t sample;
-        float      i, q;
-
-        if (out_len) *out_len = 0;
-
-        while (sample_pos < in_len) {
-            // Convert two 8-bit in values to one iqsample in the range (-1.0 1.0)
-            i = ((float)in[sample_pos])   / 127.5f - 1.0f;
-            q = ((float)in[sample_pos+1]) / 127.5f - 1.0f;
-
-            // Tune if translating vector is supplied
-            if (translator_.size() != 0) {
-                sample = translator_[trans_pos_] * iqsample_t(i, q);
-                if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
-            } else {
-                sample = iqsample_t(i, q);
-            }
-
-            auto stage_iter = stages_.begin();
-            while (stage_iter != stages_.end()) {
-                if (stage_iter->addSample(sample)) {
-                    // The stage produced a out sample
-                    sample = stage_iter->calculateOutput();
-                } else {
-                    // The stage need more samples
-                    break;
-                }
-                ++stage_iter;
-            }
-
-            if (stage_iter == stages_.end()) {
-                // Write out sample
-                *(out++) = sample;
-                if (out_len) *out_len += 1;
-            }
-
-            sample_pos += 2;
         }
     }
 
