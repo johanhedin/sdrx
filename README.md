@@ -88,7 +88,7 @@ Using
 ====
 `sdrx` is run from the command line and takes an aeronautical channel as the
 sole argument. Besides the channel, some options are available and can be
-listed with --help:
+listed with `--help`:
 
     $ cd sdrx/build
     $ ./sdrx --help
@@ -98,7 +98,7 @@ The defaults for volume and squelsh level should be good as is. RF gain
 can be adjusted according to the local signal environment. Also note that `sdrx`
 use quite narrow filters so if your dongle does not have a TCXO, take your
 time to find out the proper frequency correction and supply that with the
---fq-corr option.
+`--fq-corr` option.
 
 If you have multiple devices connected, use `--list` to list them:
 
