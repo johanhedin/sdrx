@@ -1177,7 +1177,7 @@ int main(int argc, char** argv) {
     }
 
     // Determine lenght of translator based on Fs. N depends on the IQ
-    // sampling fq. Fs * Z / 8333.33333 must be an even number
+    // sampling fq. Fs * z / 8333.33333 must be an even number
     //
     // Fs(Ms/s)    N
     // ---------------
@@ -1187,35 +1187,50 @@ int main(int argc, char** argv) {
     //  1.6        192
     //  1.92      1152
     //  2.4        288
-    //  2.56      1536
+    //  2.56      1536 (?)
     //  6.0        720
     // 10.0       1200
+    //
+    // Aha, if Z != 1, ch_offset must be multiplied with Z also.
     int N;
+    int z;
     std::vector<MSD::Stage> stages;
 
     switch (settings.rate) {
         case SampleRate::FS01200:
-            N =  144; stages = std::vector<MSD::Stage>{{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }}; break;
+            N =  144; z = 1;
+            stages = std::vector<MSD::Stage>{{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }}; break;
         case SampleRate::FS01440:
-            N = 1728; break;
+            N = 1728; z = 10;
+            break;
         case SampleRate::FS01600:
-            N =  192; break;
+            N =  192; z = 1;
+            break;
         case SampleRate::FS01920:
-            N = 1152; break;
+            N = 1152; z = 5;
+            break;
         case SampleRate::FS02400:
-            N =  288; stages = std::vector<MSD::Stage>{{ 2, lp_ds_2400k_1200k },{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }}; break;
+            N =  288; z = 1;
+            stages = std::vector<MSD::Stage>{{ 2, lp_ds_2400k_1200k },{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }}; break;
         case SampleRate::FS02500:
-            N =    0; break;
+            N = 300; z = 1;
+            break;
         case SampleRate::FS02560:
-            N = 1536; break;
+            N = 1536;
+            z = 5;
+            stages = std::vector<MSD::Stage>{{ 2, lp_ds_2560k_1280k },{ 4, lp_ds_1280k_320k },{ 4, lp_ds_320k_80k },{ 5, lp_ds_80k_16k }}; break;
         case SampleRate::FS03000:
-            N =    0; break;
+            N = 360; z = 1;
+            break;
         case SampleRate::FS06000:
-            N =  720; break;
+            N = 720; z = 1;
+            break;
         case SampleRate::FS10000:
-            N = 1200; break;
+            N = 1200; z = 1;
+            break;
         default:
-            N =    0; break;
+            N = 0; z = 1;
+            break;
     }
 
     if (N == 0 || stages.empty()) {
@@ -1231,7 +1246,7 @@ int main(int argc, char** argv) {
         int ch_offset = channel_to_offset(ch.name, (int32_t)settings.tuner_fq);
         if (ch_offset != 0) {
             for (int n = 0; n < N; n++) {
-                std::complex<float> e(0.0f, -2.0f * M_PI * n * ch_offset/(float)N);
+                std::complex<float> e(0.0f, -2.0f * M_PI * n * ch_offset * (float)z/(float)N);
                 translator.push_back(exp(e));
             }
         }

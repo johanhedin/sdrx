@@ -57,6 +57,121 @@
 
 
 // Coefficients for a low pass filter of order 8 for first stage downsampling
+// of 8-bit samples at 2560kS/s to 1280kS/s (M = 2). Care band is between 0 and
+// 5kHz and reject band is between 640kHz and 1280kHz. Attenuation is better
+// than 55dB above 640Khz. Attenuation in the band 0 to 10kHz is negligible
+// (< 0.07dB @ 10kHz).
+//
+// pkg load signal;
+// fs = 2560;
+// f = [ 0 5 640 fs/2 ];
+// a = [ 1 1 0 0 ];
+// w = [ 1 1 ];
+// b = remez(8, f/(fs/2), a, w, 'bandpass', 100);
+//
+// % Plot with (fq axis is in kHz)
+// points = 4096;
+// plot((-0.5:1/points:0.5-1/points)*fs, 20*log10(abs(fftshift(fft(b, points)))), 'b-'); grid on; axis([0 fs/2 -100 5]);
+static const std::vector<float> lp_ds_2560k_1280k = {
+     0.0138435159341356f,
+     0.0553749197660147f,
+     0.1245940259949790f,
+     0.1938131322239432f,
+     0.2232312333256408f,
+     0.1938131322239432f,
+     0.1245940259949790f,
+     0.0553749197660147f,
+     0.0138435159341356f
+};
+
+
+// Coefficients for a low pass filter of order 18 for second stage downsampling
+// of 8-bit samples at 1280kS/s to 320kS/s (M = 4). Care band is between 0 and
+// 5kHz and reject band is between 160kHz and 320kHz. Attenuation is better
+// than 55dB above 160Khz. Attenuation in the band 0 to 10kHz is negligible
+// (< 0.07dB @ 10kHz).
+//
+// pkg load signal;
+// fs = 1280;
+// f = [ 0 5 160 fs/2 ];
+// a = [ 1 1 0 0 ];
+// w = [ 1 1 ];
+// b = remez(18, f/(fs/2), a, w, 'bandpass', 100);
+//
+// % Plot with (fq axis is in kHz)
+// points = 4096;
+// plot((-0.5:1/points:0.5-1/points)*fs, 20*log10(abs(fftshift(fft(b, points)))), 'b-'); grid on; axis([0 fs/2 -100 5]);
+static const std::vector<float> lp_ds_1280k_320k = {
+     0.0020990198129169f,
+     0.0075506592833017f,
+     0.0153307640433563f,
+     0.0281428595595208f,
+     0.0440030020587179f,
+     0.0625313644889513f,
+     0.0809267358484791f,
+     0.0968937770671395f,
+     0.1076404782365306f,
+     0.1114895089244776f,
+     0.1076404782365306f,
+     0.0968937770671395f,
+     0.0809267358484791f,
+     0.0625313644889513f,
+     0.0440030020587179f,
+     0.0281428595595208f,
+     0.0153307640433563f,
+     0.0075506592833017f,
+     0.0020990198129169f
+};
+
+
+// Coefficients for a low pass filter of order 26 for second stage downsampling
+// of 8-bit samples at 320kS/s to 80kS/s (M = 4). Care band is between 0 and
+// 5kHz and reject band is between 40kHz and 80kHz. Attenuation is better
+// than 55dB above 40Khz. Attenuation in the band 0 to 10kHz is negligible
+// (< 0.07dB @ 10kHz).
+//
+// pkg load signal;
+// fs = 320;
+// f = [ 0 5 40 fs/2 ];
+// a = [ 1 1 0 0 ];
+// w = [ 1 1 ];
+// b = remez(26, f/(fs/2), a, w, 'bandpass', 100);
+//
+// % Plot with (fq axis is in kHz)
+// points = 4096;
+// plot((-0.5:1/points:0.5-1/points)*fs, 20*log10(abs(fftshift(fft(b, points)))), 'b-'); grid on; axis([0 fs/2 -100 5]);
+static const std::vector<float> lp_ds_320k_80k = {
+    -0.0021181871830726f,
+    -0.0044172220728262f,
+    -0.0075445826845633f,
+    -0.0102508144055177f,
+    -0.0108724523884005f,
+    -0.0074287696688834f,
+     0.0018482391015344f,
+     0.0178827759630307f,
+     0.0402216233397022f,
+     0.0668010110721645f,
+     0.0941471540161141f,
+     0.1180140351614288f,
+     0.1343169208879484f,
+     0.1401089865452234f,
+     0.1343169208879484f,
+     0.1180140351614288f,
+     0.0941471540161141f,
+     0.0668010110721645f,
+     0.0402216233397022f,
+     0.0178827759630307f,
+     0.0018482391015344f,
+    -0.0074287696688834f,
+    -0.0108724523884005f,
+    -0.0102508144055177f,
+    -0.0075445826845633f,
+    -0.0044172220728262f,
+    -0.0021181871830726f
+};
+
+
+// Coefficients for a low pass filter of order 8 for first stage downsampling
 // of 8-bit samples at 2400kS/s to 1200kS/s (M = 2). Care band is between 0 and
 // 5kHz and reject band is between 600kHz and 1200kHz. Attenuation is better
 // than 55dB above 600Khz. Attenuation in the band 0 to 10kHz is negligible
