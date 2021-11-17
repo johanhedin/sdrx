@@ -42,7 +42,7 @@ On Fedora they can be installed with:
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
     $ sudo apt-get install git g++-8 cmake libpopt-dev libsigc++-2.0-dev libusb-1.0-0-dev \
-                           libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy0-dev
+                           libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
 
 
 Download and build
