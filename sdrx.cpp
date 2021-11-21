@@ -299,7 +299,6 @@ static void alsa_write_cb(OutputState &ctx) {
         // What to do here? Restart device? Just return?
     }
 
-    //std::cerr << "här!\n";
     ctx.running = true;
 
     if (ctx.rb_ptr->acquireRead(&iq_buffer, &metadata_ptr)) {
@@ -1191,7 +1190,7 @@ int main(int argc, char** argv) {
     //  6.0        720
     // 10.0       1200
     //
-    // Aha, if Z != 1, ch_offset must be multiplied with Z also.
+    // Note: If Z != 1, ch_offset must be multiplied with Z also.
     int N;
     int z;
     std::vector<MSD::Stage> stages;
