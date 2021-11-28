@@ -47,7 +47,12 @@ static void signal_handler(int signo) {
 }
 
 
-static void on_data(const iqsample_t *, unsigned data_len, void*, const R820Dev::BlockInfo&) {
+static void on_data(const iqsample_t *, unsigned data_len, void*, const R820Dev::BlockInfo& block_info) {
+    if (block_info.stream_state == R820Dev::StreamState::IDLE) {
+        std::cerr << "Info: Device stopped streaming.\n";
+        return;
+    }
+
     if (callback_counter == 0) {
         ts1 = std::chrono::system_clock::now();
     } else {
