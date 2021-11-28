@@ -73,7 +73,8 @@ int RtlDev::start() {
 
     block_info_.rate = fs_;
     block_info_.pwr = 0.0f;
-    block_info_.ts = std::chrono::system_clock::now();;
+    block_info_.ts = std::chrono::system_clock::now();
+    block_info_.stream_state = StreamState::IDLE;
 
     state_ = State::STARTING;
     run_ = true;
@@ -214,9 +215,17 @@ void RtlDev::worker_(RtlDev &self) {
             std::cerr << "Device " << self.serial_ << " opended successfully\n";
             rtlsdr_reset_buffer((rtlsdr_dev_t*)self.dev_);
             self.state_ = State::RUNNING;
+            self.block_info_.stream_state = StreamState::STREAMING;
             rtlsdr_read_async((rtlsdr_dev_t*)self.dev_, RtlDev::data_cb_, &self, RTL_NUM_IQ_BUFFERS, rtl_iq_buff_size);
             rtlsdr_close((rtlsdr_dev_t*)self.dev_);
             self.dev_ = nullptr;
+
+            // Send a last data callback to indicate that we have stopped
+            // streaming
+            self.block_info_.stream_state = StreamState::IDLE;
+            self.block_info_.ts = std::chrono::system_clock::now();
+            self.data(self.iq_buffer_, 0, self.user_data_, self.block_info_);
+
             if (self.run_) {
                 std::cerr << "Device " << self.serial_ << " disappeared. Trying to reopen...\n";
                 self.state_ = State::RESTARTING;

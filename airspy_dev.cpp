@@ -117,7 +117,8 @@ int AirspyDev::start() {
 
     block_info_.rate = fs_;
     block_info_.pwr = 0.0f;
-    block_info_.ts = std::chrono::system_clock::now();;
+    block_info_.ts = std::chrono::system_clock::now();
+    block_info_.stream_state = StreamState::IDLE;
 
     state_ = State::STARTING;
     run_ = true;
@@ -243,21 +244,30 @@ void AirspyDev::worker_(AirspyDev &self) {
         if (ret == ReturnValue::OK) {
             std::cerr << "Device " << self.serial_ << " opended successfully\n";
 
+            self.block_info_.stream_state = StreamState::STREAMING;
             ret = airspy_start_rx((struct airspy_device*)self.dev_,
                                   reinterpret_cast<airspy_sample_block_cb_fn>(AirspyDev::data_cb_),
                                   &self);
             if (ret == AIRSPY_SUCCESS) {
                 self.state_ = State::RUNNING;
                 while (self.run_ && airspy_is_streaming((struct airspy_device*)self.dev_) == AIRSPY_TRUE) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
                 airspy_stop_rx((struct airspy_device*)self.dev_);
+
+                // Send a last data callback to indicate that we have stopped
+                // streaming
+                self.block_info_.stream_state = StreamState::IDLE;
+                self.block_info_.ts = std::chrono::system_clock::now();
+                self.data(self.iq_buffer_, 0, self.user_data_, self.block_info_);
 
                 if (self.run_) {
                     self.state_ = State::RESTARTING;
                     std::cerr << "Device " << self.serial_ << " disappeared. Trying to reopen...\n";
                 }
             }
+
+            self.block_info_.stream_state = StreamState::IDLE;
 
             airspy_close((struct airspy_device*)self.dev_);
             self.dev_ = nullptr;
