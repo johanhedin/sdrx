@@ -336,7 +336,7 @@ int AirspyDev::data_cb_(void *t) {
     }
 
     if (transfer->dropped_samples) {
-        std::cerr << "Warning: " << transfer->dropped_samples << " samples dropped\n";
+        std::cerr << "Warning: " << transfer->dropped_samples << " samples dropped. Your system is probably overloaded.\n";
     }
 
     sample_pos = 0;
