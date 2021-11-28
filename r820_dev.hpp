@@ -159,20 +159,26 @@ public:
     // States for the device manager
     enum class State { IDLE, STARTING, RUNNING, RESTARTING, STOPPING };
 
+    // States for the streaming manager
+    enum class StreamState { IDLE, STREAMING };
+
     // Struct holding information related to one block of IQ output from a device.
     class BlockInfo {
     public:
         using TimeStamp = std::chrono::time_point<std::chrono::system_clock>;
 
+        // Streaming state
+        StreamState stream_state;
+
         // Sample rate used
-        SampleRate rate;
+        SampleRate  rate;
 
         // Average signal power in the block expressed as dBFS relative to a
         // full scale sine wave
-        float      pwr;
+        float       pwr;
 
         // Timestamp (set by the host) for the last sample in the block
-        TimeStamp  ts;
+        TimeStamp   ts;
     };
 
     // Factory function for creating a new instance
