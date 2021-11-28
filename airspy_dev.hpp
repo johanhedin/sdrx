@@ -26,7 +26,7 @@
 #include <thread>
 #include <vector>
 
-#include "common_dev.hpp"
+#include "r820_dev.hpp"
 
 
 class AirspyDev : public R820Dev {

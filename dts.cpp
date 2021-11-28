@@ -31,9 +31,7 @@
 #include <popt.h>
 
 // Local includes
-#include "common_dev.hpp"
-#include "rtl_dev.hpp"
-#include "airspy_dev.hpp"
+#include "r820_dev.hpp"
 
 static std::string serial;
 static bool        run = true;

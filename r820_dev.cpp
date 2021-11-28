@@ -20,7 +20,7 @@
 
 #include <cassert>
 
-#include "common_dev.hpp"
+#include "r820_dev.hpp"
 #include "rtl_dev.hpp"
 #include "airspy_dev.hpp"
 

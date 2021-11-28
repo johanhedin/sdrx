@@ -56,7 +56,7 @@
 #include "crb.hpp"
 #include "fir.hpp"
 #include "agc.hpp"
-#include "common_dev.hpp"
+#include "r820_dev.hpp"
 
 // Down sampling filters
 #include "filters/fs_00960_08bit_ds_to_00016.hpp"
