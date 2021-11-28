@@ -24,6 +24,58 @@
 #include <vector>
 #include <cmath>
 
+// FIR filter that can be used for real samples or complex (IQ)
+template<typename T = float>
+class FIR3 {
+public:
+    FIR3(const std::vector<float> c = std::vector<float>()) : c_(c), c_adj_(c), buf_(c.size(), 0.0f), size_(c.size()), pos_(0), gain_(0.0f) {}
+
+    // Filter data from in and write to out. in and out may point to the same array
+    void filter(const T *in, unsigned in_len, T *out) {
+        for (auto sample = in; sample != in + in_len; ++sample) {
+            // Write in sample to internal ring buffer.
+            buf_[pos_] = *sample;
+
+            // Advance and wrap around if necessary
+            if (++pos_ == size_) pos_ = 0;
+
+            // Calculate out sample
+            *out = 0.0f;   // This will set the out sample to 0 for both fload and std::complex<float>
+            for (unsigned i = 0; i < size_; ++i) {
+                *out += c_adj_[i] * buf_[pos_];
+                if (++pos_ == size_) pos_ = 0;
+            }
+
+            out++;
+        }
+    }
+
+    // Set filter gain (in dB)
+    void setGain(float gain) {
+        gain_ = gain;
+
+        auto c = c_.begin();
+        auto c_adj = c_adj_.begin();
+        while (c != c_.end()) {
+            *c_adj = *c * std::pow(10.0f, gain_/20.0f);;
+            ++c;
+            ++c_adj;
+        }
+    }
+
+    // Get filter gain (in dB)
+    float gain(void) const { return gain_; }
+
+private:
+    std::vector<float>  c_;       // FIR coefficients
+    std::vector<float>  c_adj_;   // FIR coefficients adjusted for gain
+    std::vector<T>      buf_;     // Ring buffer delay line
+    unsigned            size_;    // Buffer/coefficient size
+    unsigned            pos_;     // Position in ring buffer
+    float               gain_;    // Filter gain in dB
+};
+
+
 class FIR {
 public:
     FIR(void) = default;
