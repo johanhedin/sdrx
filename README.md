@@ -124,6 +124,12 @@ understaning of how much you can load your specific system. Especially Airspy
 devices combined with many channels consume quite some processing power at the
 moment.
 
+If the connection to a device is lost while `sdrx` is running, `sdrx` will auto
+reconnect when the device reappears on the USB bus again. So there is no need
+to restart the program just because a device disappears for some reason. Some
+RTL based dongles have rather flimsy USB connectors and a device easily
+disconnects by just moving it sligthly.
+
 
 Output in single channel mode
 ====
