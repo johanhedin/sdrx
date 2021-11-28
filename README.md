@@ -5,7 +5,7 @@ sdrx
 [![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml)
 
 `sdrx` is a software defined narrow band multi channel AM airband receiver that
-uses a R820T(2) based RTL-SDR or a Airspy Mini/R2 dongle as it's hardware part.
+uses a R820T(2)/R860 based RTL-SDR or a Airspy Mini/R2 dongle as it's hardware part.
 It's also a program for experimenting with different SDR implementation aspects
 such as translation, downsampling, filtering, demodulation, interaction between
 clock domains, threading, audio processing and so on. `sdrx` is written in C++17
@@ -19,7 +19,7 @@ the future.
 
 For development, [RTL-SDR Blog V3](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles),
 [Airspy Mini](https://airspy.com/airspy-mini) and [Airspy R2](https://airspy.com/airspy-r2)
-dongles are used. The program only support R820T(2) based dongles and may be
+dongles are used. The program only support R820T(2)/R860 based dongles and may be
 incompatible with other RTL dongles and less powerfull Raspberry Pi models. YMMV.
 
 
