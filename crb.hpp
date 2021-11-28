@@ -48,7 +48,7 @@ template<typename T, typename M>
 class CRB {
 public:
     CRB(size_t chunk_size, size_t num_chunks) : chunks_(num_chunks+1),
-    write_ptr_(0), read_ptr_(0), end_ptr_(num_chunks), capacity_(num_chunks+1),
+    write_ptr_(0), read_ptr_(0), end_ptr_(num_chunks), streaming_(false), capacity_(num_chunks+1),
     acquired_write_len_(0), acquired_read_len_(0) {
         for (auto &c : chunks_) {
             c.buf_ = std::make_unique<T[]>(chunk_size + ALING_LEN * 2);
@@ -60,6 +60,9 @@ public:
     CRB(void) = delete;
     CRB(const CRB&) = delete;
     CRB& operator=(const CRB&) = delete;
+
+    void setStreaming(bool streaming) { streaming_ = streaming; }
+    bool isStreaming(void) { return streaming_; }
 
     bool acquireWrite(T **buf,  M **m) {
         const size_t rd_ptr = read_ptr_.load(std::memory_order_acquire);
@@ -195,6 +198,7 @@ private:
     alignas(64) std::atomic<size_t>  write_ptr_;  // Write pointer
     alignas(64) std::atomic<size_t>  read_ptr_;   // Read pointer
     alignas(64) size_t               end_ptr_;    // Current end of buffer for wrap around. Atomic not needed since write_ptr_ will fence
+    alignas(64) bool                 streaming_;
 
     // Variables used only by the writing thread
     const size_t capacity_;            // Capacity. Const and can not be changed. +1 from requested to accommodate for sentinel
