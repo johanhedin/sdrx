@@ -1,5 +1,5 @@
 //
-// Test for future RTL and Airspy device classes
+// Test for the unified RTL and Airspy device class
 //
 // @author Johan Hedin
 // @date   2021
@@ -19,8 +19,8 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // Standard C includes
-#include <string.h>
 #include <signal.h>
+#include <string.h>
 
 // Standard C++ includes
 #include <thread>
@@ -31,6 +31,7 @@
 #include <popt.h>
 
 // Local includes
+#include "common_dev.hpp"
 #include "rtl_dev.hpp"
 #include "airspy_dev.hpp"
 
@@ -48,7 +49,7 @@ static void signal_handler(int signo) {
 }
 
 
-static void on_data(const iqsample_t *, unsigned data_len, void*, const BlockInfo&) {
+static void on_data(const iqsample_t *, unsigned data_len, void*, const R820Dev::BlockInfo&) {
     if (callback_counter == 0) {
         ts1 = std::chrono::system_clock::now();
     } else {
@@ -146,13 +147,22 @@ Write some more here...)"
 
     // List devices and then exit
     if (list_devices) {
-        std::cout << "Available RTL devices..." << std::endl;
-        std::vector<RtlDev::Info> rtl_devices = RtlDev::list();
-        for (auto &dev : rtl_devices) {
-            std::cout << "    " << dev.index  << ", " << dev.serial;
+        std::cout << "Scanning for available devices...\n";
+        std::vector<std::string> serials;
+        bool duplicate_serials = false;
+
+        std::vector<R820Dev::Info> devices = R820Dev::list();
+        for (auto &dev : devices) {
+            if (std::find(serials.begin(), serials.end(), dev.serial) != serials.end()) {
+                duplicate_serials = true;
+            } else {
+                serials.push_back(dev.serial);
+            }
+
+            std::cout << "    " << dev.serial << " (" <<  R820Dev::typeToStr(dev.type) << ")";
             if (dev.available) {
                 if (dev.supported) {
-                    std::cout << ", sample rates =";
+                    std::cout << ", Sample rates:";
                     bool first = true;
                     for (auto &rate : dev.sample_rates) {
                         if (first) {
@@ -163,7 +173,7 @@ Write some more here...)"
                         }
                     }
 
-                    std::cout << ", description = " << dev.description << std::endl;
+                    std::cout << ". Description: " << dev.description << std::endl;
                 } else {
                     std::cout << " (unsupported tuner and/or crystal fq)\n";
                 }
@@ -172,30 +182,8 @@ Write some more here...)"
             }
         }
 
-        std::cout << "Available Airspy devices...\n";
-        std::vector<AirspyDev::Info> airspy_devices = AirspyDev::list();
-        for (auto &dev : airspy_devices) {
-            std::cout << "    " << dev.index  << ", " << dev.serial;
-            if (dev.available) {
-                if (dev.supported) {
-                    std::cout << ", sample rates =";
-                    bool first = true;
-                    for (auto &rate : dev.sample_rates) {
-                        if (first) {
-                            std::cout << " " << sample_rate_to_str(rate) << "MS/s";
-                            first = false;
-                        } else {
-                            std::cout << ", " << sample_rate_to_str(rate) << "MS/s";
-                        }
-                    }
-
-                    std::cout << ", description = " << dev.description << std::endl;
-                } else {
-                    std::cout << " (unsupported model and/or sample rate)\n";
-                }
-            } else {
-                std::cout << " (in use)\n";
-            }
+        if (duplicate_serials) {
+            std::cout << "Warning: Duplicate serials found. dts may show inconsistent behaviour. Please rename RTL dongles using 'rtl_eeprom -s NEW_SERIAL'.\n";
         }
 
         return 0;
@@ -212,44 +200,67 @@ Write some more here...)"
         sigaction(SIGQUIT, &sigact, NULL);
         sigaction(SIGPIPE, &sigact, NULL);
 
-        if (RtlDev::isPresent(serial)) {
-            std::cout << "Running test with RTL device " << serial << " @ " << sample_rate_to_str(fs) << "MS/s. Press Ctrl-C to stop\n";
-
-            RtlDev *dev = new RtlDev(serial, fs);
-
-            dev->data.connect(sigc::ptr_fun(on_data));
-            dev->setGain();
-            ret = dev->start();
-            if (ret < 0) {
-                std::cerr << "Error: Unable to start device, ret = " << ret << " (" << RtlDev::errStr(ret) << ")\n";
-            } else {
-                while (run) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                }
-                dev->stop();
-            }
-
-            delete dev;
-        } else if (AirspyDev::isPresent(serial)) {
-            std::cout << "Running test with Airspy device " << serial << " @ " << sample_rate_to_str(fs) << "MS/s. Press Ctrl-C to stop\n";
-
-            AirspyDev *dev = new AirspyDev(serial, fs);
-
-            dev->data.connect(sigc::ptr_fun(on_data));
-            ret = dev->start();
-            if (ret < 0) {
-                std::cerr << "Error: Unable to start device, ret = " << ret << " (" << AirspyDev::errStr(ret) << ")\n";
-            } else {
-                while (run) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                }
-                dev->stop();
-            }
-
-            delete dev;
-        } else {
-            std::cerr << "Error: No device with serial " << serial << " found.\n";
+        R820Dev::Type type = R820Dev::getType(serial);
+        if (type == R820Dev::Type::UNKNOWN) {
+            std::cerr << "Error: Device " << serial << " is not present.\n";
+            return 1;
         }
+
+        // Default to sane sample rate if not specified
+        if (fs == SampleRate::UNSPECIFIED) {
+            switch (type) {
+                case R820Dev::Type::RTL:
+                    fs = SampleRate::FS01440;
+                    break;
+                case R820Dev::Type::AIRSPY:
+                    fs = SampleRate::FS06000;
+                    break;
+                default:
+                    fs = SampleRate::UNSPECIFIED;
+                    break;
+            }
+        }
+
+        R820Dev *device = R820Dev::create(type, serial, fs);
+        if (device == nullptr) {
+            std::cerr << "Error: Unable to create instance for device " << serial << ".\n";
+            return 1;
+        }
+
+        std::cout << "Running test with " << R820Dev::typeToStr(type) << " device " << serial << " @ " << sample_rate_to_str(fs) << "MS/s. Press Ctrl-C to stop\n";
+
+        device->data.connect(sigc::ptr_fun(on_data));
+
+        ret = device->setGain();
+        if (ret < 0) {
+            std::cerr << "Error: Unable to set gain, ret = " << ret << " (" << R820Dev::retToStr(ret) << ")\n";
+            goto quit;
+        }
+
+        ret = device->setFq();
+        if (ret < 0) {
+            std::cerr << "Error: Unable to set frequency, ret = " << ret << " (" << R820Dev::retToStr(ret) << ")\n";
+            goto quit;
+        }
+
+        ret = device->start();
+        if (ret < 0) {
+            std::cerr << "Error: Unable to start device, ret = " << ret << " (" << R820Dev::retToStr(ret) << ")\n";
+            goto quit;
+        }
+
+        // Sleep until Ctrl-C
+        while (run) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+
+        ret = device->stop();
+        if (ret < 0) {
+            std::cerr << "Error: Unable to stop device, ret = " << ret << " (" << R820Dev::retToStr(ret) << ")\n";
+        }
+
+quit:
+        delete device;
 
         return 0;
     }

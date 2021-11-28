@@ -56,7 +56,17 @@
 #include "crb.hpp"
 #include "fir.hpp"
 #include "agc.hpp"
-#include "rtl_dev.hpp"
+#include "common_dev.hpp"
+
+// Down sampling filters
+#include "filters/fs_00960_08bit_ds_to_00016.hpp"
+#include "filters/fs_01200_08bit_ds_to_00016.hpp"
+#include "filters/fs_01440_08bit_ds_to_00016.hpp"
+#include "filters/fs_02560_08bit_ds_to_00016.hpp"
+#include "filters/fs_06000_12bit_ds_to_00016.hpp"
+
+// Channelization filers
+#include "filters/fs_00016_16bit_ch.hpp"
 
 
 // Usefull notes:
@@ -144,23 +154,24 @@ public:
     sql_state_t    sql_state;      // Squelch state (open/closed)
     sql_state_t    sql_state_prev; // Previous squelch state (open/closed)
     int            pos;            // Audio position. 0 == center
+
+    FIR3<iqsample_t> ch_flt;         // Channelization filter just before demodulation
 };
 
 
 // Datatype to hold sdrx global settings
 class Settings {
 public:
-    Settings(void) : fq_corr(0), rf_gain(30.0f), lf_gain(0.0f), sql_level(9.0f),
-     audio_device("default"), tuner_fq(0), rate(SampleRate::FS01200) {}
-    std::string          rtl_device_str;
-    int                  fq_corr;      // Frequency correction in ppm
-    float                rf_gain;      // RF gain in dB
-    float                lf_gain;      // LF (audio gain) in dB
-    float                sql_level;    // Squelch level in dB (over noise level)
-    std::string          audio_device; // ALSA device to use for playback
-    uint32_t             tuner_fq;     // Tuner frequency
-    std::vector<Channel> channels;     // String representations of the channels to listen to
-    SampleRate           rate;         // Sample rate from command line
+    R820Dev::Type        device_type = R820Dev::Type::UNKNOWN; // Type of device
+    std::string          device_serial;                        // Serial of device
+    SampleRate           rate = SampleRate::UNSPECIFIED;       // Sample rate from command line
+    int                  fq_corr = 0;                          // Frequency correction in ppm for RTL devices
+    float                rf_gain = 30.0f;                      // RF gain in dB
+    uint32_t             tuner_fq = 0;                         // Tuner frequency
+    float                sql_level = 9.0f;                     // Squelch level in dB (over noise level)
+    std::vector<Channel> channels;                             // String representations of the channels to listen to
+    std::string          audio_device = "default";             // ALSA device to use for playback
+    float                lf_gain = 0.0f;                       // Audio volume in dB
 };
 
 
@@ -198,7 +209,7 @@ static void signal_handler(int signo) {
 
 
 // Called by the new Device class
-static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, const BlockInfo &block_info) {
+static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, const R820Dev::BlockInfo &block_info) {
     struct InputState    &ctx = *reinterpret_cast<struct InputState*>(user_data);
     iqsample_t           *iq_buf_ptr = nullptr;
     std::vector<Channel> &channels = ctx.settings.channels;
@@ -222,11 +233,11 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
         *metadata_ptr = meta;
 
         if (!ctx.rb_ptr->commitWrite()) {
-            std::cerr << "Error: Unable to commit ring buffer write" << std::endl;
+            std::cerr << "Error: Unable to commit ring buffer write." << std::endl;
         }
     } else {
         // Overrun
-        std::cerr << "Warning: Unable to write samples. Ring buffer full" << std::endl;
+        std::cerr << "Warning: Ring buffer full. Unable to write samples." << std::endl;
     }
 }
 
@@ -504,7 +515,7 @@ static void alsa_write_cb(OutputState &ctx) {
         // Write to sound card
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.audio_buffer_s16, CH_IQ_BUF_SIZE);
         if (ret < 0) {
-            std::cerr << "Error: Failed to write audio samples: " << snd_strerror(ret) << std::endl;
+            std::cerr << "Error: Failed to play audio samples: " << snd_strerror(ret) << ".\n";
             snd_pcm_prepare(ctx.pcm_handle);
         } else {
             //std::cout << "    frames written real: " << ret << std::endl;
@@ -514,11 +525,11 @@ static void alsa_write_cb(OutputState &ctx) {
         // Underrrun
         if (ctx.samples_received) {
             // Only write warning after we have started receiving samples
-            std::cerr << "Warning: Unable to read samples. Ring buffer empty. Writing " << CH_IQ_BUF_SIZE << " samples of silence" << std::endl;
+            std::cerr << "Warning: Ring buffer empty. Unable to read samples. Playing " << CH_IQ_BUF_SIZE << " samples of silence.\n";
         }
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, CH_IQ_BUF_SIZE);
         if (ret < 0) {
-            std::cerr << "Error: Failed to write underrun silence: " << snd_strerror(ret) << std::endl;
+            std::cerr << "Error: Failed to play underrun silence: " << snd_strerror(ret) << ".\n";
             snd_pcm_prepare(ctx.pcm_handle);
         }
     }
@@ -671,7 +682,7 @@ static void alsa_worker(struct OutputState &ctx) {
     // Determine how many descriptos we need to poll for the ALSA device
     ret = snd_pcm_poll_descriptors_count(pcm_handle);
     if (ret < 0) {
-        std::cerr << "ALSA error. Unable to get number of poll descriptors: " << snd_strerror(ret) << std::endl;
+        std::cerr << "Error. Unable to get number of ALSA poll descriptors: " << snd_strerror(ret) << std::endl;
         close_alsa_dev(pcm_handle);
         return;
     }
@@ -683,9 +694,9 @@ static void alsa_worker(struct OutputState &ctx) {
     poll_descs = (struct pollfd*)calloc(sizeof(struct pollfd), num_poll_descs);
     ret = snd_pcm_poll_descriptors(pcm_handle, poll_descs, num_poll_descs);
     if (ret < 0) {
-        std::cerr << "ALSA error. Unable to get poll descriptors: " << snd_strerror(ret) << std::endl;
+        std::cerr << "Error. Unable to get ALSA poll descriptors: " << snd_strerror(ret) << std::endl;
     } else if ((unsigned int)ret != num_poll_descs) {
-        std::cerr << "ALSA error. Number of filled descriptors (" << ret << ") differs from requested" << std::endl;
+        std::cerr << "Error. Number of ALSA filled descriptors (" << ret << ") differs from requested" << std::endl;
         num_poll_descs = (unsigned int)ret;
     }
 
@@ -756,7 +767,7 @@ static void alsa_worker(struct OutputState &ctx) {
         // Block until a descriptor indicates activity or 1s of inactivity
         ret = poll(poll_descs, num_poll_descs, 1000000);
         if (ret < 0) {
-            std::cerr << "poll error. ret = " << ret << std::endl;
+            std::cerr << "Error: Unable to poll, ret = " << ret << ".\n";
             continue;
         } else if (ret == 0) {
             // Inactivity timeout. Just poll again
@@ -771,7 +782,7 @@ static void alsa_worker(struct OutputState &ctx) {
                 // logical to ALSA
                 ret = snd_pcm_poll_descriptors_revents(pcm_handle, &poll_descs[desc], 1, &revents);
                 if (ret < 0) {
-                    std::cerr << "ALSA Error revents: " << snd_strerror(ret) << std::endl;
+                    std::cerr << "Error: Unable to do ALSA revents, ret = " << ret << "(" << snd_strerror(ret) << ").\n";
                 } else {
                     if (revents & POLLOUT) {
                         // The device indicate that it wants data to output
@@ -889,6 +900,49 @@ static int get_audio_pos(unsigned channel_no, unsigned num_channels) {
 }
 
 
+// Print available devices to stdout
+static void list_available_devices(void) {
+    std::cout << "Searching for available devices...\n";
+    std::vector<std::string> serials;
+    bool duplicate_serials = false;
+
+    std::vector<R820Dev::Info> devices = R820Dev::list();
+    for (auto &dev : devices) {
+        if (std::find(serials.begin(), serials.end(), dev.serial) != serials.end()) {
+            duplicate_serials = true;
+        } else {
+            serials.push_back(dev.serial);
+        }
+
+        std::cout << "    " << dev.serial << " (" <<  R820Dev::typeToStr(dev.type) << ")";
+        if (dev.available) {
+            if (dev.supported) {
+                std::cout << ", Sample rates:";
+                bool first = true;
+                for (auto &rate : dev.sample_rates) {
+                    if (first) {
+                        std::cout << " " << sample_rate_to_str(rate) << "MS/s";
+                        first = false;
+                    } else {
+                        std::cout << ", " << sample_rate_to_str(rate) << "MS/s";
+                    }
+                }
+
+                std::cout << ". Description: " << dev.description << std::endl;
+            } else {
+                std::cout << " (unsupported tuner and/or crystal fq)\n";
+            }
+        } else {
+            std::cout << " (in use)\n";
+        }
+    }
+
+    if (duplicate_serials) {
+        std::cout << "Warning: Duplicate serials found. sdrx may show inconsistent behaviour. Please rename RTL dongles using rtl_eeprom -s NEW_SERIAL.\n";
+    }
+}
+
+
 // Parses the command line and fills the settings object. Checks that the
 // options and arguments are within limits. Returns 0 on success or < 0 on
 // parse/value error or if help was requested
@@ -905,12 +959,12 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     struct poptOption options_table[] = {
         { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and quit", nullptr },
         { "device",    'd', POPT_ARG_STRING, &device, 0, "serial for device to use. Defaults to first available if not set", "SERIAL" },
-        { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm. Defaults to 0 if not set", "FQCORR" },
+        { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm for RTL dongles. Defaults to 0 if not set", "FQCORR" },
         { "gain",      'g', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
-        { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume in dB relative to system. Defaults to 0 if not set", "VOLUME" },
+        { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current noise floor. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
-        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate i MS/s (experimental). Defaults to 1.2 if not set", "RATE" },
+        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate i MS/s (experimental). Defaults to 1.44 or 6 if not set", "RATE" },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
@@ -945,7 +999,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
 
         // Collect and free string argument if given
         if (device) {
-            settings.rtl_device_str = device;
+            settings.device_serial = device;
             free(device);
         }
 
@@ -964,14 +1018,15 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
             poptPrintHelp(popt_ctx, stderr, 0);
             std::cerr << R"(
 sdrx is a software defined narrow band AM receiver that is using a R820T(2)
-based RTL-SDR dongle as its hadware backend. It is mainly designed for use in
-the 118 to 138 MHz airband. The program is run from the command line and the
-channels to listen to are given as arguments in the standard six digit
-aeronautical notation. Both the legacy 25kHz channel separation and the new
-8.33kHz channel separation notations are supported, i.e. 118.275 and 118.280
-both mean the frequency 118.275 MHz.
+based RTL-SDR or Airspy Mini/R2 dongle as its hadware backend. It is mainly
+designed for use in the 118 to 138 MHz airband. The program is run from the
+command line and the channels to listen to are given as arguments in the
+standard six digit aeronautical notation. Both the legacy 25kHz channel
+separation and the new 8.33kHz channel separation notations are supported,
+i.e. 118.275 and 118.280 both mean the frequency 118.275 MHz.
 
-If multiple channels are given, they must all fit within 1MHz of bandwidth.
+If multiple channels are given, they must all fit within a bandwidth of 80% of
+the sampling frequency.
 
 The squelch is adaptive with respect to the current, per channel, noise floor
 and the squelch level is given as a SNR value in dB. Audio is played using ALSA.
@@ -1002,6 +1057,7 @@ Use first available device on the system:
             ret = -1;
         } else if(list_devices) {
             // Listing of devices is done in main
+            list_available_devices();
             ret = -2;
         } else {
             if (settings.rf_gain < 0.0f || settings.rf_gain > 50.0f) {
@@ -1010,10 +1066,6 @@ Use first available device on the system:
             }
             if (settings.sql_level < -10.0f || settings.sql_level > 50.0f) {
                 fprintf(stderr, "Error: Invalid SQL level given: %.4f.\n", settings.sql_level);
-                ret = -1;
-            }
-            if (settings.rate == SampleRate::UNSPECIFIED) {
-                std::cerr << "Error: Invalid sample rate given.\n";
                 ret = -1;
             }
 
@@ -1055,16 +1107,7 @@ Use first available device on the system:
                         uint32_t lo_fq = parse_fq(lo_ch, fq_type);
                         uint32_t hi_fq = parse_fq(hi_ch, fq_type);
                         uint32_t mid_fq = lo_fq + (hi_fq - lo_fq) / 2;
-                        uint32_t mid_fq_rounded = (mid_fq / 100000) * 100000;
-
-                        uint32_t MAX_CH_OFFSET = sample_rate_to_uint(settings.rate) * 8 / 20;
-
-                        // Verify that the requested channels fit
-                        if (lo_fq < (mid_fq_rounded - MAX_CH_OFFSET) || hi_fq > (mid_fq_rounded + MAX_CH_OFFSET)) {
-                            std::cerr << "Error: Requested channels does not fit inside available IF bandwidth (" <<
-                                         (MAX_CH_OFFSET*2)/1000 << "kHz).\n";
-                            ret = -1;
-                        }
+                        uint32_t mid_fq_rounded = (mid_fq / 100000) * 100000;  // TODO: Use round instead of floor
 
                         settings.tuner_fq = mid_fq_rounded;
                     }
@@ -1083,6 +1126,30 @@ Use first available device on the system:
     poptFreeContext(popt_ctx);
 
     return ret;
+}
+
+
+// Verify that the requested channels fit inside the bandwidth requested
+static bool verify_requested_bandwidth(const Settings &settings) {
+    std::vector<Channel> tmp_channels = settings.channels;
+
+    std::sort(tmp_channels.begin(), tmp_channels.end());
+    std::string lo_ch = (tmp_channels.begin())->name;
+    std::string hi_ch = (--tmp_channels.end())->name;
+
+    uint32_t lo_fq = parse_fq(lo_ch, AERONAUTICAL_CHANNEL);
+    uint32_t hi_fq = parse_fq(hi_ch, AERONAUTICAL_CHANNEL);
+    uint32_t mid_fq = lo_fq + (hi_fq - lo_fq) / 2;
+    uint32_t mid_fq_rounded = (mid_fq / 100000) * 100000;  // TODO: Use round instead of floor
+
+    uint32_t max_ch_offset = sample_rate_to_uint(settings.rate) * 8 / 20;
+
+    // Verify that the requested channels fit
+    if (lo_fq < (mid_fq_rounded - max_ch_offset) || hi_fq > (mid_fq_rounded + max_ch_offset)) {
+        return false;
+    }
+
+    return true;
 }
 
 
@@ -1120,87 +1187,126 @@ static int channel_to_offset(const std::string &channel, int32_t tuner_fq) {
 }
 
 
+// Get info for first available device on the system
+static R820Dev::Info get_first_avaialble_device(void) {
+    R820Dev::Info              device;
+    std::vector<R820Dev::Info> devices;
+
+    device.type = R820Dev::Type::UNKNOWN;
+
+    devices = R820Dev::list();
+    for (auto &dev : devices) {
+        if (dev.supported && dev.available) {
+            device = dev;
+            break;
+        }
+    }
+
+    return device;
+}
+
+
 int main(int argc, char** argv) {
     int              ret;
     struct sigaction sigact;
     Settings         settings;
-    RtlDev          *dongle = nullptr;
 
-    // Parse command line. Exit if incomplete or if help was requested
+    // Parse command line. Exit if incomplete, help requested or device list requested
     ret = parse_cmd_line(argc, argv, settings);
     if (ret < 0) {
         if (ret == -2) {
             // List devices and exit
-            std::cout << "Available devices:\n";
-            std::vector<RtlDev::Info> rtl_devices = RtlDev::list();
-            std::vector<std::string> serials;
-            bool duplicate_serials = false;
-            for (auto &dev : rtl_devices) {
-                if (std::find(serials.begin(), serials.end(), dev.serial) != serials.end()) {
-                    duplicate_serials = true;
-                } else {
-                    serials.push_back(dev.serial);
-                }
-
-                std::cout << "    " << dev.serial;
-                if (dev.available) {
-                    if (dev.supported) {
-                        std::cout << ", Sample rates:";
-                        bool first = true;
-                        for (auto &rate : dev.sample_rates) {
-                            if (first) {
-                                std::cout << " " << sample_rate_to_str(rate) << "MS/s";
-                                first = false;
-                            } else {
-                                std::cout << ", " << sample_rate_to_str(rate) << "MS/s";
-                            }
-                        }
-
-                        std::cout << ". Description: " << dev.description << std::endl;
-                    } else {
-                        std::cout << " (unsupported tuner and/or crystal fq)\n";
-                    }
-                } else {
-                    std::cout << " (in use)\n";
-                }
-            }
-
-            if (duplicate_serials) {
-                std::cout << "Warning: Duplicate serials found. sdrx may show inconsistent behaviour. Please rename using rtl_eeprom.\n";
-            }
-
             return 0;
         }
 
         return 1;
     }
 
-    // Determine lenght of translator based on Fs. N depends on the IQ
-    // sampling fq. Fs * z / 8333.33333 must be an even number
+    if (settings.device_serial == "") {
+        // No serial given on command line. Find out serial for first available device
+        std::cout << "Searching for first available device...\n";
+        R820Dev::Info info = get_first_avaialble_device();
+
+        if (info.type == R820Dev::Type::UNKNOWN) {
+            std::cerr << "Error: No device available.\n";
+            return 1;
+        }
+
+        settings.device_serial = info.serial;
+
+        std::cout << "Found device " << settings.device_serial << " (" << R820Dev::typeToStr(info.type) << ")\n";
+
+        if (settings.rate == SampleRate::UNSPECIFIED) {
+            // Sample rate not given on command line (or given but invalid).
+            // Use default for the device choosen
+            settings.rate = info.default_sample_rate;
+        }
+    }
+
+    if (settings.rate == SampleRate::UNSPECIFIED) {
+        std::cerr << "Error: Invalid sample rate given.\n";
+        return 1;
+    }
+
+    if (!verify_requested_bandwidth(settings)) {
+        uint32_t available_bw = (sample_rate_to_uint(settings.rate) * 8 / 10) / 1000;
+        std::cerr << "Error: Requested channels does not fit inside available bandwidth (" << available_bw << "kHz).\n";
+        return 1;
+    }
+
+    settings.device_type = R820Dev::getType(settings.device_serial);
+    if (settings.device_type == R820Dev::Type::UNKNOWN) {
+        std::cerr << "Error: Device " << settings.device_serial << " is not available.\n";
+    }
+
+    // Determine lenght of translator based on Fs and set up down sampling
+    // filters. N and z depends on the IQ sampling fq:
     //
-    // Fs(Ms/s)    N
-    // ---------------
-    //  0.96       576
-    //  1.2        144
-    //  1.44      1728
-    //  1.6        192
-    //  1.92      1152
-    //  2.4        288
-    //  2.56      1536 (?)
-    //  6.0        720
-    // 10.0       1200
+    //     N = Fs * z / 8333.33333
     //
-    // Note: If Z != 1, ch_offset must be multiplied with Z also.
+    // N must be an even number.
+    //
+    // Fs(Ms/s)    N      z
+    // --------------------
+    //  0.96       576    5
+    //  1.2        144    1
+    //  1.44      1728   10
+    //  1.6        192    1
+    //  1.92      1152    5
+    //  2.4        288    1
+    //  2.56      1536    5
+    //  6.0        720    1
+    // 10.0       1200    1
+    //
+    // Note: If z != 1, ch_offset must be multiplied with z also.
     int N;
     int z;
     std::vector<MSD::Stage> stages;
 
     switch (settings.rate) {
+        case SampleRate::FS00960:
+            N =  576; z = 5;
+            stages = std::vector<MSD::Stage>{
+                { 3, fs_00960_08bit_ds_lpf1_00960_to_00320 },
+                { 4, fs_00960_08bit_ds_lpf2_00320_to_00080 },
+                { 5, fs_00960_08bit_ds_lpf3_00080_to_00016 }
+            };
+            break;
         case SampleRate::FS01200:
             N =  144; z = 1;
-            stages = std::vector<MSD::Stage>{{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }}; break;
+            stages = std::vector<MSD::Stage>{
+                { 3, fs_01200_08bit_ds_lpf1_01200_to_00400 },
+                { 5, fs_01200_08bit_ds_lpf2_00400_to_00080 },
+                { 5, fs_01200_08bit_ds_lpf3_00080_to_00016 }
+            };
+            break;
         case SampleRate::FS01440:
             N = 1728; z = 10;
+            stages = std::vector<MSD::Stage>{
+                { 3, fs_01440_08bit_ds_lpf1_01440_to_00400 },
+                { 6, fs_01440_08bit_ds_lpf2_00480_to_00080 },
+                { 5, fs_01440_08bit_ds_lpf3_00080_to_00016 }
+            };
             break;
         case SampleRate::FS01600:
             N =  192; z = 1;
@@ -1210,19 +1316,31 @@ int main(int argc, char** argv) {
             break;
         case SampleRate::FS02400:
             N =  288; z = 1;
-            stages = std::vector<MSD::Stage>{{ 2, lp_ds_2400k_1200k },{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }}; break;
+            stages = std::vector<MSD::Stage>{{ 2, lp_ds_2400k_1200k },{ 3, lp_ds_1200k_400k },{ 5, lp_ds_400k_80k },{ 5, lp_ds_80k_16k }};
+            break;
         case SampleRate::FS02500:
             N = 300; z = 1;
             break;
         case SampleRate::FS02560:
-            N = 1536;
-            z = 5;
-            stages = std::vector<MSD::Stage>{{ 2, lp_ds_2560k_1280k },{ 4, lp_ds_1280k_320k },{ 4, lp_ds_320k_80k },{ 5, lp_ds_80k_16k }}; break;
+            N = 1536; z = 5;
+            stages = std::vector<MSD::Stage>{
+                { 4, fs_02560_08bit_ds_lpf1_02560_to_00640 },
+                { 4, fs_02560_08bit_ds_lpf2_00640_to_00160 },
+                { 5, fs_02560_08bit_ds_lpf3_00160_to_00320 },
+                { 2, fs_02560_08bit_ds_lpf4_00320_to_00160 }
+            };
+            break;
         case SampleRate::FS03000:
             N = 360; z = 1;
             break;
         case SampleRate::FS06000:
             N = 720; z = 1;
+            stages = std::vector<MSD::Stage>{
+                { 3, fs_06000_12bit_ds_lpf1_06000_to_02000 },
+                { 5, fs_06000_12bit_ds_lpf2_02000_to_00400 },
+                { 5, fs_06000_12bit_ds_lpf3_00400_to_00800 },
+                { 5, fs_06000_12bit_ds_lpf4_00080_to_00016 }
+            };
             break;
         case SampleRate::FS10000:
             N = 1200; z = 1;
@@ -1233,7 +1351,7 @@ int main(int argc, char** argv) {
     }
 
     if (N == 0 || stages.empty()) {
-        std::cerr << "Error: Sample rate " << sample_rate_to_str(settings.rate) << " MS/s is not supported yet.\n";
+        std::cerr << "Error: Sample rate " << sample_rate_to_str(settings.rate) << " MS/s is not supported yet (work in progress).\n";
         return 1;
     }
 
@@ -1252,6 +1370,8 @@ int main(int argc, char** argv) {
 
         ch.msd = MSD(translator, stages);
 
+        ch.ch_flt = FIR3<iqsample_t>(fs_00016_16bit_ch_amdemod_lpf1);
+
         ch.agc.setReference(1.0f);
         ch.agc.setAttack(1.0f);
         ch.agc.setDecay(0.01f);
@@ -1261,16 +1381,18 @@ int main(int argc, char** argv) {
     }
 
     // Print settings
-    std::cout << "The folowing settings were given:" << std::endl;
-    std::cout << "    Device: " << (settings.rtl_device_str.empty() ? "(first available)":settings.rtl_device_str) << std::endl;
-    std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
-    std::cout << "    Sampling frequency: " << sample_rate_to_str(settings.rate) << "MS/s" << std::endl;
-    std::cout << "    RF gain: " << settings.rf_gain << "dB" << std::endl;
-    std::cout << "    Volume: " << settings.lf_gain << "dB" << std::endl;
-    std::cout << "    Squelch level: " << settings.sql_level << "dB" << std::endl;
+    std::cout << "The folowing settings are being used:\n";
+    std::cout << "    Device: " << settings.device_serial << " (" << R820Dev::typeToStr(settings.device_type) << ")\n";
+    if (settings.device_type == R820Dev::Type::RTL) {
+        std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
+    }
+    std::cout << "    Sampling frequency: " << sample_rate_to_str(settings.rate) << "MS/s\n";
+    std::cout << "    RF gain: " << settings.rf_gain << "dB\n";
+    std::cout << "    Volume: " << settings.lf_gain << "dB\n";
+    std::cout << "    Squelch level: " << settings.sql_level << "dB\n";
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
-    std::cout << "    Tuner center frequency: " << settings.tuner_fq/1000 << " kHz" << std::endl;
-    std::cout << "    Bandwidth: +/-" << (sample_rate_to_uint(settings.rate) * 8 / 20)/1000 << " kHz relative to center frequency" << std::endl;
+    std::cout << "    Tuner center frequency: " << settings.tuner_fq/1000 << " kHz\n";
+    std::cout << "    Available bandwidth: +/-" << (sample_rate_to_uint(settings.rate) * 8 / 20)/1000 << " kHz relative to center frequency\n";
     std::cout << "    Channels:";
     for (auto &ch : settings.channels) std::cout << " " << ch.name << "(" << ch.pos << ")";
     std::cout << std::endl;
@@ -1281,12 +1403,20 @@ int main(int argc, char** argv) {
     input_state.settings   = settings;
     input_state.rb_ptr     = &iq_rb;
 
-    dongle = new RtlDev(settings.rtl_device_str, settings.rate);
-    dongle->setUserData((void*)&input_state);
-    dongle->setFq(settings.tuner_fq);
-    dongle->setGain(settings.rf_gain);
-    dongle->data.connect(sigc::ptr_fun(data_cb));
+    // Create tuner class instance
+    R820Dev *device = R820Dev::create(settings.device_type, settings.device_serial, settings.rate, settings.fq_corr);
+    if (device == nullptr) {
+        std::cerr << "Error: Unable to create device instance.\n";
+        return 1;
+    }
 
+    // Set up the instance
+    device->setUserData((void*)&input_state);
+    device->setFq(settings.tuner_fq);
+    device->setGain(settings.rf_gain);
+    device->data.connect(sigc::ptr_fun(data_cb));
+
+    // Install signal handler
     sigact.sa_handler = signal_handler;
     sigemptyset(&sigact.sa_mask);
     sigact.sa_flags = 0;
@@ -1309,18 +1439,24 @@ int main(int argc, char** argv) {
     }
     usleep(1500000);
 
-    ret = dongle->start();
-    if (ret == 0) {
-        while (run) {
-            sleep(1);
-        }
-    } else {
-        std::cerr << "Error: Unable to start dongle, ret = " << ret << "(" << RtlDev::errStr(ret) << ")\n";
+    ret = device->start();
+    if (ret < 0) {
+        std::cerr << "Error: Unable to start device, ret = " << ret << " (" << R820Dev::retToStr(ret) << ").\n";
+        goto quit;
     }
 
-    dongle->stop();
+    // Sleep until Crtl-C is pressed
+    while (run) {
+        sleep(1);
+    }
 
-    delete dongle;
+    ret = device->stop();
+    if (ret < 0) {
+        std::cerr << "Error: Unable to stop device, ret = " << ret << " (" << R820Dev::retToStr(ret) << ").\n";
+    }
+
+quit:
+    delete device;
 
     alsa_thread.join();
 

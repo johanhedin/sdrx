@@ -26,43 +26,12 @@
 #include <thread>
 #include <vector>
 
-#include <sigc++/sigc++.h>
-
 #include "common_dev.hpp"
-#include "iqsample.hpp"
 
 
-enum rtl_dev_return_values {
-    RTLDEV_OK                    =   0,
-    RTLDEV_ERROR                 =  -1,
-    RTLDEV_DEVICE_NOT_FOUND      =  -2,
-    RTLDEV_UNABLE_TO_OPEN_DEVICE =  -3,
-    RTLDEV_INVALID_SAMPLE_RATE   =  -4,
-    RTLDEV_INVALID_FQ            =  -5,
-    RTLDEV_INVALID_GAIN          =  -6,
-    RTLDEV_INVALID_SERIAL        =  -7,
-    RTLDEV_ALREADY_STARTED       =  -8,
-    RTLDEV_ALREADY_STOPPED       =  -9
-};
-
-
-class RtlDev {
+class RtlDev : public R820Dev {
 public:
-    enum class State { IDLE, STARTING, RUNNING, RESTARTING, STOPPING };
-
-    struct Info {
-        unsigned                index;
-        std::string             serial;
-        bool                    available;
-        bool                    supported;
-        std::string             description;
-        std::vector<SampleRate> sample_rates;
-    };
-
     RtlDev(const std::string &serial, SampleRate fs, int xtal_corr = 0);
-    ~RtlDev(void);
-
-    void setUserData(void *user_data = nullptr) { user_data_ = user_data; }
 
     // Start up the instance asynchronous. This function will return
     // immediately and the internal thread will start looking for the
@@ -77,33 +46,17 @@ public:
     int setMixGain(unsigned idx);
     int setVgaGain(unsigned idx);
 
-    // Data signal. One block represents 32ms of data irrespectively of the
-    // sampling frequency. Data len will ofcourse vary. 32ms bocks equals
-    // a callback frequency of 31.25Hz
-    sigc::signal<void(const iqsample_t*, unsigned, void*, const BlockInfo&)> data;
-
-    State getState(void) { return state_; }
-
     // Stop the instance. This function will block until the worker thread
     // is stopped and the RTL device is fully closed
     int stop(void);
 
     // Get a list of available devices
-    static std::vector<RtlDev::Info> list(void);
+    static std::vector<R820Dev::Info> list(void);
 
     // Check if a given device is present on the USB bus
     static bool isPresent(const std::string &serial);
 
-    // Convert error code to string
-    static std::string errStr(int ret);
-
-    // Instance of this class is not intended to be copied in any way
-    RtlDev(const RtlDev&) = delete;
-    RtlDev& operator=(const RtlDev&) = delete;
-
 private:
-    std::string    serial_;
-    SampleRate     fs_;
     int            xtal_corr_;
     uint32_t       fq_;
     float          gain_;
@@ -111,15 +64,11 @@ private:
     unsigned       mix_gain_idx_;
     unsigned       vga_gain_idx_;
     void          *dev_;
-    bool           run_;
     std::thread    worker_thread_;
     int            open_(void);
     static void    worker_(RtlDev &self);
     static void    data_cb_(unsigned char *data, uint32_t data_len, void *ctx);
-    State          state_;
     iqsample_t     iq_buffer_[81920];   // Largest buffer for 2.56MS/s
-    void          *user_data_;
-    BlockInfo      block_info_;
 };
 
 #endif // RTL_DEV_HPP

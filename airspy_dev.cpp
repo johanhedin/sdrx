@@ -18,8 +18,6 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-#include <cassert>
-#include <chrono>
 #include <iostream>
 #include <algorithm>
 #include <cinttypes>
@@ -64,7 +62,7 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string& serial
         std::string tmp_str = firmware_str;
 
         airspy_get_samplerates(dev, &num_samplerates, 0);
-        sample_rates = (uint32_t*)malloc(num_samplerates * sizeof(uint32_t));
+        sample_rates = (uint32_t*)malloc(num_samplerates * sizeof(uint32_t));     // TODO: Change from malloc to new (and delete)
         airspy_get_samplerates(dev, sample_rates, num_samplerates);
 
         if (num_samplerates > 0) {
@@ -97,9 +95,9 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string& serial
 
 
 AirspyDev::AirspyDev(const std::string &serial, SampleRate fs)
-: serial_(serial), fs_(fs), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
+: R820Dev(serial, fs), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
   lna_gain_idx_(DEFAULT_LNA_GAIN_IDX), mix_gain_idx_(DEFAULT_MIX_GAIN_IDX), vga_gain_idx_(DEFAULT_VGA_GAIN_IDX),
-  dev_(nullptr), run_(false), state_(State::IDLE), part_pos_(0), block_size_(0), iq_pos_(0), user_data_(nullptr) {
+  dev_(nullptr), part_pos_(0), block_size_(0), iq_pos_(0) {
       if (sample_rate_to_uint(fs_) * 4 % 125) {
           std::cerr << "Error: Requested sample rate " << sample_rate_to_str(fs_) << "MS/s is not evenly divisible by 31.25\n";
       }
@@ -108,19 +106,14 @@ AirspyDev::AirspyDev(const std::string &serial, SampleRate fs)
 }
 
 
-AirspyDev::~AirspyDev(void) {
-    assert(run_ == false);
-}
-
-
 int AirspyDev::start() {
     std::vector<SampleRate> supported_rates;
 
-    if (run_) return AIRSPYDEV_ALREADY_STARTED;
+    if (run_) return ReturnValue::ALREADY_STARTED;
 
     supported_rates = get_sample_rates(serial_);
     if (std::find(supported_rates.begin(), supported_rates.end(), fs_) == supported_rates.end())
-        return AIRSPYDEV_INVALID_SAMPLE_RATE;
+        return ReturnValue::INVALID_SAMPLE_RATE;
 
     block_info_.rate = fs_;
     block_info_.pwr = 0.0f;
@@ -130,34 +123,34 @@ int AirspyDev::start() {
     run_ = true;
     worker_thread_ = std::thread(worker_, std::ref(*this));
 
-    return AIRSPYDEV_OK;
+    return ReturnValue::OK;
 }
 
 
 int AirspyDev::stop() {
-    if (!run_) return AIRSPYDEV_ALREADY_STOPPED;
+    if (!run_) return ReturnValue::ALREADY_STOPPED;
 
     run_ = false;
     state_ = State::STOPPING;
     worker_thread_.join();
 
-    return AIRSPYDEV_OK;
+    return ReturnValue::OK;
 }
 
 
 int AirspyDev::setFq(uint32_t fq) {
     int ret;
 
-    if (fq < MIN_FQ || fq > MAX_FQ) return AIRSPYDEV_INVALID_FQ;
+    if (fq < MIN_FQ || fq > MAX_FQ) return ReturnValue::INVALID_FQ;
 
     fq_ = fq;
 
     if (dev_ && state_ == State::RUNNING) {
         ret = airspy_set_freq((struct airspy_device*)dev_, fq_);
-        if (ret != AIRSPY_SUCCESS) return AIRSPYDEV_ERROR;
+        if (ret != AIRSPY_SUCCESS) return ReturnValue::ERROR;
     }
 
-    return AIRSPYDEV_OK;
+    return ReturnValue::OK;
 }
 
 
@@ -168,7 +161,7 @@ int AirspyDev::setGain(float gain) {
     unsigned vga_gain_idx = 12;
     float    tmp_gain = 0.0f;
 
-    if (gain < MIN_GAIN || gain > MAX_GAIN) return AIRSPYDEV_INVALID_GAIN;
+    if (gain < MIN_GAIN || gain > MAX_GAIN) return ReturnValue::INVALID_GAIN;
 
     gain_ = gain;
 
@@ -184,63 +177,61 @@ int AirspyDev::setGain(float gain) {
     mix_gain_idx_ = mix_gain_idx;
     vga_gain_idx_ = vga_gain_idx;
 
-    std::cout << "gain = " << gain_ << " -> lna = " << lna_gain_idx_ << ", mix = " << mix_gain_idx_ << ", vga = " << vga_gain_idx_ << std::endl;
-
     ret = setLnaGain(lna_gain_idx_);
-    if (ret != AIRSPYDEV_OK) return AIRSPYDEV_ERROR;
+    if (ret != ReturnValue::OK) return ret;
 
     ret = setMixGain(mix_gain_idx_);
-    if (ret != AIRSPYDEV_OK) return AIRSPYDEV_ERROR;
+    if (ret != ReturnValue::OK) return ret;
 
     ret = setVgaGain(vga_gain_idx_);
-    if (ret != AIRSPYDEV_OK) return AIRSPYDEV_ERROR;
+    if (ret != ReturnValue::OK) return ret;
 
-    return AIRSPYDEV_OK;
+    return ReturnValue::OK;
 }
 
 int AirspyDev::setLnaGain(unsigned idx) {
     int ret;
 
-    if (idx > 15) return AIRSPYDEV_INVALID_GAIN;
+    if (idx > 15) return ReturnValue::INVALID_GAIN;
 
     lna_gain_idx_ = idx;
 
     if (dev_ && state_ == State::RUNNING) {
         ret = airspy_set_lna_gain((struct airspy_device*)dev_, (uint8_t)lna_gain_idx_);
-        if (ret != AIRSPY_SUCCESS) return AIRSPYDEV_ERROR;
+        if (ret != AIRSPY_SUCCESS) return ReturnValue::ERROR;
     }
 
-    return AIRSPYDEV_OK;
+    return ReturnValue::OK;
 }
 
 int AirspyDev::setMixGain(unsigned idx) {
     int ret;
 
-    if (idx > 15) return AIRSPYDEV_INVALID_GAIN;
+    if (idx > 15) return ReturnValue::INVALID_GAIN;
 
     mix_gain_idx_ = idx;
 
     if (dev_ && state_ == State::RUNNING) {
         ret = airspy_set_mixer_gain((struct airspy_device*)dev_, (uint8_t)mix_gain_idx_);
-        if (ret != AIRSPY_SUCCESS) return AIRSPYDEV_ERROR;
+        if (ret != AIRSPY_SUCCESS) return ReturnValue::ERROR;
     }
 
-    return AIRSPYDEV_OK;
+    return ReturnValue::OK;
 }
 
 int AirspyDev::setVgaGain(unsigned idx) {
     int ret;
 
-    if (idx > 15) return AIRSPYDEV_INVALID_GAIN;
+    if (idx > 15) return ReturnValue::INVALID_GAIN;
 
     vga_gain_idx_ = idx;
 
     if (dev_ && state_ == State::RUNNING) {
         ret = airspy_set_vga_gain((struct airspy_device*)dev_, (uint8_t)vga_gain_idx_);
-        if (ret != AIRSPY_SUCCESS) return AIRSPYDEV_ERROR;
+        if (ret != AIRSPY_SUCCESS) return ReturnValue::ERROR;
     }
 
-    return AIRSPYDEV_OK;
+    return ReturnValue::OK;
 }
 
 
@@ -249,7 +240,7 @@ void AirspyDev::worker_(AirspyDev &self) {
 
     while (self.run_) {
         ret = self.open_();
-        if (ret == AIRSPYDEV_OK) {
+        if (ret == ReturnValue::OK) {
             std::cerr << "Device " << self.serial_ << " opended successfully\n";
 
             ret = airspy_start_rx((struct airspy_device*)self.dev_,
@@ -288,11 +279,11 @@ int AirspyDev::open_(void) {
     // If serial string is set, use it. Otherwise defaults to "first device" (serial == 0)
     if (serial_.length() != 0) {
         ret = sscanf(serial_.c_str(), "%" SCNx64, &serial);
-        if (ret != 1) return AIRSPYDEV_INVALID_SERIAL;
+        if (ret != 1) return ReturnValue::INVALID_SERIAL;
     }
 
     ret = airspy_open_sn((struct airspy_device**)&dev_, serial);
-    if (ret != AIRSPY_SUCCESS) return AIRSPYDEV_UNABLE_TO_OPEN_DEVICE;
+    if (ret != AIRSPY_SUCCESS) return ReturnValue::UNABLE_TO_OPEN_DEVICE;
 
     ret = airspy_set_sample_type((struct airspy_device*)dev_, AIRSPY_SAMPLE_FLOAT32_IQ);
     //ret = airspy_set_sample_type((struct airspy_device*)dev_, AIRSPY_SAMPLE_RAW);
@@ -313,13 +304,13 @@ int AirspyDev::open_(void) {
     ret = airspy_set_vga_gain((struct airspy_device*)dev_, (uint8_t)vga_gain_idx_);
     if (ret != AIRSPY_SUCCESS) goto error;
 
-    return AIRSPYDEV_OK;
+    return ReturnValue::OK;
 
 error:
     airspy_close((struct airspy_device*)dev_);
     dev_ = nullptr;
 
-    return AIRSPYDEV_ERROR;
+    return ReturnValue::ERROR;
 }
 
 
@@ -386,22 +377,7 @@ int AirspyDev::data_cb_(void *t) {
 // Static functions below
 //
 
-std::string AirspyDev::errStr(int ret) {
-    switch (ret) {
-        case AIRSPYDEV_OK:                    return "Ok";
-        case AIRSPYDEV_ERROR:                 return "Error";
-        case AIRSPYDEV_NO_DEVICE_FOUND:       return "No device found";
-        case AIRSPYDEV_UNABLE_TO_OPEN_DEVICE: return "Unable to open device";
-        case AIRSPYDEV_INVALID_FQ:            return "Invalid frequency";
-        case AIRSPYDEV_INVALID_GAIN:          return "Invalid gain";
-        case AIRSPYDEV_INVALID_SERIAL:        return "Invalid serial number format";
-        case AIRSPYDEV_INVALID_SAMPLE_RATE:   return "Invalid sample rate";
-        default:                              return "Unknown";
-    }
-}
-
-
-std::vector<AirspyDev::Info> AirspyDev::list(void) {
+std::vector<R820Dev::Info> AirspyDev::list(void) {
 #define MAX_NUM_DEVICES   32
 #define MAX_FWSTR_LEN     255
 #define MAX_SERSTR_LEN    255
@@ -418,10 +394,10 @@ std::vector<AirspyDev::Info> AirspyDev::list(void) {
     num_devices = airspy_list_devices(serials, MAX_NUM_DEVICES);
     if (num_devices > 0 && num_devices <= MAX_NUM_DEVICES) {
         for (int d = 0; d < num_devices; ++d) {
-            Info info;
-
             snprintf(serial_str, MAX_SERSTR_LEN, "%" PRIX64, serials[d]);
 
+            Info info;
+            info.type = Type::AIRSPY;
             info.serial = serial_str;
             info.index = (unsigned)d;
             info.available = false;
@@ -457,6 +433,8 @@ std::vector<AirspyDev::Info> AirspyDev::list(void) {
                             // AirSpy R2 supports 6MS/s as alternative Fs
                             info.sample_rates.push_back(SampleRate::FS06000);
                         }
+
+                        info.default_sample_rate = SampleRate::FS06000;
                     }
 
                     std::sort(info.sample_rates.begin(), info.sample_rates.end());

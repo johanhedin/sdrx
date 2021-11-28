@@ -26,43 +26,12 @@
 #include <thread>
 #include <vector>
 
-#include <sigc++/sigc++.h>
-
 #include "common_dev.hpp"
-#include "iqsample.hpp"
 
 
-enum airspy_dev_return_values {
-    AIRSPYDEV_OK                    =   0,
-    AIRSPYDEV_ERROR                 =  -1,
-    AIRSPYDEV_NO_DEVICE_FOUND       =  -2,
-    AIRSPYDEV_UNABLE_TO_OPEN_DEVICE =  -3,
-    AIRSPYDEV_INVALID_SAMPLE_RATE   =  -4,
-    AIRSPYDEV_INVALID_FQ            =  -5,
-    AIRSPYDEV_INVALID_GAIN          =  -6,
-    AIRSPYDEV_INVALID_SERIAL        =  -7,
-    AIRSPYDEV_ALREADY_STARTED       =  -8,
-    AIRSPYDEV_ALREADY_STOPPED       =  -9
-};
-
-
-class AirspyDev {
+class AirspyDev : public R820Dev {
 public:
-    enum class State { IDLE, STARTING, RUNNING, RESTARTING, STOPPING };
-
-    struct Info {
-        unsigned                index;
-        std::string             serial;
-        bool                    available;
-        bool                    supported;
-        std::string             description;
-        std::vector<SampleRate> sample_rates;
-    };
-
     AirspyDev(const std::string &serial, SampleRate fs);
-    ~AirspyDev(void);
-
-    void setUserData(void *user_data = nullptr) { user_data_ = user_data; }
 
     // Start up the instance asynchronous. This function will return
     // immediately and the internal thread will start looking for the
@@ -77,51 +46,31 @@ public:
     int setMixGain(unsigned idx);
     int setVgaGain(unsigned idx);
 
-    // Data signal. One block represents 32ms of data irrespectively of the
-    // sampling frequency. Data len will ofcourse vary. 32ms bocks equals
-    // a callback frequency of 31.25Hz
-    sigc::signal<void(const iqsample_t*, unsigned, void*, const BlockInfo&)> data;
-
-    State getState(void) { return state_; }
-
     // Stop the instance. This function will block until the worker thread
     // is stopped and the Airspy device is fully closed
     int stop(void);
 
     // Get a list of available devices
-    static std::vector<AirspyDev::Info> list(void);
+    static std::vector<R820Dev::Info> list(void);
 
     // Check if a given device is present on the USB bus
     static bool isPresent(const std::string &serial);
 
-    // Convert error code to string
-    static std::string errStr(int ret);
-
-    // Instance of this class is not intended to be copied in any way
-    AirspyDev(const AirspyDev&) = delete;
-    AirspyDev& operator=(const AirspyDev&) = delete;
-
 private:
-    std::string    serial_;
-    SampleRate     fs_;
     uint32_t       fq_;
     float          gain_;
     unsigned       lna_gain_idx_;
     unsigned       mix_gain_idx_;
     unsigned       vga_gain_idx_;
     void          *dev_;
-    bool           run_;
     std::thread    worker_thread_;
     int            open_(void);
     static void    worker_(AirspyDev &self);
     static int     data_cb_(void *transfer);
-    State          state_;
     iqsample_t     iq_buffer_[320000*2]; // Largest buffer for 10MS/s. Times twice
     unsigned       part_pos_;
     unsigned       block_size_;
     unsigned       iq_pos_;
-    void          *user_data_;
-    BlockInfo      block_info_;
 };
 
 #endif // AIRSPY_DEV_HPP
