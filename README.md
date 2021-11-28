@@ -5,19 +5,23 @@ sdrx
 [![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml)
 
 `sdrx` is a software defined narrow band multi channel AM airband receiver that
-uses a R820T(2) based RTL-SDR USB dongle as it's hardware part. It's also a
-project for experimenting with different SDR implementation aspects as
-translation, down sampling, filtering, demodulation, interaction between clock
-domains, threading, audio processing and so on. `sdrx` is written in C++17 and
-is tested on a x86_64 machine running Fedora 35 and on a Raspberry Pi 4 Model
-B 4GiB running Raspberry Pi OS. Audio is played using ALSA.
+uses a R820T(2) based RTL-SDR or a Airspy Mini/R2 dongle as it's hardware part.
+It's also a program for experimenting with different SDR implementation aspects
+as translation, down sampling, filtering, demodulation, interaction between
+clock domains, threading, audio processing and so on. `sdrx` is written in C++17
+and is tested on a x86_64 machine running Fedora 35 and on a Raspberry Pi 4
+Model B 4GiB running Raspberry Pi OS. Audio is played using ALSA.
 
-A RTL-SDR Blog V3 dongle, https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
-is used for development. The program only support R820T(2) based dongles and
-may be incompatible with other RTL dongles and less powerfull Raspberry Pi
-models. YMMV.
+The channelization is done with a translate, filter and downsampling approach.
+This is simple, but not the most effective way when listening to many
+simultaneous channels. Other, more effective methods are being considered in
+the future.
 
-Support for Airspy R2 and Airspy Mini is being worked on.
+For development, RTL-SDR Blog V3; https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles,
+Airspy Mini; https://airspy.com/airspy-mini and Airspy R2;
+https://airspy.com/airspy-r2 dongles are used. The program only support R820T(2)
+based dongles and may be incompatible with other RTL dongles and less powerfull
+Raspberry Pi models. YMMV.
 
 
 Build requirements
@@ -96,27 +100,29 @@ listed with `--help`:
 
 The defaults for volume and squelsh level should be good as is. RF gain
 can be adjusted according to the local signal environment. Also note that `sdrx`
-use quite narrow filters so if your dongle does not have a TCXO, take your
+use quite narrow filters so if your RTL dongle does not have a TCXO, take your
 time to find out the proper frequency correction and supply that with the
-`--fq-corr` option.
+`--fq-corr` option. For Airspy devices, no correction is needed.
 
 If you have multiple devices connected, use `--list` to list them:
 
     $ ./sdrx --list
 
 Note that to use a specific device, it's serial must be used and you must
-ensure that all devices have unique serials. Use `rtl_eeprom` from the standard
-librtlsdr package to set serials.
+ensure that all devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from
+the standard librtlsdr package to set unique serials for your devices.
 
-Support for multiple channels are available as well. Just list the channels as
-arguments (due to the fixed sampling frequency currently used, they must fit
-inside a 1MHz band):
+Support for multiple channels is available as well. Just list the channels as
+arguments. The channels must fit inside 80% of the available bandwidth (same
+as 80% of the sample rate):
 
     $ ./sdrx --gain 40 118.105 118.280 118.405 118.505
 
 The more channels you list, the more processing power will be used. Please
 monitor your system load when running `sdrx`with many channels to get an
-understaning of how much you can load your specific system.
+understaning of how much you can load your specific system. Especially Airspy
+devices combined with many channels consume quite some processing power at the
+moment.
 
 
 Output in single channel mode
