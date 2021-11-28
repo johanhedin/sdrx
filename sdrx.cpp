@@ -176,8 +176,9 @@ public:
 
 
 struct InputState {
-    rb_t           *rb_ptr;                  // Input -> Output buffer
-    Settings        settings;                // System wide settings
+    rb_t                 *rb_ptr;                  // Input -> Output buffer
+    R820Dev::StreamState  stream_state = R820Dev::StreamState::IDLE;
+    Settings              settings;                // System wide settings
 };
 
 
@@ -216,6 +217,12 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
     struct Metadata      *metadata_ptr = nullptr;
     struct Metadata       meta;
 
+    if (block_info.stream_state == R820Dev::StreamState::IDLE) {
+        ctx.rb_ptr->setStreaming(false);
+        std::cerr << "Info: Device stopped streaming.\n";
+        return;
+    }
+
     // Prepare chunk metadata
     meta.pwr_dbfs = block_info.pwr;
     meta.ts = block_info.ts;
@@ -234,6 +241,12 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
 
         if (!ctx.rb_ptr->commitWrite()) {
             std::cerr << "Error: Unable to commit ring buffer write." << std::endl;
+        }
+
+        // Will only kick in for the first block of data
+        if (ctx.stream_state == R820Dev::StreamState::IDLE) {
+            ctx.stream_state = R820Dev::StreamState::STREAMING;
+            ctx.rb_ptr->setStreaming(true);
         }
     } else {
         // Overrun
@@ -523,10 +536,18 @@ static void alsa_write_cb(OutputState &ctx) {
 
     } else {
         // Underrrun
+        /*
         if (ctx.samples_received) {
             // Only write warning after we have started receiving samples
             std::cerr << "Warning: Ring buffer empty. Unable to read samples. Playing " << CH_IQ_BUF_SIZE << " samples of silence.\n";
         }
+        */
+
+        if (ctx.rb_ptr->isStreaming()) {
+            // Only write warning while streaming
+            std::cerr << "Warning: Ring buffer empty. Unable to read samples. Playing " << CH_IQ_BUF_SIZE << " samples of silence.\n";
+        }
+
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, CH_IQ_BUF_SIZE);
         if (ret < 0) {
             std::cerr << "Error: Failed to play underrun silence: " << snd_strerror(ret) << ".\n";
@@ -921,14 +942,14 @@ static void list_available_devices(void) {
                 bool first = true;
                 for (auto &rate : dev.sample_rates) {
                     if (first) {
-                        std::cout << " " << sample_rate_to_str(rate) << "MS/s";
+                        std::cout << " " << sample_rate_to_str(rate);
                         first = false;
                     } else {
-                        std::cout << ", " << sample_rate_to_str(rate) << "MS/s";
+                        std::cout << ", " << sample_rate_to_str(rate);
                     }
                 }
 
-                std::cout << ". Description: " << dev.description << std::endl;
+                std::cout << "MS/s. Description: " << dev.description << std::endl;
             } else {
                 std::cout << " (unsupported tuner and/or crystal fq)\n";
             }
@@ -964,7 +985,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current noise floor. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
-        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate i MS/s (experimental). Defaults to 1.44 or 6 if not set", "RATE" },
+        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate i MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set", "RATE" },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
@@ -1243,20 +1264,23 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (settings.rate == SampleRate::UNSPECIFIED) {
-        std::cerr << "Error: Invalid sample rate given.\n";
+    settings.device_type = R820Dev::getType(settings.device_serial);
+    if (settings.device_type == R820Dev::Type::UNKNOWN) {
+        std::cerr << "Error: Device " << settings.device_serial << " is not available.\n";
         return 1;
+    }
+
+    // Set default sample rate if not given. TODO: Refactor this to something better...
+    if (settings.rate == SampleRate::UNSPECIFIED && settings.device_type == R820Dev::Type::RTL) {
+        settings.rate = SampleRate::FS01440;
+    } else if (settings.rate == SampleRate::UNSPECIFIED && settings.device_type == R820Dev::Type::AIRSPY) {
+        settings.rate = SampleRate::FS06000;
     }
 
     if (!verify_requested_bandwidth(settings)) {
         uint32_t available_bw = (sample_rate_to_uint(settings.rate) * 8 / 10) / 1000;
         std::cerr << "Error: Requested channels does not fit inside available bandwidth (" << available_bw << "kHz).\n";
         return 1;
-    }
-
-    settings.device_type = R820Dev::getType(settings.device_serial);
-    if (settings.device_type == R820Dev::Type::UNKNOWN) {
-        std::cerr << "Error: Device " << settings.device_serial << " is not available.\n";
     }
 
     // Determine lenght of translator based on Fs and set up down sampling
@@ -1434,10 +1458,12 @@ int main(int argc, char** argv) {
     std::thread alsa_thread(alsa_worker, std::ref(output_state));
 
     // Give the output thread up to 2 seconds to start upp
+    /*
     while (output_state.running == false && run) {
         usleep(500000);
     }
     usleep(1500000);
+    */
 
     ret = device->start();
     if (ret < 0) {
