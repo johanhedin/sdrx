@@ -63,6 +63,7 @@
 #include "filters/fs_01200_08bit_ds_to_00016.hpp"
 #include "filters/fs_01440_08bit_ds_to_00016.hpp"
 #include "filters/fs_01600_08bit_ds_to_00016.hpp"
+#include "filters/fs_01920_08bit_ds_to_00016.hpp"
 #include "filters/fs_02560_08bit_ds_to_00016.hpp"
 #include "filters/fs_06000_12bit_ds_to_00016.hpp"
 
@@ -1343,6 +1344,11 @@ int main(int argc, char** argv) {
             break;
         case SampleRate::FS01920:
             N = 1152; z = 5;
+            stages = std::vector<MSD::Stage>{
+                { 4, fs_01920_08bit_ds_lpf1_01920_to_00480 },
+                { 6, fs_01920_08bit_ds_lpf2_00480_to_00080 },
+                { 5, fs_01920_08bit_ds_lpf3_00080_to_00016 }
+            };
             break;
         case SampleRate::FS02400:
             N =  288; z = 1;
