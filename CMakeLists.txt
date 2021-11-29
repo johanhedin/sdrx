@@ -45,8 +45,9 @@ add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 option(DETACH_KERNEL_DRIVER "" ON)
 add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
 
-add_executable(sdrx sdrx.cpp r820_dev.cpp rtl_dev.cpp airspy_dev.cpp)
-add_executable(dts EXCLUDE_FROM_ALL dts.cpp r820_dev.cpp rtl_dev.cpp airspy_dev.cpp)
+add_library(r820dev r820_dev.cpp rtl_dev.cpp airspy_dev.cpp)
+add_executable(sdrx sdrx.cpp)
+add_executable(dts EXCLUDE_FROM_ALL dts.cpp)
 
 # Add our project root and the linked libairspy/librtlsdr as include directories
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR})
@@ -57,10 +58,12 @@ target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR})
 target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
 target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
 
+target_link_libraries(sdrx r820dev)
 target_link_libraries(sdrx m)
 target_link_libraries(sdrx airspy-static)
 target_link_libraries(sdrx rtlsdr_static)
 
+target_link_libraries(dts r820dev)
 target_link_libraries(dts m)
 target_link_libraries(dts airspy-static)
 target_link_libraries(dts rtlsdr_static)
