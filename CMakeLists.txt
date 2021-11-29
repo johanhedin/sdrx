@@ -46,6 +46,7 @@ option(DETACH_KERNEL_DRIVER "" ON)
 add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
 
 add_library(r820dev r820_dev.cpp rtl_dev.cpp airspy_dev.cpp)
+
 add_executable(sdrx sdrx.cpp)
 add_executable(dts EXCLUDE_FROM_ALL dts.cpp)
 
