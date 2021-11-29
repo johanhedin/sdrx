@@ -489,10 +489,10 @@ static void alsa_write_cb(OutputState &ctx) {
 
                 if (channels.size() == 1) {
                     if (ch.sql_state == SQL_OPEN) {
-                        fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f|%5.1f|%5.1f|%5.1f|%6.2f\033[0m] (SNR|low|mid|hig|imbalance)",
+                        fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m] [\033[1;30m%5.1f|%5.1f|%5.1f\033[0m] [\033[1;30m%6.2f\033[0m] [SNR] [low|mid|hig] [imbalance]",
                                 ch.name.c_str(), snr, ref_level_lo, sig_level, ref_level_hi, imbalance);
                     } else {
-                        fprintf(stdout, "  %s[\033[1;30m%4.1f|%5.1f|%5.1f|%5.1f|%6.2f\033[0m] (SNR|low|mid|hig|imbalance)",
+                        fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m] [\033[1;30m%5.1f|%5.1f|%5.1f\033[0m] [\033[1;30m%6.2f\033[0m] [SNR] [low|mid|hig] [imbalance]",
                                 ch.name.c_str(), snr, ref_level_lo, sig_level, ref_level_hi, imbalance);
                     }
                 } else {
