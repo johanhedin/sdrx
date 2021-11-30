@@ -5,12 +5,12 @@ sdrx
 [![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml)
 
 `sdrx` is a software defined narrow band multi channel AM airband receiver that
-uses a R820T(2)/R860 based RTL-SDR or a Airspy Mini/R2 dongle as it's hardware part.
-It's also a program for experimenting with different SDR implementation aspects
-such as translation, downsampling, filtering, demodulation, interaction between
-clock domains, threading, audio processing and so on. `sdrx` is written in C++17
-and is tested on a x86_64 machine running Fedora 35 and on a Raspberry Pi 4
-Model B 4GiB running Raspberry Pi OS. Audio is played using ALSA.
+uses a R820T(2)/R860 based RTL-SDR or a Airspy Mini/R2 dongle as it's hardware
+part. It's also a program for experimenting with different SDR implementation
+aspects such as translation, downsampling, filtering, demodulation, interaction
+between clock domains, threading, audio processing and so on. `sdrx` is written
+in C++17 and is tested on a x86_64 machine running Fedora 35 and on a Raspberry
+Pi 4 Model B 4GiB running Raspberry Pi OS. Audio is played using ALSA.
 
 The channelization is done with a translate, filter and downsampling approach.
 This is simple, but not the most effective way when listening to many
@@ -50,10 +50,23 @@ On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
 Download and build
 ====
-The easiest way to get `sdrx` is to clone the GitHub repo. `sdrx` depend
-on the latest libairspy and librtlsdr at the moment so these projects are
-included as submodules. With the commands below you will get the submodules
-checked out properly:
+The easiest way to get `sdrx` is to clone the GitHub repo.
+
+> Note 1: _At the moment_, `sdrx` depend on the latest libairspy and librtlsdr
+development/main branches from GitHub. Their respective source code is brought
+into `sdrx` as git submodules. With the commands below, everything you need is
+checked out properly.
+
+> Note 2: This bundling of librtlsdr and libairspy into `sdrx` will in no way
+interfere with what is allready installed on your system with respect to
+librtlsdr and libairspy. The `sdrx` binary will not link to the on-system
+librtlsdr and libairspy .so files.
+
+> Note 3: The librtlsdr and libairspy packages still need to be installed on
+your system to be able to run `sdrx` since they provide nessesary udev config
+files for the unique USB ids that the dongles use.
+
+Check out `sdrx` with the needed submodules:
 
     $ git clone --recurse-submodules https://github.com/johanhedin/sdrx.git
     $ cd sdrx
