@@ -156,11 +156,6 @@ if not set explicitly. Change to your liking with the `--sample-rate` option:
 
 Available rates for each device is shown in the output from the `--list` option.
 
-> Note 5: The 3MS/s rate for Airspy Mini and the 2.5MS/s rate for Airspy R2 are
-not supported even though they are shown as such. If you try to use them, `sdrx`
-will show an error and refuse to start. These rates will be removed from the
-listings in the future.
-
 
 Output in single channel mode
 ====
