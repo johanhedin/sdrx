@@ -67,6 +67,7 @@
 #include "filters/fs_02400_08bit_ds_to_00016.hpp"
 #include "filters/fs_02560_08bit_ds_to_00016.hpp"
 #include "filters/fs_06000_12bit_ds_to_00016.hpp"
+#include "filters/fs_10000_12bit_ds_to_00016.hpp"
 
 // Channelization filers
 #include "filters/fs_00016_16bit_ch.hpp"
@@ -1386,6 +1387,12 @@ int main(int argc, char** argv) {
             break;
         case SampleRate::FS10000:
             N = 1200; z = 1;
+            stages = std::vector<MSD::Stage>{
+                { 5, fs_10000_12bit_ds_lpf1_10000_to_02000 },
+                { 5, fs_10000_12bit_ds_lpf2_02000_to_00400 },
+                { 5, fs_10000_12bit_ds_lpf3_00400_to_00800 },
+                { 5, fs_10000_12bit_ds_lpf4_00080_to_00016 }
+            };
             break;
         default:
             N = 0; z = 1;
