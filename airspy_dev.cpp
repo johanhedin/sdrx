@@ -283,6 +283,8 @@ void AirspyDev::worker_(AirspyDev &self) {
 
 
 int AirspyDev::open_(void) {
+#define PACKING_ON  1
+#define PACKING_OFF 0
     int      ret;
     uint64_t serial = 0;
 
@@ -297,6 +299,9 @@ int AirspyDev::open_(void) {
 
     ret = airspy_set_sample_type((struct airspy_device*)dev_, AIRSPY_SAMPLE_FLOAT32_IQ);
     //ret = airspy_set_sample_type((struct airspy_device*)dev_, AIRSPY_SAMPLE_RAW);
+    if (ret != AIRSPY_SUCCESS) goto error;
+
+    ret = airspy_set_packing((struct airspy_device*)dev_, PACKING_ON);
     if (ret != AIRSPY_SUCCESS) goto error;
 
     ret = airspy_set_samplerate((struct airspy_device*)dev_, sample_rate_to_uint(fs_));
