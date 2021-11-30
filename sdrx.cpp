@@ -945,6 +945,9 @@ static void list_available_devices(void) {
                 std::cout << ", Sample rates:";
                 bool first = true;
                 for (auto &rate : dev.sample_rates) {
+                    // 2.5 and 3MS/s is not supported in sdrx at the moment
+                    if (rate == SampleRate::FS02500 || rate == SampleRate::FS03000) continue;
+
                     if (first) {
                         std::cout << " " << sample_rate_to_str(rate);
                         first = false;
