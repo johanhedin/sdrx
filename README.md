@@ -115,7 +115,7 @@ can be adjusted according to the local signal environment. Also note that `sdrx`
 use quite narrow filters so if your RTL dongle does not have a TCXO, take your
 time to find out the proper frequency correction and supply that with the
 `--fq-corr` option. For Airspy devices the correction concept is not used at
-all and any `--fq-corr` given is just ignored.
+all and any `--fq-corr` given is silently ignored.
 
 If you have multiple devices connected, use `--list` to list them:
 
@@ -134,16 +134,28 @@ as 80% of the sample rate):
     $ ./sdrx --gain 40 118.105 118.280 118.405 118.505
 
 The more channels you list, the more processing power will be used. Please
-monitor your system load when running `sdrx`with many channels to get an
+monitor your system load when running `sdrx` with many channels to get an
 understaning of how much you can load your specific system. Especially Airspy
 devices combined with many channels consume quite some processing power at the
 moment.
 
 If the connection to a device is lost while `sdrx` is running, `sdrx` will auto
-reconnect when the device reappears on the USB bus again. So there is no need
-to restart the program just because a device disappears for some reason. Some
-RTL based dongles have rather flimsy USB connectors and a device easily
-disconnects by just moving it sligthly.
+reconnect when the device reappears on the USB bus. There is no need to restart
+the program just because a device disappears for some reason. Some RTL based
+dongles have rather flimsy USB connectors and a device easily disconnects by
+just moving it sligthly.
+
+Sample rate defaults to 1.44MS/s for RTL devices and 6MS/s for Airspy devices,
+if not set explicitly. Change to your liking with the `--sample-rate` option:
+
+    $ ./sdrx --sample-rate 2.56 118.280 118.405 118.505
+
+Available rates for each device is shown in the output from the `--list` option.
+
+> Note 4: The 3MS/s rate for Airspy Mini and the 2.5MS/s rate for Airspy R2 are
+not supported even though they are shown as such. If you try to use them, `sdrx`
+will show an error and refuse to start. These rates will be removed from the
+listings in the future.
 
 
 Output in single channel mode
@@ -226,7 +238,7 @@ SNR is shown for the channels:
 Spurious outputs on the terminal
 ====
 The `librtlsdr` library have quite some `fprintf:s` build in and pollutes the
-terminal with printouts during start/stop and on different error cases
+terminal with printouts during start/stop and on different error cases.
 
 The `--list` function will trigger some of them and the printouts may be
 interpreted as a misbehaviour of `sdrx`, but it's not. To clean up the list
