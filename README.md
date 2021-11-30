@@ -127,6 +127,10 @@ the standard `librtlsdr` package to set unique serials for your RTL devices.
 Airspy devices normaly have unique serials and you do not have to worry
 about them.
 
+> Note 4: Airspy R2 devices are described as "AirSpy NOS" in the listing. This
+is what they call themselves when queried over the USB bus and is nothing `sdrx`
+can do anything about.
+
 Support for multiple channels is available as well. Just list the channels as
 arguments. The channels must fit inside 80% of the available bandwidth (same
 as 80% of the sample rate):
@@ -152,7 +156,7 @@ if not set explicitly. Change to your liking with the `--sample-rate` option:
 
 Available rates for each device is shown in the output from the `--list` option.
 
-> Note 4: The 3MS/s rate for Airspy Mini and the 2.5MS/s rate for Airspy R2 are
+> Note 5: The 3MS/s rate for Airspy Mini and the 2.5MS/s rate for Airspy R2 are
 not supported even though they are shown as such. If you try to use them, `sdrx`
 will show an error and refuse to start. These rates will be removed from the
 listings in the future.
