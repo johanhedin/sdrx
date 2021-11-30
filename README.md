@@ -123,7 +123,9 @@ If you have multiple devices connected, use `--list` to list them:
 
 Note that to use a specific device, it's serial must be used and you must
 ensure that all devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from
-the standard `librtlsdr` package to set unique serials for your devices.
+the standard `librtlsdr` package to set unique serials for your RTL devices.
+Airspy devices normaly have unique serials and you do not have to worry
+about them.
 
 Support for multiple channels is available as well. Just list the channels as
 arguments. The channels must fit inside 80% of the available bandwidth (same
