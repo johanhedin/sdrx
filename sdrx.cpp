@@ -549,7 +549,7 @@ static void alsa_write_cb(OutputState &ctx) {
 
         if (ctx.rb_ptr->isStreaming()) {
             // Only write warning while streaming
-            std::cerr << "Warning: Ring buffer empty. Unable to read samples. Playing " << CH_IQ_BUF_SIZE << " samples of silence.\n";
+            std::cerr << "Warning: Ring buffer empty. Unable to read samples. Playing " << CH_IQ_BUF_SIZE << " samples (32ms) of silence.\n";
         }
 
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, CH_IQ_BUF_SIZE);
@@ -985,14 +985,14 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     int           normal_fq_fmt = 0;
 
     struct poptOption options_table[] = {
-        { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and quit", nullptr },
+        { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and their sample rates and quit", nullptr },
         { "device",    'd', POPT_ARG_STRING, &device, 0, "serial for device to use. Defaults to first available if not set", "SERIAL" },
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm for RTL dongles. Defaults to 0 if not set", "FQCORR" },
         { "gain",      'g', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
         { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current noise floor. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
-        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate i MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set", "RATE" },
+        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate i MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
@@ -1045,7 +1045,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
             // Ignore given options and just print the extended help
             poptPrintHelp(popt_ctx, stderr, 0);
             std::cerr << R"(
-sdrx is a software defined narrow band AM receiver that is using a R820T(2)
+sdrx is a software defined narrow band AM receiver that is using a R820T(2)/R860
 based RTL-SDR or Airspy Mini/R2 dongle as its hadware backend. It is mainly
 designed for use in the 118 to 138 MHz airband. The program is run from the
 command line and the channels to listen to are given as arguments in the
@@ -1436,7 +1436,7 @@ int main(int argc, char** argv) {
     std::cout << "The folowing settings are being used:\n";
     std::cout << "    Device: " << settings.device_serial << " (" << R820Dev::typeToStr(settings.device_type) << ")\n";
     if (settings.device_type == R820Dev::Type::RTL) {
-        std::cout << "    Frequency correction: " << settings.fq_corr << "ppm" << std::endl;
+        std::cout << "    Frequency correction: " << settings.fq_corr << "ppm\n";
     }
     std::cout << "    Sampling frequency: " << sample_rate_to_str(settings.rate) << "MS/s\n";
     std::cout << "    RF gain: " << settings.rf_gain << "dB\n";
@@ -1514,5 +1514,5 @@ quit:
 
     alsa_thread.join();
 
-    std::cout << "Stopped." << std::endl;
+    std::cout << "Stopped.\n";
 }
