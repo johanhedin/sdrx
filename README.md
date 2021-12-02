@@ -12,15 +12,20 @@ between clock domains, threading, audio processing and so on. `sdrx` is written
 in C++17 and is tested on a x86_64 machine running Fedora 35 and on a Raspberry
 Pi 4 Model B 4GiB running Raspberry Pi OS. Audio is played using ALSA.
 
-The channelization is done with a translate, filter and downsampling approach.
-This is simple, but not the most effective way when listening to many
-simultaneous channels. Other, more effective methods are being considered in
-the future.
+The channelization is done with a translate, filter and downsampling approach in
+one single thread. This is simple, but not the most effective way when listening
+to many simultaneous channels. Other, more effective methods are being considered
+in the future.
 
 For development, [RTL-SDR Blog V3](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles),
 [Airspy Mini](https://airspy.com/airspy-mini) and [Airspy R2](https://airspy.com/airspy-r2)
 dongles are used. The program only support R820T(2)/R860 based dongles and may be
 incompatible with other RTL dongles and less powerfull Raspberry Pi models. YMMV.
+
+`sdrx` is only available in source code form. It is easily build using the
+instructions below, but some basic Linux understanding and familiarity with a
+terminal/bash is expected from the user. Especially with respect to how to
+run programs from the command line.
 
 
 Build requirements
@@ -99,21 +104,40 @@ inside the build directory and start over:
     $ cmake ../
     $ make
 
+`sdrx` is under active development so make sure to `git pull` according
+to the instruction above regularly to keep up with the changes. And always read
+this README to see how the program changes over time as new features are added,
+existing features are modified or features being removed.
+
 
 Using
 ====
 `sdrx` is run from the command line and takes an aeronautical channel as the
-sole argument. Besides the channel, some options are available and can be
-listed with `--help`:
+argument. Besides the channel, some options are available and can be listed
+with `--help`:
 
     $ cd sdrx/build
     $ ./sdrx --help
     $ ./sdrx --gain 30 122.455
 
+Stop the program by pressing Crtl-C in the terminal. This will correctly stop
+the program as Ctrl-C is handled properly.
+
 The defaults for volume and squelsh level should be good as is. RF gain
-can be adjusted according to the local signal environment. Also note that `sdrx`
-use quite narrow filters so if your RTL dongle does not have a TCXO, take your
-time to find out the proper frequency correction and supply that with the
+can be adjusted according to the local signal environment.
+
+> Note 4: The R820T(2)/R860 tuner chip has three gain stages, LNA, Mixer and
+VGA (sometimes referred to as IF). Each stage can be set to a value between 0
+and 15 and each step represents a change in gain for the stage in question
+(typically an increase about +3dB). The gain you give to `sdrx` as an
+argument will be translated into one value between 0 and 15 for each stage
+according to an `sdrx` internal mapping table. This table is the same as is
+used in the official librtlsdr library. Look into the source code for the
+details. Support for other ways of setting the gain will be introduced in the
+near future.
+
+`sdrx` use quite narrow filters so if your RTL dongle does not have a TCXO, take
+your time to find out the proper frequency correction and supply that with the
 `--fq-corr` option. For Airspy devices the correction concept is not used at
 all and any `--fq-corr` given is silently ignored.
 
@@ -121,40 +145,49 @@ If you have multiple devices connected, use `--list` to list them:
 
     $ ./sdrx --list
 
-Note that to use a specific device, it's serial must be used and you must
-ensure that all devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from
-the standard `librtlsdr` package to set unique serials for your RTL devices.
-Airspy devices normaly have unique serials and you do not have to worry
-about them.
+To use a specific device, it's serial must be used and you must ensure that
+all devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from the standard
+`librtlsdr` package to set unique serials for your RTL devices. Airspy devices
+normaly have unique serials and you do not have to worry about them.
 
-> Note 4: Airspy R2 devices are described as "AirSpy NOS" in the listing. This
+> Note 5: Airspy R2 devices are described as "AirSpy NOS" in the listing. This
 is what they call themselves when queried over the USB bus and is nothing `sdrx`
 can do anything about.
 
-Support for multiple channels is available as well. Just list the channels as
-arguments. The channels must fit inside 80% of the available bandwidth (same
-as 80% of the sample rate):
+Support for multiple channels is available as well. Just specify the channels as
+arguments (the channels must fit inside 80% of the sampling frequency used):
 
     $ ./sdrx --gain 40 118.105 118.280 118.405 118.505
 
-The more channels you list, the more processing power will be used. Please
+The more channels you specify, the more processing power will be used. Please
 monitor your system load when running `sdrx` with many channels to get an
 understaning of how much you can load your specific system. Especially Airspy
 devices combined with many channels consume quite some processing power at the
 moment.
 
-If the connection to a device is lost while `sdrx` is running, `sdrx` will auto
-reconnect when the device reappears on the USB bus. There is no need to restart
-the program just because a device disappears for some reason. Some RTL based
-dongles have rather flimsy USB connectors and a device easily disconnects by
-just moving it sligthly.
+If the connection to a device is lost while `sdrx` is running, i.e. the device
+is being unplugged from the USB bus, `sdrx` will auto reconnect when the device
+is plugged in again. There is no need to restart the program just because a
+device disappears for some reason. Some RTL based dongles have rather flimsy
+USB connectors and a device easily disconnects by just moving it sligthly.
 
 Sample rate defaults to 1.44MS/s for RTL devices and 6MS/s for Airspy devices,
 if not set explicitly. Change to your liking with the `--sample-rate` option:
 
     $ ./sdrx --sample-rate 2.56 118.280 118.405 118.505
 
+As stated earlier, the sample rate dictates the RF bandwidth that can be
+used. If, for example, a sample rate of 2.56 MS/s is used, the available RF
+bandwidth will be 2.56 * 0.8 = 2.048 MHz. For a rate of 1.44 MS/s it will be
+1.44 * 0.8 = 1.152 MHz. And so on.
+
 Available rates for each device is shown in the output from the `--list` option.
+
+> Note 6: When specifying a sample rate, use the exact text of the rate as
+shown when using `--list`, i.e. if the list say 2.56, you enter 2.56. If the list
+say 0.96, you enter 0.96. If the list say 10, you enter 10. And so on. Do not
+include "MS/s" after the rate value. Do not use comma (,) as decimal separator.
+Do not try to set anything else other than what is shown with `--list`.
 
 
 Output in single channel mode
