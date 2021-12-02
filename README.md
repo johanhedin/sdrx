@@ -120,8 +120,8 @@ with `--help`:
     $ ./sdrx --help
     $ ./sdrx --gain 30 122.455
 
-Stop the program by pressing Crtl-C in the terminal. This will correctly stop
-the program as Ctrl-C is handled properly.
+To stop the program, just press Crtl-C in the terminal and wait. This will stop
+`sdr` cleanly as Ctrl-C is handled properly.
 
 The defaults for volume and squelsh level should be good as is. RF gain
 can be adjusted according to the local signal environment.
