@@ -166,16 +166,22 @@ public:
 // Datatype to hold sdrx global settings
 class Settings {
 public:
+    enum class GainMode { COMPOSITE, SPLIT };
+
     R820Dev::Type        device_type = R820Dev::Type::UNKNOWN; // Type of device
     std::string          device_serial;                        // Serial of device
     SampleRate           rate = SampleRate::UNSPECIFIED;       // Sample rate from command line
     int                  fq_corr = 0;                          // Frequency correction in ppm for RTL devices
-    float                rf_gain = 30.0f;                      // RF gain in dB
     uint32_t             tuner_fq = 0;                         // Tuner frequency
     float                sql_level = 9.0f;                     // Squelch level in dB (over noise level)
     std::vector<Channel> channels;                             // String representations of the channels to listen to
     std::string          audio_device = "default";             // ALSA device to use for playback
     float                lf_gain = 0.0f;                       // Audio volume in dB
+    GainMode             gain_mode = GainMode::COMPOSITE;      // Gain mode
+    unsigned             lna_gain_idx = 9;
+    unsigned             mix_gain_idx = 8;
+    unsigned             vga_gain_idx = 12;
+    float                composit_gain = 30.0f;
 };
 
 
@@ -981,6 +987,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     char         *device = nullptr;
     char         *audio_device = nullptr;
     char         *sample_rate_str = nullptr;
+    char         *gain_str = nullptr;
     int           print_help = 0;
     int           normal_fq_fmt = 0;
 
@@ -988,7 +995,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and their sample rates and quit", nullptr },
         { "device",    'd', POPT_ARG_STRING, &device, 0, "serial for device to use. Defaults to first available if not set", "SERIAL" },
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm for RTL dongles. Defaults to 0 if not set", "FQCORR" },
-        { "gain",      'g', POPT_ARG_FLOAT,  &settings.rf_gain, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
+        { "gain",      'g', POPT_ARG_STRING, &gain_str, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
         { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current noise floor. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
@@ -1041,6 +1048,21 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
             free(sample_rate_str);
         }
 
+        if (gain_str) {
+            int ret;
+            ret = sscanf(gain_str, "%u:%u:%u", &settings.lna_gain_idx, &settings.mix_gain_idx, &settings.vga_gain_idx);
+            if (ret == 3) {
+                settings.gain_mode = Settings::GainMode::SPLIT;
+            } else {
+                ret = sscanf(gain_str, "%f", &settings.composit_gain);
+                if (ret == 1) {
+                    settings.gain_mode = Settings::GainMode::COMPOSITE;
+                }
+            }
+
+            free(gain_str);
+        }
+
         if (print_help) {
             // Ignore given options and just print the extended help
             poptPrintHelp(popt_ctx, stderr, 0);
@@ -1076,10 +1098,10 @@ device with serial "MY-DEVICE":
 
     $ sdrx --device MY-DEVICE --gain 40 --volume 3 122.450
 
-Listen to the channels 118.105 and 118.505 with 34dB of RF gain and 5dB squelch.
-Use first available device on the system:
+Listen to the channels 118.105 and 118.505 with 34dB of RF gain, 5dB squelch and
+a sample rate of 1.2 MS/s. Use first available device on the system:
 
-    $ sdrx --gain 34 --sql-level 5 118.105 118.505
+    $ sdrx --gain 34 --sql-level 5 --sample-rate 1.2 118.105 118.505
 )"
             << std::endl;
             ret = -1;
@@ -1088,8 +1110,12 @@ Use first available device on the system:
             list_available_devices();
             ret = -2;
         } else {
-            if (settings.rf_gain < 0.0f || settings.rf_gain > 50.0f) {
-                fprintf(stderr, "Error: Invalid RF gain given: %.4f.\n", settings.rf_gain);
+            if (settings.gain_mode == Settings::GainMode::COMPOSITE && (settings.composit_gain < 0.0f || settings.composit_gain > 50.0f)) {
+                fprintf(stderr, "Error: Invalid RF gain given: %.4f.\n", settings.composit_gain);
+                ret = -1;
+            }
+            if (settings.gain_mode == Settings::GainMode::SPLIT && (settings.lna_gain_idx > 15 || settings.mix_gain_idx > 15 || settings.vga_gain_idx > 15)) {
+                fprintf(stderr, "Error: Invalid RF gain indexes given: %u:%u:%u.\n", settings.lna_gain_idx, settings.mix_gain_idx, settings.vga_gain_idx);
                 ret = -1;
             }
             if (settings.sql_level < -10.0f || settings.sql_level > 50.0f) {
@@ -1439,7 +1465,11 @@ int main(int argc, char** argv) {
         std::cout << "    Frequency correction: " << settings.fq_corr << "ppm\n";
     }
     std::cout << "    Sampling frequency: " << sample_rate_to_str(settings.rate) << "MS/s\n";
-    std::cout << "    RF gain: " << settings.rf_gain << "dB\n";
+    if (settings.gain_mode == Settings::GainMode::COMPOSITE) {
+        std::cout << "    RF gain: " << settings.composit_gain << "dB\n";
+    } else {
+        std::cout << "    RF gain indexes: " << settings.lna_gain_idx << ":" << settings.lna_gain_idx << ":" << settings.vga_gain_idx << std::endl;
+    }
     std::cout << "    Volume: " << settings.lf_gain << "dB\n";
     std::cout << "    Squelch level: " << settings.sql_level << "dB\n";
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
@@ -1465,7 +1495,13 @@ int main(int argc, char** argv) {
     // Set up the instance
     device->setUserData((void*)&input_state);
     device->setFq(settings.tuner_fq);
-    device->setGain(settings.rf_gain);
+    if (settings.gain_mode == Settings::GainMode::COMPOSITE) {
+        device->setGain(settings.composit_gain);
+    } else if (settings.gain_mode == Settings::GainMode::SPLIT) {
+        device->setLnaGain(settings.lna_gain_idx);
+        device->setMixGain(settings.mix_gain_idx);
+        device->setVgaGain(settings.vga_gain_idx);
+    }
     device->data.connect(sigc::ptr_fun(data_cb));
 
     // Install signal handler
