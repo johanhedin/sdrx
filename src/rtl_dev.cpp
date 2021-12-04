@@ -22,7 +22,7 @@
 #include <algorithm>
 
 
-#include "librtlsdr/include/rtl-sdr.h"
+#include "../librtlsdr/include/rtl-sdr.h"
 
 #include "rtl_dev.hpp"
 

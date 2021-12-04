@@ -22,7 +22,7 @@
 #include <algorithm>
 #include <cinttypes>
 
-#include "libairspy/libairspy/src/airspy.h"
+#include "../libairspy/libairspy/src/airspy.h"
 
 #include "airspy_dev.hpp"
 
