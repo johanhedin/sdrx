@@ -139,12 +139,66 @@ using rb_t = CRB<iqsample_t, Metadata>;
 
 using sql_state_t = enum { SQL_CLOSED, SQL_OPEN };
 
+enum class Modulation { UNSPECIFIED, AM, FM };
+
+static const std::string &modulation_to_str(Modulation modulation) {
+    static const std::string AM_STR("AM");
+    static const std::string FM_STR("FM");
+    static const std::string UNKNOWN_STR("Unknown");
+
+    switch (modulation) {
+        case Modulation::AM: return AM_STR;
+        case Modulation::FM: return FM_STR;
+        default:             return UNKNOWN_STR;
+    }
+}
+
+
+static Modulation str_to_modulation(const std::string &str) {
+    if      (str == "AM") return Modulation::AM;
+    else if (str == "FM") return Modulation::FM;
+    else                  return Modulation::UNSPECIFIED;
+}
+
+
+class Demod {
+public:
+    Demod(Modulation mod = Modulation::UNSPECIFIED) : mod_(mod), prev_sample(0, 0) {}
+    ~Demod(void) {}
+
+    float demod(iqsample_t sample) {
+        if (mod_ == Modulation::AM) {
+            return std::abs(sample);
+        } else if (mod_ == Modulation::FM) {
+            float audio_sample;
+
+            // Normalize amplitude
+            sample = sample / std::abs(sample);
+
+            float i = sample.real();
+            float q = sample.imag();
+
+            audio_sample = std::atan2(q * prev_sample.real() - i * prev_sample.imag(), i * prev_sample.real() + q * prev_sample.imag());
+
+            prev_sample = sample;
+
+            return audio_sample;
+        } else {
+            return 0.0f;
+        }
+    }
+
+private:
+    Modulation mod_;
+    iqsample_t prev_sample;
+};
+
 
 // Datatype to represent one channel in the IQ spectra
 class Channel {
 public:
     Channel(const std::string &name, float sql_level = 9.0f)
-    : name(name), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0) {}
+    : name(name), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0), mod(Modulation::AM) {}
 
     bool operator<(const Channel &rhv) { return name < rhv.name; }
     bool operator==(const Channel &rhv) { return name == rhv.name; }
@@ -152,15 +206,17 @@ public:
     bool operator<(const char *rhv) { return name < rhv; }
     bool operator==(const char *rhv) { return name == rhv; }
 
-    std::string    name;           // Channel name, e.g "118.105"
-    MSD            msd;            // Multi stage down sampler with tuner
-    AGC            agc;            // AGC
-    float          sql_level;      // Squelch level for the channel
-    sql_state_t    sql_state;      // Squelch state (open/closed)
-    sql_state_t    sql_state_prev; // Previous squelch state (open/closed)
-    int            pos;            // Audio position. 0 == center
+    std::string      name;           // Channel name, e.g "118.105"
+    MSD              msd;            // Multi stage down sampler with tuner
+    AGC              agc;            // AGC
+    float            sql_level;      // Squelch level for the channel
+    sql_state_t      sql_state;      // Squelch state (open/closed)
+    sql_state_t      sql_state_prev; // Previous squelch state (open/closed)
+    int              pos;            // Audio position. 0 == center
 
     FIR3<iqsample_t> ch_flt;         // Channelization filter just before demodulation
+    Modulation       mod;            // Modulation, AM or FM
+    Demod            demod;          // Demodulator
 };
 
 
@@ -183,6 +239,7 @@ public:
     unsigned             mix_gain_idx = 8;
     unsigned             vga_gain_idx = 12;
     float                composit_gain = 30.0f;
+    Modulation           mod = Modulation::AM;
 };
 
 
@@ -357,7 +414,8 @@ static void alsa_write_cb(OutputState &ctx) {
                 iqsample_t agc_adj_sample = ch.agc.adjust(iq_buffer[j]); // AGC adjusted IQ sample
                 if (ch.sql_state == SQL_OPEN) {
                     // AM demodulator
-                    float s = std::abs(agc_adj_sample);
+                    //float s = std::abs(agc_adj_sample);
+                    float s = ch.demod.demod(agc_adj_sample);
 
                     // If the squelsh has just opend, ramp up the audio
                     if (ch.sql_state_prev == SQL_CLOSED) {
@@ -1092,6 +1150,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     char         *audio_device = nullptr;
     char         *sample_rate_str = nullptr;
     char         *gain_str = nullptr;
+    char         *modulation_str = nullptr;
     int           print_help = 0;
     int           normal_fq_fmt = 0;
 
@@ -1104,6 +1163,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current channel noise floor. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
         { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
+        { "modulation",  0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL!", "MOD" },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
@@ -1130,7 +1190,6 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
                 std::cerr << "Error: Unknown error in option parsing, ret = " << ret << ".";
                 break;
         }
-        //poptPrintHelp(popt_ctx, stderr, 0);
         std::cerr << " Use --help to learn how to use sdrx.\n";
         ret = -1;
     } else {
@@ -1151,6 +1210,11 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         if (sample_rate_str) {
             settings.rate = str_to_sample_rate(std::string(sample_rate_str));
             free(sample_rate_str);
+        }
+
+        if (modulation_str) {
+            settings.mod = str_to_modulation(std::string(modulation_str));
+            free(modulation_str);
         }
 
         if (gain_str) {
@@ -1228,6 +1292,10 @@ a sample rate of 1.2 MS/s. Use first available device on the system:
                 fprintf(stderr, "Error: Invalid SQL level given: %.4f.\n", settings.sql_level);
                 ret = -1;
             }
+            if (settings.mod == Modulation::UNSPECIFIED) {
+                std::cerr << "Error: Invalid modulation given.\n";
+                ret = -1;
+            }
 
             // Parse the arguments as channels
             if (poptPeekArg(popt_ctx) != nullptr) {
@@ -1277,9 +1345,11 @@ a sample rate of 1.2 MS/s. Use first available device on the system:
                 ret = -1;
             }
 
+            /*
             if (ret < 0) {
-                //poptPrintHelp(popt_ctx, stderr, 0);
+                poptPrintHelp(popt_ctx, stderr, 0);
             }
+            */
         }
     }
 
@@ -1563,6 +1633,9 @@ int main(int argc, char** argv) {
 
         ch.ch_flt = FIR3<iqsample_t>(fs_00016_16bit_ch_amdemod_lpf1);
 
+        ch.mod = settings.mod;
+        ch.demod = Demod(settings.mod);
+
         ch.agc.setReference(1.0f);
         ch.agc.setAttack(1.0f);
         ch.agc.setDecay(0.01f);
@@ -1583,6 +1656,7 @@ int main(int argc, char** argv) {
     } else {
         std::cout << "    RF gain indexes: " << settings.lna_gain_idx << ":" << settings.lna_gain_idx << ":" << settings.vga_gain_idx << std::endl;
     }
+    std::cout << "    Modulation: " << modulation_to_str(settings.mod) << std::endl;
     std::cout << "    Volume: " << settings.lf_gain << "dB\n";
     std::cout << "    Squelch level: " << settings.sql_level << "dB\n";
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
