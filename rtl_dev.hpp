@@ -31,7 +31,7 @@
 
 class RtlDev : public R820Dev {
 public:
-    RtlDev(const std::string &serial, SampleRate fs, int xtal_corr = 0);
+    RtlDev(const std::string &serial, SampleRate rate, int xtal_corr = 0);
 
     // Start up the instance asynchronous. This function will return
     // immediately and the internal thread will start looking for the
@@ -55,6 +55,9 @@ public:
 
     // Check if a given device is present on the USB bus
     static bool isPresent(const std::string &serial);
+
+    // Check if the given device supports the given rate
+    static bool rateSupported(const std::string &serial, SampleRate rate);
 
 private:
     int            xtal_corr_;

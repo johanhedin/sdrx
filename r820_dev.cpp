@@ -25,8 +25,8 @@
 #include "airspy_dev.hpp"
 
 
-R820Dev::R820Dev(const std::string &serial, SampleRate fs)
- : serial_(serial), fs_(fs), state_(State::IDLE), user_data_(nullptr), run_(false), type_(Type::UNKNOWN) {}
+R820Dev::R820Dev(const std::string &serial, SampleRate rate)
+ : serial_(serial), fs_(rate), state_(State::IDLE), user_data_(nullptr), run_(false), type_(Type::UNKNOWN) {}
 
 
 R820Dev::~R820Dev(void) {
@@ -41,24 +41,24 @@ R820Dev::~R820Dev(void) {
 // Static functions below
 //
 
-R820Dev *R820Dev::create(Type type, const std::string &serial, SampleRate fs, int xtal_corr) {
+R820Dev *R820Dev::create(Type type, const std::string &serial, SampleRate rate, int xtal_corr) {
     R820Dev *dev_ptr;
 
     switch (type) {
         case Type::RTL:
-            dev_ptr = new RtlDev(serial, fs, xtal_corr);
+            dev_ptr = new RtlDev(serial, rate, xtal_corr);
+            dev_ptr->type_ = type;
             break;
 
         case Type::AIRSPY:
-            dev_ptr = new AirspyDev(serial, fs);
+            dev_ptr = new AirspyDev(serial, rate);
+            dev_ptr->type_ = type;
             break;
 
         default:
             dev_ptr = nullptr;
             break;
     }
-
-    if (dev_ptr) dev_ptr->type_ = type;
 
     return dev_ptr;
 }
@@ -106,21 +106,6 @@ const std::string &R820Dev::typeToStr(Type type) {
 }
 
 
-/*
-bool R820Dev::isPresent(const std::string &serial) {
-    bool present = false;
-
-    if (RtlDev::isPresent(serial)) {
-        present = true;
-    } else if (AirspyDev::isPresent(serial)) {
-        present = true;
-    }
-
-    return present;
-}
-*/
-
-
 R820Dev::Type R820Dev::getType(const std::string &serial) {
     Type type = Type::UNKNOWN;
 
@@ -132,6 +117,21 @@ R820Dev::Type R820Dev::getType(const std::string &serial) {
 
     return type;
 }
+
+
+bool R820Dev::rateSupported(const std::string &serial, SampleRate rate) {
+    bool supported = false;
+
+    Type type = getType(serial);
+    if (type == Type::RTL) {
+        supported = RtlDev::rateSupported(serial, rate);
+    } else if (type == Type::AIRSPY) {
+        supported = AirspyDev::rateSupported(serial, rate);
+    }
+
+    return supported;
+}
+
 
 std::vector<R820Dev::Info> R820Dev::list(void) {
     std::vector<R820Dev::Info> devices;

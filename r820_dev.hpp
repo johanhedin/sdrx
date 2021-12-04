@@ -182,7 +182,7 @@ public:
     };
 
     // Factory function for creating a new instance
-    static R820Dev *create(Type type, const std::string &serial, SampleRate fs, int xtal_corr = 0);
+    static R820Dev *create(Type type, const std::string &serial, SampleRate rate, int xtal_corr = 0);
 
     // Instances of this class is not intended to be copied in any way
     R820Dev(const R820Dev&) = delete;
@@ -218,7 +218,9 @@ public:
 
     // Data signal. Emitted when a block of 32ms of data is available
     // irrespectively of the sample rate. Data len will ofcourse vary. 32ms
-    // bocks equals a callback frequency of 31.25Hz
+    // bocks equals a callback frequency of 31.25Hz. The signal will be
+    // emitted in the context of an internal thread. Use appropriate mutex
+    // in your slot if you need to.
     sigc::signal<void(const iqsample_t*, unsigned, void*, const BlockInfo&)> data;
 
     // Convert return value to string
@@ -231,12 +233,15 @@ public:
     // not available on the bus, UNKNOWN is returned
     static Type getType(const std::string &serial);
 
+    // Check if the given device supports the given rate
+    static bool rateSupported(const std::string &serial, SampleRate rate);
+
     // Get a list of available devices
     static std::vector<R820Dev::Info> list(void);
 
 protected:
     // Prevent instantiation of the base class
-    R820Dev(const std::string &serial, SampleRate fs);
+    R820Dev(const std::string&, SampleRate);
 
     std::string    serial_;
     SampleRate     fs_;

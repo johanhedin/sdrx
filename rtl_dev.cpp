@@ -434,3 +434,15 @@ bool RtlDev::isPresent(const std::string &serial) {
 
     return false;
 }
+
+
+bool RtlDev::rateSupported(const std::string &serial, SampleRate rate) {
+    bool supported = false;
+
+    std::vector<SampleRate> supported_rates = get_sample_rates(serial);
+    if (std::find(supported_rates.begin(), supported_rates.end(), rate) != supported_rates.end()) {
+        supported = true;
+    }
+
+    return supported;
+}

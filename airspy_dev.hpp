@@ -31,7 +31,7 @@
 
 class AirspyDev : public R820Dev {
 public:
-    AirspyDev(const std::string &serial, SampleRate fs);
+    AirspyDev(const std::string &serial, SampleRate rate);
 
     // Start up the instance asynchronous. This function will return
     // immediately and the internal thread will start looking for the
@@ -55,6 +55,9 @@ public:
 
     // Check if a given device is present on the USB bus
     static bool isPresent(const std::string &serial);
+
+    // Check if the given device supports the given rate
+    static bool rateSupported(const std::string &serial, SampleRate rate);
 
 private:
     uint32_t       fq_;
