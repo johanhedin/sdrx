@@ -1654,7 +1654,7 @@ int main(int argc, char** argv) {
     if (settings.gain_mode == Settings::GainMode::COMPOSITE) {
         std::cout << "    RF gain: " << settings.composit_gain << "dB\n";
     } else {
-        std::cout << "    RF gain indexes: " << settings.lna_gain_idx << ":" << settings.lna_gain_idx << ":" << settings.vga_gain_idx << std::endl;
+        std::cout << "    RF gain indexes: " << settings.lna_gain_idx << ":" << settings.mix_gain_idx << ":" << settings.vga_gain_idx << std::endl;
     }
     std::cout << "    Modulation: " << modulation_to_str(settings.mod) << std::endl;
     std::cout << "    Volume: " << settings.lf_gain << "dB\n";
