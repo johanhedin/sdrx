@@ -158,7 +158,7 @@ normaly have unique serials and you do not have to worry about them.
 `sdrx` does not use the "device id" concept at all. An "id" (typically a low
 number like 0 or 1) is not a stable way to reference a dongle since the id
 may cange over time as devices are plugged in and removed from the USB bus.
-The serial numer concept is, on the other hand, a stable and predictive way
+The serial number concept is, on the other hand, a stable and predictive way
 to reference a specific dongle as long as every dongle on the system have been
 given a unique name.
 
@@ -213,12 +213,12 @@ A typical output look like this:
 
     $ ./sdrx -g 45 118.105
     ...
-    10:57:00: Level[XX    -37.2] 118.105[ 0.0] [-22.5|-22.6|-23.4] [  0.00] [SNR] [low|mid|hig] [imbalance]
-    10:57:01: Level[XX    -39.6] 118.105[ 0.0] [-22.1|-22.9|-22.2] [  0.00] [SNR] [low|mid|hig] [imbalance]
-    10:57:01: Level[XX    -39.5] 118.105[ 0.0] [-21.1|-22.3|-22.8] [  0.00] [SNR] [low|mid|hig] [imbalance]
-    10:57:01: Level[XXXX  -27.5] 118.105[38.0] [-21.4| 16.5|-21.7] [-12.28] [SNR] [low|mid|hig] [imbalance]
-    10:57:02: Level[XXXX  -27.5] 118.105[38.7] [-22.7| 16.6|-21.6] [-30.74] [SNR] [low|mid|hig] [imbalance]
-    10:57:02: Level[XXXX  -27.5] 118.105[39.7] [-21.8| 16.9|-24.2] [-30.66] [SNR] [low|mid|hig] [imbalance]
+    10:57:00: Level[X    -37.2] 118.105[ 0.0] [-22.5|-22.6|-23.4] [  0.00] [SNR][low|mid|hig][imbalance]
+    10:57:01: Level[X    -39.6] 118.105[ 0.0] [-22.1|-22.9|-22.2] [  0.00] [SNR][low|mid|hig][imbalance]
+    10:57:01: Level[X    -39.5] 118.105[ 0.0] [-21.1|-22.3|-22.8] [  0.00] [SNR][low|mid|hig][imbalance]
+    10:57:01: Level[XXX  -27.5] 118.105[38.0] [-21.4| 16.5|-21.7] [-12.28] [SNR][low|mid|hig][imbalance]
+    10:57:02: Level[XXX  -27.5] 118.105[38.7] [-22.7| 16.6|-21.6] [-30.74] [SNR][low|mid|hig][imbalance]
+    10:57:02: Level[XXX  -27.5] 118.105[39.7] [-21.8| 16.9|-24.2] [-30.66] [SNR][low|mid|hig][imbalance]
     ...
 
 Open squelch is indicated by the channel name getting a yellow background.
@@ -255,7 +255,7 @@ awareness of what channels that are active. The channels will be placed in the
 panorma based on their order on the command line.
 
 Output in the terminal looks about the same as for signle channel but only the
-SNR is shown for every individual channel:
+SNR is shown for each individual channel:
 
     $ ./sdrx -g 40 118.105 118.280 118.405
     ...
