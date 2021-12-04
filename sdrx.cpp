@@ -44,6 +44,7 @@
 #include <clocale>
 #include <cctype>
 #include <map>
+#include <iomanip>
 
 // Libs that we use
 #include <popt.h>
@@ -268,11 +269,12 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
 // Render a dBFS level for a IQ sample as a ASCII bargraph
 static void render_bargraph(float level, char *buf) {
     int lvl = (int)level;
+    static const int noise_floor = -56;
 
-    if (lvl < -56) lvl = -56;
+    if (lvl < noise_floor) lvl = noise_floor;
     if (lvl > 0) lvl = 0;
 
-    int tmp_level = lvl + 56;
+    int tmp_level = lvl + (-noise_floor);
     int base = tmp_level/8;
     int rest = tmp_level - base * 8;
 
@@ -308,11 +310,11 @@ static void render_bargraph(float level, char *buf) {
                 buf += 3;
             }
         } else {
-            snprintf(buf, 65, " ");
+            snprintf(buf, 66, " ");
             buf += 1;
         }
     }
-    snprintf(buf, 65, "\033[0m");
+    snprintf(buf, 66, "\033[0m");
 }
 
 
@@ -323,7 +325,7 @@ static void alsa_write_cb(OutputState &ctx) {
     const struct Metadata *metadata_ptr = nullptr;
     struct tm              tm;
     char                   tmp_str[256];
-    char                   bar[71];
+    char                   bar[75];
     std::vector<Channel>  &channels = ctx.settings.channels;
 
     ret = snd_pcm_avail_update(ctx.pcm_handle);
@@ -936,15 +938,116 @@ static void list_available_devices(void) {
     std::cout << "Searching for available devices...\n";
     std::vector<std::string> serials;
     bool duplicate_serials = false;
+    unsigned max_serial_len = 0;
+    unsigned max_type_len = 0;
+    unsigned max_state_len = 0;
+    unsigned max_rate_len = 0;
+    unsigned max_desc_len = 0;
 
+    static const std::string hdr_serial = "Serial:";
+    static const std::string hdr_type   = "Type:";
+    static const std::string hdr_state  = "State:";
+    static const std::string hdr_rate   = "Sample rates (MS/s):";
+    static const std::string hdr_desc   = "Description:";
+
+    max_serial_len = hdr_serial.length();
+    max_type_len   = hdr_type.length();
+    max_state_len  = hdr_state.length();
+    max_rate_len   = hdr_rate.length();
+    max_desc_len   = hdr_desc.length();
+
+    // Collect devices on the system
     std::vector<R820Dev::Info> devices = R820Dev::list();
+
+    // Calculate column widths
     for (auto &dev : devices) {
+        if (dev.serial.length() > max_serial_len) max_serial_len = dev.serial.length();
+
+        if (R820Dev::typeToStr(dev.type).length() > max_type_len) max_type_len = R820Dev::typeToStr(dev.type).length();
+
+        std::string tmp_state_str;
+        if (dev.available) {
+            tmp_state_str = "Available";
+        } else {
+            tmp_state_str = "In use";
+        }
+        if (tmp_state_str.length() > max_state_len) max_state_len = tmp_state_str.length();
+
+        std::string tmp_rate_str;
+        bool first = true;
+        unsigned tmp_rate_len = 0;
+        for (auto &rate : dev.sample_rates) {
+            tmp_rate_str = sample_rate_to_str(rate);
+            if (first) {
+                tmp_rate_len = tmp_rate_str.length();
+                first = false;
+            } else {
+                tmp_rate_len += (2 + tmp_rate_str.length());
+            }
+        }
+        if (tmp_rate_len > max_rate_len) max_rate_len = tmp_rate_len;
+
+        if (dev.description.length() > max_desc_len) max_desc_len = dev.description.length();
+    }
+
+    max_serial_len += 2;
+    max_state_len += 2;
+    max_type_len += 2;
+    max_rate_len += 2;
+
+    // Print devices
+    if (devices.size() > 0) {
+        std::cout << std::setw(max_serial_len) << std::left << hdr_serial <<
+                     std::setw(max_type_len)   << std::left << hdr_type <<
+                     std::setw(max_state_len)  << std::left << hdr_state <<
+                     std::setw(max_rate_len)   << std::left << hdr_rate <<
+                                                               hdr_desc << std::endl;
+        for (unsigned i = 0; i < max_serial_len+max_type_len+max_state_len+max_rate_len+max_desc_len; i++) {
+            std::cout << "-";
+        }
+        std::cout << std::endl;
+    }
+
+    for (auto &dev : devices) {
+        // Check for duplicate serials
         if (std::find(serials.begin(), serials.end(), dev.serial) != serials.end()) {
             duplicate_serials = true;
         } else {
             serials.push_back(dev.serial);
         }
 
+        // Construct sample rate string
+        std::string sample_rate_str;
+        if (dev.available && dev.supported) {
+            bool first = true;
+            for (auto &rate : dev.sample_rates) {
+                // 2.5 and 3MS/s is not supported in sdrx at the moment
+                if (rate == SampleRate::FS02500 || rate == SampleRate::FS03000) continue;
+
+                if (first) {
+                    sample_rate_str = sample_rate_to_str(rate);
+                    first = false;
+                } else {
+                    sample_rate_str += ", ";
+                    sample_rate_str += sample_rate_to_str(rate);
+                }
+            }
+        }
+
+        if (dev.available) {
+            std::cout << std::setw(max_serial_len)      << std::left << dev.serial <<
+                         std::setw(max_type_len)        << std::left << R820Dev::typeToStr(dev.type) <<
+                         std::setw(max_state_len)       << std::left << "Available" <<
+                         std::setw(max_rate_len)        << std::left << sample_rate_str <<
+                                                                        dev.description << std::endl;
+        } else {
+            std::cout << std::setw(max_serial_len)      << std::left << dev.serial <<
+                         std::setw(max_type_len)        << std::left << R820Dev::typeToStr(dev.type) <<
+                         std::setw(max_state_len)       << std::left << "In use" <<
+                         std::endl;
+        }
+
+        /*
         std::cout << "    " << dev.serial << " (" <<  R820Dev::typeToStr(dev.type) << ")";
         if (dev.available) {
             if (dev.supported) {
@@ -969,6 +1072,7 @@ static void list_available_devices(void) {
         } else {
             std::cout << " (in use)\n";
         }
+        */
     }
 
     if (duplicate_serials) {
@@ -997,15 +1101,15 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm for RTL dongles. Defaults to 0 if not set", "FQCORR" },
         { "gain",      'g', POPT_ARG_STRING, &gain_str, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
         { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
-        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current noise floor. Defaults to 9 if not set", "SQLLEVEL" },
+        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current channel noise floor. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
-        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate i MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
+        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
 
     popt_ctx = poptGetContext(nullptr, argc, (const char**)argv, options_table, POPT_CONTEXT_POSIXMEHARDER);
-    poptSetOtherOptionHelp(popt_ctx, "[OPTION...] CHANNEL [CHANNEL...]");
+    poptSetOtherOptionHelp(popt_ctx, "[OPTION...] CHANNEL [CHANNEL...]\nOptions:");
 
     // Parse options
     while ((ret = poptGetNextOpt(popt_ctx)) > 0);
@@ -1013,20 +1117,21 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         // Error while parsing the options. Print the reason
         switch (ret) {
             case POPT_ERROR_BADOPT:
-                std::cerr << "Error: Unknown option given.\n";
+                std::cerr << "Error: Unknown option given.";
                 break;
             case POPT_ERROR_NOARG:
-                std::cerr << "Error: Missing option value.\n";
+                std::cerr << "Error: Missing option value.";
                 break;
             case POPT_ERROR_BADNUMBER:
             case POPT_ERROR_OVERFLOW:
-                std::cerr << "Error: Option could not be converted to number.\n";
+                std::cerr << "Error: Option could not be converted to number.";
                 break;
             default:
-                std::cerr << "Error: Unknown error in option parsing, ret = " << ret << ".\n";
+                std::cerr << "Error: Unknown error in option parsing, ret = " << ret << ".";
                 break;
         }
-        poptPrintHelp(popt_ctx, stderr, 0);
+        //poptPrintHelp(popt_ctx, stderr, 0);
+        std::cerr << " Use --help to learn how to use sdrx.\n";
         ret = -1;
     } else {
         // Options parsed without error
@@ -1067,6 +1172,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
             // Ignore given options and just print the extended help
             poptPrintHelp(popt_ctx, stderr, 0);
             std::cerr << R"(
+Explanation:
 sdrx is a software defined narrow band AM receiver that is using a R820T(2)/R860
 based RTL-SDR or Airspy Mini/R2 dongle as its hadware backend. It is mainly
 designed for use in the 118 to 138 MHz airband. The program is run from the
@@ -1131,10 +1237,10 @@ a sample rate of 1.2 MS/s. Use first available device on the system:
                     uint32_t fq_ret = parse_fq(arg, fq_type);
                     if (fq_ret == 0) {
                         std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") <<
-                                     " given: " << arg << ".\n";
+                                     " given: " << arg << ". Use --help to learn how to use sdrx.\n";
                         ret = -1;
                     } else if (fq_ret < 45000000 || fq_ret > 1800000000) {
-                        std::cerr << "Error: Invalid frequency given: " << fq_ret << "Hz.\n";
+                        std::cerr << "Error: Invalid frequency given: " << fq_ret << "Hz. Use --help to learn how to use sdrx.\n";
                         ret = -1;
                     } else {
                         // Add to channels list if not already present
@@ -1167,12 +1273,12 @@ a sample rate of 1.2 MS/s. Use first available device on the system:
                     }
                 }
             } else {
-                std::cerr << "Error: No channel given.\n";
+                std::cerr << "Error: No channel given. Use --help to learn how to use sdrx.\n";
                 ret = -1;
             }
 
             if (ret < 0) {
-                poptPrintHelp(popt_ctx, stderr, 0);
+                //poptPrintHelp(popt_ctx, stderr, 0);
             }
         }
     }
@@ -1308,6 +1414,13 @@ int main(int argc, char** argv) {
         settings.rate = SampleRate::FS01440;
     } else if (settings.rate == SampleRate::UNSPECIFIED && settings.device_type == R820Dev::Type::AIRSPY) {
         settings.rate = SampleRate::FS06000;
+    }
+
+    // Verify that the requested sample rate is supported by the requested
+    // device type
+    if (!R820Dev::rateSupported(settings.device_serial, settings.rate)) {
+        std::cerr << "Error: Sample rate " << sample_rate_to_str(settings.rate) << "MS/s is not supported by device " << settings.device_serial << std::endl;
+        return 1;
     }
 
     if (!verify_requested_bandwidth(settings)) {
