@@ -22,11 +22,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <math.h>
 #include <signal.h>
 #include <poll.h>
 #include <sys/time.h>
-#include <inttypes.h>
 #include <time.h>
 
 // Standard C++ includes
@@ -41,6 +39,7 @@
 #include <utility>
 #include <cmath>
 #include <cstdint>
+#include <cinttypes>
 #include <clocale>
 #include <cctype>
 #include <map>
@@ -318,7 +317,7 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
         }
     } else {
         // Overrun
-        std::cerr << "Warning: Ring buffer full. Unable to write samples." << std::endl;
+        std::cerr << "Warning: Ring buffer full. Skipping 32ms block of samples." << std::endl;
     }
 }
 
@@ -326,7 +325,7 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
 // Render a dBFS level for a IQ sample as a ASCII bargraph
 static void render_bargraph(float level, char *buf) {
     int lvl = (int)level;
-    static const int noise_floor = -56;
+    static const int noise_floor = -64;
 
     if (lvl < noise_floor) lvl = noise_floor;
     if (lvl > 0) lvl = 0;
@@ -335,24 +334,24 @@ static void render_bargraph(float level, char *buf) {
     int base = tmp_level/8;
     int rest = tmp_level - base * 8;
 
-    snprintf(buf, 65, "\033[32m"); // Green
+    snprintf(buf, 70, "\033[32m"); // Green
     buf += 5;
-    for (int i = 0; i < 7; i++) {
-        if (i == 5) {
-            snprintf(buf, 65, "\033[33m"); // Yellow(/brown)
+    for (int i = 0; i < 8; i++) {
+        if (i == 6) {
+            snprintf(buf, 70, "\033[33m"); // Yellow(/brown)
             buf += 5;
         }
-        if (i == 6) {
-            snprintf(buf, 65, "\033[31m"); // Red
+        if (i == 7) {
+            snprintf(buf, 70, "\033[31m"); // Red
             buf += 5;
         }
 
         if (i < base) {
-            snprintf(buf, 65, "\u2588");
+            snprintf(buf, 70, "\u2588");
             buf += 3;
         } else if (i == base) {
             if (rest == 0) {
-                snprintf(buf, 65, " ");
+                snprintf(buf, 70, " ");
                 buf += 1;
             } else {
                 switch (rest) {
@@ -367,7 +366,7 @@ static void render_bargraph(float level, char *buf) {
                 buf += 3;
             }
         } else {
-            snprintf(buf, 66, " ");
+            snprintf(buf, 70, " ");
             buf += 1;
         }
     }
@@ -606,16 +605,9 @@ static void alsa_write_cb(OutputState &ctx) {
 
     } else {
         // Underrrun
-        /*
-        if (ctx.samples_received) {
-            // Only write warning after we have started receiving samples
-            std::cerr << "Warning: Ring buffer empty. Unable to read samples. Playing " << CH_IQ_BUF_SIZE << " samples of silence.\n";
-        }
-        */
-
         if (ctx.rb_ptr->isStreaming()) {
             // Only write warning while streaming
-            std::cerr << "Warning: Ring buffer empty. Unable to read samples. Playing " << CH_IQ_BUF_SIZE << " samples (32ms) of silence.\n";
+            std::cerr << "Warning: Ring buffer empty. Playing 32ms of silence.\n";
         }
 
         ret = snd_pcm_writei(ctx.pcm_handle, ctx.silence, CH_IQ_BUF_SIZE);
