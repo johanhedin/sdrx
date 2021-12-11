@@ -985,31 +985,27 @@ static int get_audio_pos(unsigned channel_no, unsigned num_channels) {
 
 // Print available devices to stdout
 static void list_available_devices(void) {
-    std::cout << "Searching for available devices...\n";
     std::vector<std::string> serials;
     bool duplicate_serials = false;
-    unsigned max_serial_len = 0;
-    unsigned max_type_len = 0;
-    unsigned max_state_len = 0;
-    unsigned max_rate_len = 0;
-    unsigned max_desc_len = 0;
 
+    static const unsigned column_spacer = 2;
     static const std::string hdr_serial = "Serial:";
     static const std::string hdr_type   = "Type:";
     static const std::string hdr_state  = "State:";
     static const std::string hdr_rate   = "Sample rates (MS/s):";
     static const std::string hdr_desc   = "Description:";
 
-    max_serial_len = hdr_serial.length();
-    max_type_len   = hdr_type.length();
-    max_state_len  = hdr_state.length();
-    max_rate_len   = hdr_rate.length();
-    max_desc_len   = hdr_desc.length();
+    unsigned max_serial_len = hdr_serial.length();
+    unsigned max_type_len   = hdr_type.length();
+    unsigned max_state_len  = hdr_state.length();
+    unsigned max_rate_len   = hdr_rate.length();
+    unsigned max_desc_len   = hdr_desc.length();
 
     // Collect devices on the system
+    std::cout << "Scanning..." << std::flush;
     std::vector<R820Dev::Info> devices = R820Dev::list();
 
-    // Calculate column widths
+    // Calculate column widths based on what we found
     for (auto &dev : devices) {
         if (dev.serial.length() > max_serial_len) max_serial_len = dev.serial.length();
 
@@ -1039,14 +1035,14 @@ static void list_available_devices(void) {
 
         if (dev.description.length() > max_desc_len) max_desc_len = dev.description.length();
     }
+    max_serial_len += column_spacer;
+    max_type_len   += column_spacer;
+    max_state_len  += column_spacer;
+    max_rate_len   += column_spacer;
 
-    max_serial_len += 2;
-    max_state_len += 2;
-    max_type_len += 2;
-    max_rate_len += 2;
-
-    // Print devices
+    // Print table header
     if (devices.size() > 0) {
+        std::cout << " Found " << devices.size() << " supported devices:\n";
         std::cout << std::setw(max_serial_len) << std::left << hdr_serial <<
                      std::setw(max_type_len)   << std::left << hdr_type <<
                      std::setw(max_state_len)  << std::left << hdr_state <<
@@ -1056,8 +1052,11 @@ static void list_available_devices(void) {
             std::cout << "-";
         }
         std::cout << std::endl;
+    } else {
+        std::cout << " No supported devices found.\n";
     }
 
+    // Print devices (if any)
     for (auto &dev : devices) {
         // Check for duplicate serials
         if (std::find(serials.begin(), serials.end(), dev.serial) != serials.end()) {
@@ -1096,33 +1095,6 @@ static void list_available_devices(void) {
                          std::setw(max_state_len)       << std::left << "In use" <<
                          std::endl;
         }
-
-        /*
-        std::cout << "    " << dev.serial << " (" <<  R820Dev::typeToStr(dev.type) << ")";
-        if (dev.available) {
-            if (dev.supported) {
-                std::cout << ", Sample rates:";
-                bool first = true;
-                for (auto &rate : dev.sample_rates) {
-                    // 2.5 and 3MS/s is not supported in sdrx at the moment
-                    if (rate == SampleRate::FS02500 || rate == SampleRate::FS03000) continue;
-
-                    if (first) {
-                        std::cout << " " << sample_rate_to_str(rate);
-                        first = false;
-                    } else {
-                        std::cout << ", " << sample_rate_to_str(rate);
-                    }
-                }
-
-                std::cout << "MS/s. Description: " << dev.description << std::endl;
-            } else {
-                std::cout << " (unsupported tuner and/or crystal fq)\n";
-            }
-        } else {
-            std::cout << " (in use)\n";
-        }
-        */
     }
 
     if (duplicate_serials) {
