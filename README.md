@@ -5,13 +5,13 @@ sdrx
 [![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml)
 
 `sdrx` is a software defined narrow band multi channel AM airband receiver that
-uses a R820T(2)/R860 based RTL-SDR or a Airspy Mini/R2 dongle as it's hardware
+uses R820T(2)/R860 based RTL-SDR or a Airspy Mini/R2 dongles as it's hardware
 part. It's also a program for experimenting with different SDR implementation
 aspects such as translation, downsampling, filtering, channelization,
 demodulation, interaction between clock domains, threading and audio processing.
-`sdrx` is written in C++17 and is tested on a x86_64 machine running Fedora 35
-and on a Raspberry Pi 4 Model B 4GiB running Raspberry Pi OS. Audio is played
-using ALSA.
+`sdrx` is written in C++17 and is tested on a x86_64 machine running Fedora 35,
+on a Raspberry Pi 4 Model B 4GiB and on a Raspberry Pi Zero 2 W running Raspberry
+Pi OS. Audio is played using ALSA.
 
 The dongles used during development are; [RTL-SDR Blog V3](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles),
 [Nooelec NESDR SMArt v4](https://www.nooelec.com/store/sdr/sdr-receivers/smart/nesdr-smart-sdr.html),
@@ -213,12 +213,12 @@ A typical output look like this:
 
     $ ./sdrx -g 45 118.105
     ...
-    10:57:00: Level[X    -37.2] 118.105[ 0.0] [-22.5|-22.6|-23.4] [  0.00] [SNR][low|mid|hig][imbalance]
-    10:57:01: Level[X    -39.6] 118.105[ 0.0] [-22.1|-22.9|-22.2] [  0.00] [SNR][low|mid|hig][imbalance]
-    10:57:01: Level[X    -39.5] 118.105[ 0.0] [-21.1|-22.3|-22.8] [  0.00] [SNR][low|mid|hig][imbalance]
-    10:57:01: Level[XXX  -27.5] 118.105[38.0] [-21.4| 16.5|-21.7] [-12.28] [SNR][low|mid|hig][imbalance]
-    10:57:02: Level[XXX  -27.5] 118.105[38.7] [-22.7| 16.6|-21.6] [-30.74] [SNR][low|mid|hig][imbalance]
-    10:57:02: Level[XXX  -27.5] 118.105[39.7] [-21.8| 16.9|-24.2] [-30.66] [SNR][low|mid|hig][imbalance]
+    10:57:00: Level[X   -37.2] 118.105[ 0.0] [-22.5|-22.6|-23.4] [  0.00] [SNR][low|mid|hig][imbalance]
+    10:57:01: Level[X   -39.6] 118.105[ 0.0] [-22.1|-22.9|-22.2] [  0.00] [SNR][low|mid|hig][imbalance]
+    10:57:01: Level[X   -39.5] 118.105[ 0.0] [-21.1|-22.3|-22.8] [  0.00] [SNR][low|mid|hig][imbalance]
+    10:57:01: Level[XXX -27.5] 118.105[38.0] [-21.4| 16.5|-21.7] [-12.28] [SNR][low|mid|hig][imbalance]
+    10:57:02: Level[XXX -27.5] 118.105[38.7] [-22.7| 16.6|-21.6] [-30.74] [SNR][low|mid|hig][imbalance]
+    10:57:02: Level[XXX -27.5] 118.105[39.7] [-21.8| 16.9|-24.2] [-30.66] [SNR][low|mid|hig][imbalance]
     ...
 
 Open squelch is indicated by the channel name getting a yellow background.
@@ -278,20 +278,3 @@ SNR is shown for each individual channel:
     10:57:06: Level[XX    -39.6] 118.105[ 1.8] 118.205[ 0.0] 118.280[ 1.2] 118.405[ 0.0]
     10:57:06: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
     ...
-
-
-Spurious outputs on the terminal
-====
-The `librtlsdr` library have quite some `fprintf`:s build in and pollutes the
-terminal with printouts during start/stop and on different error cases.
-
-The `--list` function will trigger some of them and the printouts may be
-interpreted as a misbehaviour of `sdrx`, but it's not. To clean up the list
-function, a redirect of stderr to `/dev/null` can help:
-
-    $ ./sdrx --list 2>/dev/null
-
-It's not advisable to run `sdrx` with stderr redirected to `/dev/null` all the
-time since important errors will not be shown.
-
-Ways of removing these spurious printouts are being considered.
