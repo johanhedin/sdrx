@@ -1042,7 +1042,7 @@ static void list_available_devices(void) {
 
     // Print table header
     if (devices.size() > 0) {
-        std::cout << " Found " << devices.size() << " supported devices:\n";
+        std::cout << " Found " << devices.size() << " device" << (devices.size() > 1 ? "s":"") << ":\n";
         std::cout << std::setw(max_serial_len) << std::left << hdr_serial <<
                      std::setw(max_type_len)   << std::left << hdr_type <<
                      std::setw(max_state_len)  << std::left << hdr_state <<
