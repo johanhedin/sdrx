@@ -52,40 +52,60 @@ public:
 
     // Translate and down sample. If in_len is a multiple of m, you don't need
     // out_len since you know how many out samples that are to be output.
-    void decimate(const iqsample_t *in, unsigned in_len, iqsample_t *out, unsigned *out_len = nullptr) {
-        unsigned   sample_pos = 0;
+    inline void decimate(const iqsample_t *in, unsigned in_len, iqsample_t *out, unsigned *out_len_ptr = nullptr) {
         iqsample_t sample;
+        unsigned   out_len = 0;
 
-        if (out_len) *out_len = 0;
+        if (translator_.empty()) {
+            // No tuning required
+            for (unsigned i = 0; i < in_len; ++i) {
+                sample = in[i];
 
-        while (sample_pos < in_len) {
-            // Tune if translating vector is supplied
-            if (translator_.size() != 0) {
-                sample = translator_[trans_pos_] * in[sample_pos];
-                if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
-            } else {
-                sample = in[sample_pos];
-            }
-
-            auto stage_iter = stages_.begin();
-            while (stage_iter != stages_.end()) {
-                if (stage_iter->addSample(sample)) {
-                    // The stage produced a out sample
-                    sample = stage_iter->calculateOutput();
-                } else {
-                    // The stage need more samples
-                    break;
+                auto stage_iter = stages_.begin();
+                while (stage_iter != stages_.end()) {
+                    if (stage_iter->addSample(sample)) {
+                        // The stage produced a out sample
+                        sample = stage_iter->calculateOutput();
+                    } else {
+                        // The stage need more samples
+                        break;
+                    }
+                    ++stage_iter;
                 }
-                ++stage_iter;
-            }
 
-            if (stage_iter == stages_.end()) {
-                // Write out sample
-                *(out++) = sample;
-                if (out_len) *out_len += 1;
+                if (stage_iter == stages_.end()) {
+                    // Write out sample
+                    *(out++) = sample;
+                    out_len += 1;
+                }
             }
-            ++sample_pos;
+        } else {
+            // Tune to requested channel
+            for (unsigned i = 0; i < in_len; ++i) {
+                sample = in[i] * translator_[trans_pos_];
+                if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
+
+                auto stage_iter = stages_.begin();
+                while (stage_iter != stages_.end()) {
+                    if (stage_iter->addSample(sample)) {
+                        // The stage produced a out sample
+                        sample = stage_iter->calculateOutput();
+                    } else {
+                        // The stage need more samples
+                        break;
+                    }
+                    ++stage_iter;
+                }
+
+                if (stage_iter == stages_.end()) {
+                    // Write out sample
+                    *(out++) = sample;
+                    out_len += 1;
+                }
+            }
         }
+
+        if (out_len_ptr) *out_len_ptr = out_len;
     }
 
 private:
@@ -97,7 +117,7 @@ private:
             rb_(c.size(), iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m) {}
 
         // Add one new sample to the delay line
-        bool addSample(iqsample_t sample) {
+        inline bool addSample(iqsample_t sample) {
             bool ret = false;
 
             // Add sample to the ring buffer at current position
@@ -118,13 +138,13 @@ private:
 
         // Calculat one output sample based on the in samples in the delay line
         // and the filter coefficients
-        iqsample_t calculateOutput(void) {
-            auto i = pos_;
+        inline iqsample_t calculateOutput(void) {
+            auto rb_pos = pos_;
 
             iqsample_t out_sample(0.0f, 0.0f);
-            for (auto c = c_.begin(); c != c_.end(); ++c) {
-                out_sample += *c * rb_[i++];
-                if (i == rb_.size()) i = 0;
+            for (unsigned i = 0; i < c_.size(); ++i) {
+                out_sample += rb_[rb_pos] * c_[i];
+                if (++rb_pos == rb_.size()) rb_pos = 0;
             }
 
             return out_sample;
@@ -141,7 +161,7 @@ private:
     std::vector<MSD::S>     stages_;     // List of stages
     unsigned                m_;          // Total decimation factor
     std::vector<iqsample_t> translator_; // Fq tuning sequence
-    unsigned                trans_pos_;
+    unsigned                trans_pos_;  // Position in translator
 };
 
 #endif // MSD_HPP
