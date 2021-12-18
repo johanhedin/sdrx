@@ -21,16 +21,21 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 # build in release mode
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
-    message(STATUS "Build type not specified, defaulting to debug. Change with -DCMAKE_BUILD_TYPE=Release")
+    message(STATUS "Build type not specified, defaulting to Debug. Change to Release with -DCMAKE_BUILD_TYPE=Release")
 endif(NOT CMAKE_BUILD_TYPE)
 
 # Our compiler flags. We run with optimization even in debug mode to be able
 # to run in "real time".
 # Extra flags for reporting around vectorization are:
 #   -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=7
-set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+#   -fopt-info-vec -fopt-info-vec-note
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -march=native  -mtune=native")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O2")
-set(CMAKE_CXX_FLAGS_RELEASE "-O2")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+set(CMAKE_C_FLAGS "-Wall -Wextra -march=native  -mtune=native")
+set(CMAKE_C_FLAGS_DEBUG "-g -O2")
+set(CMAKE_C_FLAGS_RELEASE "-O3")
 
 # Add submodule libairspy (airspyone_host) as a subdirectory to our project.
 # The EXCLUDE_FROM_ALL option allows us to cherry pick the airspy-static
@@ -111,9 +116,8 @@ if (PkgConfig_FOUND)
     target_link_libraries(dts ${SIGC2_LIBRARIES})
 endif(PkgConfig_FOUND)
 
-#find_package(RTLSDR REQUIRED)
-#if (RTLSDR_FOUND)
-#    include_directories(${RTLSDR_INCLUDE_DIRS})
-#    target_link_libraries (sdrx ${RTLSDR_LIBRARIES})
-#    target_link_libraries (dts ${RTLSDR_LIBRARIES})
-#endif(RTLSDR_FOUND)
+#find_package(Volk REQUIRED)
+#if (VOLK_FOUND)
+#    include_directories(${VOLK_INCLUDE_DIRS})
+#    target_link_libraries (sdrx ${VOLK_LIBRARIES})
+#endif(VOLK_FOUND)
