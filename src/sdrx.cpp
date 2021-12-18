@@ -1219,13 +1219,9 @@ Volume and squelch can normally be left as is since the defaults work well.
 
 Examples:
 
-List available devices (spurious librtlsdr printouts to stderr may occure):
+List available devices:
 
     $ sdrx --list
-
-or, for a more clean output:
-
-    $ sdrx --list 2>/dev/null
 
 Listen to the channel 122.450 with 40dB of RF gain and +3dB volume. Use
 device with serial "MY-DEVICE":
