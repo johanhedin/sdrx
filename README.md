@@ -19,10 +19,10 @@ The dongles used during development are; [RTL-SDR Blog V3](https://www.rtl-sdr.c
 The program only support R820T(2)/R860 based devices and may be incompatible
 with other RTL dongles and less powerfull Raspberry Pi models. YMMV.
 
-The channelization is done with a translate, filter and downsampling approach in
-one single thread. This is simple, but not the most effective way when listening
-to many simultaneous channels. Other, more effective methods are being considered
-in the future.
+The channelization is currently done with a translate, filter and downsampling
+approach in one single thread. This is simple, but not the most effective way
+when listening to many simultaneous channels. Other, more effective methods are
+being considered in the future.
 
 `sdrx` is only available in source code form. It is easy to build using the
 instructions below, but some basic Linux understanding and familiarity with a
@@ -36,11 +36,11 @@ Besides git, gcc, cmake and the standard set of development tools, `sdrx` depend
 on the following libraries. They, and their development parts, need to be
 installed on your machine in order to build and run `sdrx`:
 
- * libpopt
+ * popt
  * libsigc++20
  * libusb-1.0
- * libfftw
- * libasound
+ * fftw
+ * alsa
  * librtlsdr
  * libairspy
 
