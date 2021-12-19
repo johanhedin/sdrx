@@ -296,9 +296,9 @@ static const std::vector<float> fs_02560_08bit_ds_lpf4_00320_to_00160 = {
 //
 // Output the filter coefficients as a C++ float vector:
 //
-//   > vectortocpp(c, "fs_02560_08bit_ds_lpf1_02560_to_00320")
+//   > vectortocpp(c, "fs_02560_08bit_ds_lpf1_02560_to_00160")
 //
-static const std::vector<float> fs_02560_08bit_ds_lpf1_02560_to_00320 = {
+static const std::vector<float> fs_02560_08bit_ds_lpf1_02560_to_00160 = {
      0.0015865468475583f,
      0.0019256484220172f,
      0.0030136569562523f,
