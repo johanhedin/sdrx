@@ -302,4 +302,193 @@ static const std::vector<float> fs_06000_12bit_ds_lpf4_00080_to_00016 = {
 };
 
 
+
+
+// Filter for first stage downsampling. Allows for reduction of the sample rate
+// from 6.0MS/s to 1.2MS/s (M = 5) and increases the dynamic range from 74dB
+// to ~80.98dB.
+//
+// Care band is between 0 and 10kHz and we want the attenuation in the folding
+// area (1200 +/-10 kHz and 2400 +/- 10 kHz in this case) to be more than 74dB.
+//
+// Calculate with octave. fs is the sampling frequency and fcut is the care
+// band high cutoff frequency (both in kHz):
+//
+//   > pkg load signal;
+//   > fs = 6000;
+//   > fcut = 10;
+//   > M = 5;
+//   > c = sincflt(17, fs, fcut, @ultrwin, 1, 3.33);
+//
+// Plot the filter response with the care band and alias zones marked with the
+// fltbox function:
+//
+//   > fltbox(fs, 74, fcut, M);
+//   > plot((-0.5:1/4096:0.5-1/4096)*fs, 20*log10(abs(fftshift(fft(c, 4096)))), 'b-');
+//
+// Output the filter coefficients as a C++ float vector:
+//
+//   > vectortocpp(c, "fs_06000_12bit_ds_lpf1_06000_to_01200")
+//
+static const std::vector<float> fs_06000_12bit_ds_lpf1_06000_to_01200 = {
+     0.0006006403003994f,
+     0.0033940324695984f,
+     0.0110696194344303f,
+     0.0264965302093969f,
+     0.0509119222351129f,
+     0.0821050659591422f,
+     0.1139337485489379f,
+     0.1379966567308591f,
+     0.1469835682242459f,
+     0.1379966567308591f,
+     0.1139337485489379f,
+     0.0821050659591422f,
+     0.0509119222351129f,
+     0.0264965302093969f,
+     0.0110696194344303f,
+     0.0033940324695984f,
+     0.0006006403003994f
+};
+
+
+// Filter for second stage downsampling. Allows for reduction of the sample rate
+// from 1200kS/s to 400kS/s (M = 3) and increases the dynamic range from ~80.98dB
+// to ~85.8dB.
+//
+// Care band is between 0 and 10kHz and we want the attenuation in the folding
+// area (400 +/-10 kHz in this case) to be more than 81dB.
+//
+// Calculate with octave. fs is the sampling frequency and fcut is the care
+// band high cutoff frequency (both in kHz):
+//
+//   > pkg load signal;
+//   > fs = 1200;
+//   > fcut = 10;
+//   > M = 3;
+//   > c = sincflt(11, fs, fcut, @ultrwin, 1, 3.33);
+//
+// Plot the filter response with the care band and alias zones marked with the
+// fltbox function:
+//
+//   > fltbox(fs, 81, fcut, M);
+//   > plot((-0.5:1/4096:0.5-1/4096)*fs, 20*log10(abs(fftshift(fft(c, 4096)))), 'b-');
+//
+// Output the filter coefficients as a C++ float vector:
+//
+//   > vectortocpp(c, "fs_06000_12bit_ds_lpf2_01200_to_00400")
+//
+static const std::vector<float> fs_06000_12bit_ds_lpf2_01200_to_00400 = {
+     0.0025136162927465f,
+     0.0169157562346710f,
+     0.0566573299150966f,
+     0.1230684290013303f,
+     0.1908330988125411f,
+     0.2200235394872289f,
+     0.1908330988125411f,
+     0.1230684290013303f,
+     0.0566573299150966f,
+     0.0169157562346710f,
+     0.0025136162927465f
+};
+
+
+// Filter for second stage downsampling. Allows for reduction of the sample rate
+// from 1200kS/s to 240kS/s (M = 5) and increases the dynamic range from ~80.98dB
+// to ~87.98dB.
+//
+// Care band is between 0 and 10kHz and we want the attenuation in the folding
+// area (240 +/-10 kHz and 480 +/- 10 kHz in this case) to be more than 81dB.
+//
+// Calculate with octave. fs is the sampling frequency and fcut is the care
+// band high cutoff frequency (both in kHz):
+//
+//   > pkg load signal;
+//   > fs = 1200;
+//   > fcut = 10;
+//   > M = 5;
+//   > c = sincflt(19, fs, fcut, @ultrwin, 1, 3.33);
+//
+// Plot the filter response with the care band and alias zones marked with the
+// fltbox function:
+//
+//   > fltbox(fs, 81, fcut, M);
+//   > plot((-0.5:1/4096:0.5-1/4096)*fs, 20*log10(abs(fftshift(fft(c, 4096)))), 'b-');
+//
+// Output the filter coefficients as a C++ float vector:
+//
+//   > vectortocpp(c, "fs_06000_12bit_ds_lpf2_01200_to_00240")
+//
+static const std::vector<float> fs_06000_12bit_ds_lpf2_01200_to_00240 = {
+     0.0004202576729204f,
+     0.0022491272083677f,
+     0.0071763294153506f,
+     0.0171924075658931f,
+     0.0337021724262576f,
+     0.0564371373934518f,
+     0.0827461189730626f,
+     0.1078141101471069f,
+     0.1259625452321310f,
+     0.1325995879309161f,
+     0.1259625452321310f,
+     0.1078141101471069f,
+     0.0827461189730626f,
+     0.0564371373934518f,
+     0.0337021724262576f,
+     0.0171924075658931f,
+     0.0071763294153506f,
+     0.0022491272083677f,
+     0.0004202576729204f
+};
+
+
+// Filter for third stage downsampling. Allows for reduction of the sample rate
+// from 240kS/s to 80kS/s (M = 3) and increases the dynamic range from ~87.98dB
+// to ~92.75dB.
+//
+// Care band is between 0 and 10kHz and we want the attenuation in the folding
+// area (80 +/-10 kHz in this case) to be more than 88dB.
+//
+// Calculate with octave. fs is the sampling frequency and fcut is the care
+// band high cutoff frequency (both in kHz):
+//
+//   > pkg load signal;
+//   > fs = 240;
+//   > fcut = 10;
+//   > M = 3;
+//   > c = sincflt(21, fs, fcut+20, @ultrwin, 0.9, 3.73);
+//
+// Plot the filter response with the care band and alias zones marked with the
+// fltbox function:
+//
+//   > fltbox(fs, 88, fcut, M);
+//   > plot((-0.5:1/4096:0.5-1/4096)*fs, 20*log10(abs(fftshift(fft(c, 4096)))), 'b-');
+//
+// Output the filter coefficients as a C++ float vector:
+//
+//   > vectortocpp(c, "fs_06000_12bit_ds_lpf3_00240_to_00080")
+//
+static const std::vector<float> fs_06000_12bit_ds_lpf3_00240_to_00080 = {
+     0.0000439575217698f,
+     0.0002062309042165f,
+    -0.0000000000000000f,
+    -0.0024238305026163f,
+    -0.0085068635056162f,
+    -0.0130976302923929f,
+     0.0000000000000000f,
+     0.0490883572749505f,
+     0.1325839901271730f,
+     0.2162269954046298f,
+     0.2517575861357718f,
+     0.2162269954046298f,
+     0.1325839901271730f,
+     0.0490883572749505f,
+     0.0000000000000000f,
+    -0.0130976302923929f,
+    -0.0085068635056162f,
+    -0.0024238305026163f,
+    -0.0000000000000000f,
+     0.0002062309042165f,
+     0.0000439575217698f
+};
+
 #endif // FS_06000_12BIT_DS_TO_00016_HPP
