@@ -175,9 +175,9 @@ static const std::vector<float> fs_02560_08bit_ds_lpf2_00640_to_00160 = {
 //
 // Output the filter coefficients as a C++ float vector:
 //
-//   > vectortocpp(c, "fs_02560_08bit_ds_lpf3_00160_to_00320")
+//   > vectortocpp(c, "fs_02560_08bit_ds_lpf3_00160_to_00032")
 //
-static const std::vector<float> fs_02560_08bit_ds_lpf3_00160_to_00320 = {
+static const std::vector<float> fs_02560_08bit_ds_lpf3_00160_to_00032 = {
      0.0001840359044440f,
      0.0006409912293569f,
      0.0013774575329339f,
@@ -241,9 +241,9 @@ static const std::vector<float> fs_02560_08bit_ds_lpf3_00160_to_00320 = {
 //
 // Output the filter coefficients as a C++ float vector:
 //
-//   > vectortocpp(c, "fs_02560_08bit_ds_lpf4_00320_to_00160")
+//   > vectortocpp(c, "fs_02560_08bit_ds_lpf4_00032_to_00016")
 //
-static const std::vector<float> fs_02560_08bit_ds_lpf4_00320_to_00160 = {
+static const std::vector<float> fs_02560_08bit_ds_lpf4_00032_to_00016 = {
      0.0003683349209640f,
     -0.0002660820012386f,
     -0.0035421569940826f,
@@ -340,6 +340,156 @@ static const std::vector<float> fs_02560_08bit_ds_lpf1_02560_to_00160 = {
      0.0030136569562523f,
      0.0019256484220172f,
      0.0015865468475583f
+};
+
+
+// Filter for first stage downsampling. Allows for reduction of the sample rate
+// from 2.56MS/s to 128kS/s (M = 20) and increases the dynamic range from 50dB
+// to ~63.01dB.
+//
+// Care band is between 0 and 10kHz and we want the attenuation in the folding
+// areas (160 +/-10 kHz and 320 +/- 10 kHz and 960 +/- 10 in this case) to be
+// more than 50dB.
+//
+// Calculate with octave. fs is the sampling frequency and fcut is the care
+// band high cutoff frequency (both in kHz):
+//
+//   > pkg load signal;
+//   > fs = 2560;
+//   > fcut = 10;
+//   > M = 20;
+//   > c = sincflt(51, fs, fcut, @chebwin, 55);
+//
+// Plot the filter response with the care band and alias zones marked with the
+// fltbox function:
+//
+//   > fltbox(fs, 50, fcut, M);
+//   > plot((-0.5:1/4096:0.5-1/4096)*fs, 20*log10(abs(fftshift(fft(c, 4096)))), 'b-');
+//
+// Output the filter coefficients as a C++ float vector:
+//
+//   > vectortocpp(c, "fs_02560_08bit_ds_lpf1_02560_to_00128")
+//
+static const std::vector<float> fs_02560_08bit_ds_lpf1_02560_to_00128 = {
+     0.0013769051701223f,
+     0.0013482130854811f,
+     0.0019750586352696f,
+     0.0027591262887578f,
+     0.0037145797662651f,
+     0.0048524200510544f,
+     0.0061796607077686f,
+     0.0076985814719289f,
+     0.0094061007314750f,
+     0.0112933047756907f,
+     0.0133451668367938f,
+     0.0155404821412123f,
+     0.0178520366829825f,
+     0.0202470175978873f,
+     0.0226876623091988f,
+     0.0251321325549059f,
+     0.0275355885508511f,
+     0.0298514284607068f,
+     0.0320326495746322f,
+     0.0340332806311903f,
+     0.0358098299554681f,
+     0.0373226918261809f,
+     0.0385374538951738f,
+     0.0394260515953054f,
+     0.0399677211763582f,
+     0.0401497110546783f,
+     0.0399677211763582f,
+     0.0394260515953054f,
+     0.0385374538951738f,
+     0.0373226918261809f,
+     0.0358098299554681f,
+     0.0340332806311903f,
+     0.0320326495746322f,
+     0.0298514284607068f,
+     0.0275355885508511f,
+     0.0251321325549059f,
+     0.0226876623091988f,
+     0.0202470175978873f,
+     0.0178520366829825f,
+     0.0155404821412123f,
+     0.0133451668367938f,
+     0.0112933047756907f,
+     0.0094061007314750f,
+     0.0076985814719289f,
+     0.0061796607077686f,
+     0.0048524200510544f,
+     0.0037145797662651f,
+     0.0027591262887578f,
+     0.0019750586352696f,
+     0.0013482130854811f,
+     0.0013769051701223f
+};
+
+
+// Filter for second stage downsampling. Allows for reduction of the sample rate
+// from 128kS/s to 32kS/s (M = 4) and increases the dynamic range from ~63.01dB
+// to ~69.03dB.
+//
+// Care band is between 0 and 10kHz and we want the attenuation in the folding
+// areas (32 +/- 5 kHz and 64 +/- 5 kHz in this case) to be more than 63dB.
+//
+// Calculate with octave. fs is the sampling frequency and fcut is the care
+// band high cutoff frequency (both in kHz):
+//
+//   > pkg load signal;
+//   > fs = 128;
+//   > fcut = 10;
+//   > M = 4;
+//   >
+//   > % Candidates:
+//   > c = sincflt(51, fs, fcut+2, @chebwin, 66);
+//   >
+//   > % Used as of 2021-12-19:
+//   > c = sincflt(33, fs, fcut+4, @chebwin, 54);
+//
+// Plot the filter response with the care band and alias zones marked with the
+// fltbox function:
+//
+//   > fltbox(fs, 63, fcut, M);
+//   > plot((-0.5:1/4096:0.5-1/4096)*fs, 20*log10(abs(fftshift(fft(c, 4096)))), 'b-');
+//
+// Output the filter coefficients as a C++ float vector:
+//
+//   > vectortocpp(c, "fs_02560_08bit_ds_lpf2_00128_to_00032")
+//
+static const std::vector<float> fs_02560_08bit_ds_lpf2_00128_to_00032 = {
+    -0.0006783399654280f,
+    -0.0008093334100785f,
+    -0.0003623383559927f,
+     0.0014372195386501f,
+     0.0043729475392083f,
+     0.0067400722740468f,
+     0.0056338795167298f,
+    -0.0013947459080642f,
+    -0.0138483793437282f,
+    -0.0264765058542223f,
+    -0.0298710715750712f,
+    -0.0141285208821101f,
+     0.0256718159836250f,
+     0.0850333558412913f,
+     0.1495910557035150f,
+     0.1997504351731863f,
+     0.2186769074488850f,
+     0.1997504351731863f,
+     0.1495910557035150f,
+     0.0850333558412913f,
+     0.0256718159836250f,
+    -0.0141285208821101f,
+    -0.0298710715750712f,
+    -0.0264765058542223f,
+    -0.0138483793437282f,
+    -0.0013947459080642f,
+     0.0056338795167298f,
+     0.0067400722740468f,
+     0.0043729475392083f,
+     0.0014372195386501f,
+    -0.0003623383559927f,
+    -0.0008093334100785f,
+    -0.0006783399654280f
 };
 
 #endif // FS_02560_08BIT_DS_TO_00016_HPP
