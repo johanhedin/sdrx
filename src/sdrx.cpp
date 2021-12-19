@@ -1551,10 +1551,9 @@ int main(int argc, char** argv) {
         case SampleRate::FS06000:
             N = 720; z = 1;
             stages = std::vector<MSD::Stage>{
-                { 5, fs_06000_12bit_ds_lpf1_06000_to_01200 },
-                { 5, fs_06000_12bit_ds_lpf2_01200_to_00240 },
-                { 3, fs_06000_12bit_ds_lpf3_00240_to_00080 },
-                { 5, fs_06000_12bit_ds_lpf4_00080_to_00016 }
+                { 15, fs_06000_12bit_ds_lpf1_06000_to_00400 },
+                {  5, fs_06000_12bit_ds_lpf3_00400_to_00080 },
+                {  5, fs_06000_12bit_ds_lpf4_00080_to_00016 }
             };
             break;
         case SampleRate::FS10000:
