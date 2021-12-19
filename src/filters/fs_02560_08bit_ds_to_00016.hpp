@@ -268,4 +268,78 @@ static const std::vector<float> fs_02560_08bit_ds_lpf4_00320_to_00160 = {
 };
 
 
+
+
+
+// Filter for first stage downsampling. Allows for reduction of the sample rate
+// from 2.56MS/s to 160kS/s (M = 16) and increases the dynamic range from 50dB
+// to ~62.04dB.
+//
+// Care band is between 0 and 10kHz and we want the attenuation in the folding
+// areas (160 +/-10 kHz and 320 +/- 10 kHz and 960 +/- 10 in this case) to be
+// more than 50dB.
+//
+// Calculate with octave. fs is the sampling frequency and fcut is the care
+// band high cutoff frequency (both in kHz):
+//
+//   > pkg load signal;
+//   > fs = 2560;
+//   > fcut = 10;
+//   > M = 16;
+//   > c = sincflt(41, fs, fcut, @chebwin, 55);
+//
+// Plot the filter response with the care band and alias zones marked with the
+// fltbox function:
+//
+//   > fltbox(fs, 50, fcut, M);
+//   > plot((-0.5:1/4096:0.5-1/4096)*fs, 20*log10(abs(fftshift(fft(c, 4096)))), 'b-');
+//
+// Output the filter coefficients as a C++ float vector:
+//
+//   > vectortocpp(c, "fs_02560_08bit_ds_lpf1_02560_to_00320")
+//
+static const std::vector<float> fs_02560_08bit_ds_lpf1_02560_to_00320 = {
+     0.0015865468475583f,
+     0.0019256484220172f,
+     0.0030136569562523f,
+     0.0044224582411319f,
+     0.0061802610881581f,
+     0.0083036600848512f,
+     0.0107949105875284f,
+     0.0136397767782353f,
+     0.0168061584848598f,
+     0.0202436625256841f,
+     0.0238842287676967f,
+     0.0276438534547813f,
+     0.0314253774365601f,
+     0.0351222303131845f,
+     0.0386229491889759f,
+     0.0418162285618006f,
+     0.0445962111024823f,
+     0.0468677018450225f,
+     0.0485509832871791f,
+     0.0495859270327776f,
+     0.0499351379865260f,
+     0.0495859270327776f,
+     0.0485509832871791f,
+     0.0468677018450225f,
+     0.0445962111024823f,
+     0.0418162285618006f,
+     0.0386229491889759f,
+     0.0351222303131845f,
+     0.0314253774365601f,
+     0.0276438534547813f,
+     0.0238842287676967f,
+     0.0202436625256841f,
+     0.0168061584848598f,
+     0.0136397767782353f,
+     0.0107949105875284f,
+     0.0083036600848512f,
+     0.0061802610881581f,
+     0.0044224582411319f,
+     0.0030136569562523f,
+     0.0019256484220172f,
+     0.0015865468475583f
+};
+
 #endif // FS_02560_08BIT_DS_TO_00016_HPP
