@@ -1541,8 +1541,8 @@ int main(int argc, char** argv) {
             stages = std::vector<MSD::Stage>{
                 { 4, fs_02560_08bit_ds_lpf1_02560_to_00640 },
                 { 4, fs_02560_08bit_ds_lpf2_00640_to_00160 },
-                { 5, fs_02560_08bit_ds_lpf3_00160_to_00320 },
-                { 2, fs_02560_08bit_ds_lpf4_00320_to_00160 }
+                { 5, fs_02560_08bit_ds_lpf3_00160_to_00032 },
+                { 2, fs_02560_08bit_ds_lpf4_00032_to_00016 }
             };
             break;
         case SampleRate::FS03000:
