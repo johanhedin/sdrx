@@ -57,6 +57,29 @@ public:
         return sample_adjusted;
     }
 
+    float adjust(float sample) {
+        float sample_adjusted = sample * gain_;
+
+        float power = sample_adjusted * sample_adjusted;
+        float error = reference_ - power;
+
+        if (error > 0.0f) {
+            // Adjusted signal power is under reference. Increase gain
+            gain_ += decay_ * error;
+        } else {
+            // Adjusted signal power is over reference. Decrease gain
+            gain_ += attack_ * error;
+        }
+
+        if (gain_ < 0.0f) {
+            gain_ = 0.0f;
+        } else if (gain_ > max_gain_) {
+            gain_ = max_gain_;
+        }
+
+        return sample_adjusted;
+    }
+
 private:
     float   attack_;
     float   decay_;
