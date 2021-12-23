@@ -409,7 +409,7 @@ std::vector<R820Dev::Info> AirspyDev::list(void) {
     num_devices = airspy_list_devices(serials, MAX_NUM_DEVICES);
     if (num_devices > 0 && num_devices <= MAX_NUM_DEVICES) {
         for (int d = 0; d < num_devices; ++d) {
-            snprintf(serial_str, MAX_SERSTR_LEN, "%" PRIX64, serials[d]);
+            snprintf(serial_str, MAX_SERSTR_LEN, "%.16" PRIX64, serials[d]);
 
             Info info;
             info.type = Type::AIRSPY;
@@ -478,7 +478,7 @@ bool AirspyDev::isPresent(const std::string &serial) {
     if (num_devices > 0 && num_devices <= MAX_NUM_DEVICES) {
         for (int d = 0; d < num_devices; ++d) {
 
-            snprintf(serial_str, MAX_SERSTR_LEN, "%" PRIX64, serials[d]);
+            snprintf(serial_str, MAX_SERSTR_LEN, "%.16" PRIX64, serials[d]);
 
             if (serial == serial_str) return true;
         }
