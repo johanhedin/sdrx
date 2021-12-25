@@ -30,7 +30,7 @@ On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
       libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
 
 
-Clone the repo
+Clone the repo and build
 ====
 > Note 1: _At the moment_, `sdrx` depend on the latest libairspy and librtlsdr
 development/main branches from GitHub. Their respective source code is brought
