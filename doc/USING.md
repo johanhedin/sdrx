@@ -1,7 +1,7 @@
 Using sdrx
 ====
 `sdrx` is run from the command line in a terminal window. If you have not already
-build `sdrx`, look at [the build page](BUILD.md) for instructions.
+build `sdrx`, look at the [build page](BUILD.md) for instructions.
 
 `sdrx` takes an aeronautical channel to listen to as the argument. Besides the
 channel, some options are available and can be listed with `--help`:
