@@ -61,7 +61,7 @@ and then build with cmake:
 
 Keep up to date with changes
 ====
-To keep up to date with changes and updates to `sdrs`, simply run:
+To keep up to date with changes and updates to `sdrx`, simply run:
 
     $ cd sdrx
     $ git pull --ff-only
@@ -85,7 +85,8 @@ inside the build directory and start over:
 
 `sdrx` is under active development. Make sure to `git pull` according
 to the instruction above regularly to keep up with the changes. And always read
-this README to see how the program changes over time as new features are added,
+the README to see how the program changes over time as new features are added,
 existing features are modified or features being removed.
 
-To run and use `sdrx`, look at the [main page](https://github.com/johanhedin/sdrx) for instructions.
+To run and use `sdrx`, look at the [main page](https://github.com/johanhedin/sdrx)
+for links to instructions.
