@@ -47,12 +47,12 @@ installed on your machine in order to build and run `sdrx`:
 On Fedora they can be installed with:
 
     $ sudo dnf install git gcc-c++ cmake popt-devel libsigc++20-devel libusb1-devel fftw-devel \
-                       fftw-libs-single alsa-lib-devel rtl-sdr-devel airspyone_host-devel
+      fftw-libs-single alsa-lib-devel rtl-sdr-devel airspyone_host-devel
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
-    $ sudo apt-get install git g++-8 cmake build-essential libpopt-dev libsigc++-2.0-dev libusb-1.0-0-dev \
-                           libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
+    $ sudo apt-get install git g++-8 cmake build-essential libpopt-dev libsigc++-2.0-dev \
+      libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
 
 
 Download and build
