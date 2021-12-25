@@ -85,4 +85,4 @@ to the instruction above regularly to keep up with the changes. And always read
 this README to see how the program changes over time as new features are added,
 existing features are modified or features being removed.
 
-To run and use `sdrx`, look at the [start page](/README.md) for instructions.
+To run and use `sdrx`, look at the [main page](https://github.com/johanhedin/sdrx) for instructions.
