@@ -58,7 +58,10 @@ and then build with cmake:
     $ cmake ../
     $ make
 
-To keep up to date with changes, simply run:
+
+Keep up to date with changes
+====
+To keep up to date with changes and updates to `sdrs`, simply run:
 
     $ cd sdrx
     $ git pull --ff-only

@@ -19,98 +19,16 @@ The dongles used during development are; [RTL-SDR Blog V3](https://www.rtl-sdr.c
 The program only support R820T(2)/R860 based devices and may be incompatible
 with other RTL dongles and less powerfull Raspberry Pi models. YMMV.
 
-The channelization is currently done with a translate, filter and downsampling
-approach in one single thread. This is simple, but not the most effective way
-when listening to many simultaneous channels. Other, more effective methods are
-being considered in the future.
-
 `sdrx` is only available in source code form. It is easy to build using the
-instructions below, but some basic Linux understanding and familiarity with a
-terminal/bash is expected from the user. Especially with respect to how to
+instructions referenced below, but some basic Linux understanding and familiarity
+with a terminal/bash is expected from the user. Especially with respect to how to
 run programs from the command line.
-
-
-Build requirements
-====
-Besides git, gcc, cmake and the standard set of development tools, `sdrx` depend
-on the following libraries. They, and their development parts, need to be
-installed on your machine in order to build and run `sdrx`:
-
- * popt
- * libsigc++20
- * libusb-1.0
- * fftw
- * alsa
- * librtlsdr
- * libairspy
-
-On Fedora they can be installed with:
-
-    $ sudo dnf install git gcc-c++ cmake popt-devel libsigc++20-devel libusb1-devel fftw-devel \
-      fftw-libs-single alsa-lib-devel rtl-sdr-devel airspyone_host-devel
-
-On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
-
-    $ sudo apt-get install git g++-8 cmake build-essential libpopt-dev libsigc++-2.0-dev \
-      libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
 
 
 Download and build
 ====
-The easiest way to get `sdrx` is to clone the GitHub repo.
-
-> Note 1: _At the moment_, `sdrx` depend on the latest libairspy and librtlsdr
-development/main branches from GitHub. Their respective source code is brought
-into the `sdrx` source tree as git submodules. With the commands below,
-everything you need is checked out properly.
-
-> Note 2: This bundling of librtlsdr and libairspy sources into `sdrx` will in
-no way interfere with what is allready installed on your system with respect to
-librtlsdr and libairspy. The `sdrx` binary will not link to the on-system
-librtlsdr and libairspy .so files.
-
-> Note 3: The librtlsdr and libairspy packages still need to be installed on
-your system to be able to run `sdrx` since they provide nessesary udev config
-files for the unique USB ids that the dongles use.
-
-Clone `sdrx` from GitHub with the needed submodules:
-
-    $ git clone --recurse-submodules https://github.com/johanhedin/sdrx.git
-    $ cd sdrx
-
-and then build with cmake:
-
-    $ mkdir build
-    $ cd build
-    $ cmake ../
-    $ make
-
-To keep up to date with changes, simply run:
-
-    $ cd sdrx
-    $ git pull --ff-only
-    $ git submodule update --init --recursive
-    $ cd build
-    $ cmake ../
-    $ make
-
-Please always run the `git submodule update`-part as stated above since it is
-required for the submodule linking to work as indended. The `--init` and
-`--recursive` arguments will assure that newly added submodules are checked out
-properly. For existing submodules, they are a no-op.
-
-If the build for some reason fails after a update, try to remove all files
-inside the build directory and start over:
-
-    $ cd build
-    $ rm -rf *
-    $ cmake ../
-    $ make
-
-`sdrx` is under active development. Make sure to `git pull` according
-to the instruction above regularly to keep up with the changes. And always read
-this README to see how the program changes over time as new features are added,
-existing features are modified or features being removed.
+Instructions for how to download and build `sdrx` is found on the
+[build instructions](doc/BUILD.md) page.
 
 
 Using
@@ -131,7 +49,12 @@ windows.
 The defaults for volume and squelsh level should be good as is. RF gain
 can be adjusted according to the local signal environment.
 
-> Note 4: The R820T(2)/R860 tuner chip has three gain stages, LNA, Mixer and
+The channelization is currently done with a translate, filter and downsampling
+approach in one single thread. This is simple, but not the most effective way
+when listening to many simultaneous channels. Other, more effective methods are
+being considered in the future.
+
+> Note 1: The R820T(2)/R860 tuner chip has three gain stages, LNA, Mixer and
 VGA (sometimes referred to as IF). Each stage can be set to a value between 0
 and 15 and each step represents a change in gain for the stage in question
 (typically an increase at about +3dB). The gain you give to `sdrx` as an
@@ -156,7 +79,7 @@ all devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from the standard
 `librtlsdr` package to set unique serials for your RTL devices. Airspy devices
 normaly have unique serials and you do not have to worry about them.
 
-> Note 5: Unlike many other programs that support RTL and/or Airspy dongles,
+> Note 2: Unlike many other programs that support RTL and/or Airspy dongles,
 `sdrx` does not use the "device id" concept at all. An "id" (typically a low
 number like 0 or 1) is not a stable way to reference a dongle since the id
 may cange over time as devices are plugged in and removed from the USB bus.
@@ -164,7 +87,7 @@ The serial number concept is, on the other hand, a stable and predictive way
 to reference a specific dongle as long as every dongle on the system have been
 given a unique name.
 
-> Note 6: Airspy R2 devices are described as "AirSpy NOS" when listing available
+> Note 3: Airspy R2 devices are described as "AirSpy NOS" when listing available
 devices. This is what they call themselves when queried over the USB bus and is
 nothing `sdrx` can do anything about.
 
@@ -198,7 +121,7 @@ bandwidth will be 2.56 * 0.8 = 2.048 MHz. For a rate of 1.44 MS/s it will be
 
 Available rates for each device is shown in the output from the `--list` option.
 
-> Note 7: When specifying a sample rate, use the exact text of the rate as
+> Note 4: When specifying a sample rate, use the exact text of the rate as
 shown when using `--list`, i.e. if the list say 2.56, you enter 2.56. If the list
 say 0.96, you enter 0.96. If the list say 10, you enter 10. And so on. Do not
 include "MS/s" after the rate value. Do not use comma (,) as decimal separator.
