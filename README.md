@@ -51,7 +51,7 @@ On Fedora they can be installed with:
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
-    $ sudo apt-get install git g++-8 cmake libpopt-dev libsigc++-2.0-dev libusb-1.0-0-dev \
+    $ sudo apt-get install git g++-8 cmake build-essential libpopt-dev libsigc++-2.0-dev libusb-1.0-0-dev \
                            libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
 
 
@@ -124,7 +124,9 @@ with `--help`:
     $ ./sdrx --gain 30 122.455
 
 To stop the program, just press Crtl-C in the terminal and wait. This will stop
-`sdr` cleanly as Ctrl-C is handled properly.
+`sdr` cleanly as Ctrl-C is handled properly. If you have multiple devices
+connected you can easily run multiple instances of `sdrx` in different terminal
+windows.
 
 The defaults for volume and squelsh level should be good as is. RF gain
 can be adjusted according to the local signal environment.
