@@ -27,7 +27,7 @@ run programs from the command line.
 Download and build
 ====
 `sdrx` is only available in source code form. It is easy to build using the
-instructions on the [build instructions](doc/BUILD.md) page.
+instructions on the [build](doc/BUILD.md) page.
 
 
 Using
