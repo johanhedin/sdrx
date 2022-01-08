@@ -216,6 +216,7 @@ public:
     FIR3<iqsample_t> ch_flt;         // Channelization filter just before demodulation
     Modulation       mod;            // Modulation, AM or FM
     Demod            demod;          // Demodulator
+    LfAGC            agc_lf;         // AGC for demodulated signal
 };
 
 
@@ -416,6 +417,8 @@ static void alsa_write_cb(OutputState &ctx) {
                     //float s = std::abs(agc_adj_sample);
                     float s = ch.demod.demod(agc_adj_sample);
 
+                    s = ch.agc_lf.adjust(s);
+
                     // If the squelsh has just opend, ramp up the audio
                     if (ch.sql_state_prev == SQL_CLOSED) {
                         s = ramp_up[i] * s;
@@ -452,6 +455,7 @@ static void alsa_write_cb(OutputState &ctx) {
                 } else if (ch.sql_state_prev == SQL_OPEN) {
                     // Ramp down
                     float s = std::abs(agc_adj_sample);
+                    s = ch.agc_lf.adjust(s);
                     s = ramp_down[i] * s;
 
                     // Mix this channel into the output buffer
@@ -517,9 +521,11 @@ static void alsa_write_cb(OutputState &ctx) {
 
             // Calculate SNR
             float snr = 10 * std::log10(sig_level / noise_level);
-            if (snr > ch.sql_level) {
+
+            // Require a bit higher SNR than requested to open the squelsh
+            if (snr > ch.sql_level + 3 || ch.sql_level == 0.0f) {
                 ch.sql_state = SQL_OPEN;
-            } else {
+            } else if (snr < ch.sql_level) {
                 ch.sql_state = SQL_CLOSED;
             }
 
@@ -566,8 +572,10 @@ static void alsa_write_cb(OutputState &ctx) {
                     if (snr < 1.0f) snr = 0.0f;
                     if (ch.sql_state == SQL_OPEN) {
                         fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
+                        //fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]/%5.1f/%5.1f", ch.name.c_str(), snr, ch.agc.gain(), ch.agc_lf.gain());
                     } else {
                         fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
+                        //fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]/%5.1f/%5.1f", ch.name.c_str(), snr, ch.agc.gain(), ch.agc_lf.gain());
                     }
                 }
             }
@@ -1248,7 +1256,7 @@ a sample rate of 1.2 MS/s. Use first available device on the system:
                 fprintf(stderr, "Error: Invalid RF gain indexes given: %u:%u:%u.\n", settings.lna_gain_idx, settings.mix_gain_idx, settings.vga_gain_idx);
                 ret = -1;
             }
-            if (settings.sql_level < -10.0f || settings.sql_level > 50.0f) {
+            if (settings.sql_level < 0.0f || settings.sql_level > 50.0f) {
                 fprintf(stderr, "Error: Invalid SQL level given: %.4f.\n", settings.sql_level);
                 ret = -1;
             }
@@ -1597,6 +1605,11 @@ int main(int argc, char** argv) {
         ch.agc.setReference(1.0f);
         ch.agc.setAttack(1.0f);
         ch.agc.setDecay(0.01f);
+        ch.agc.setMaxGain(300);
+
+        ch.agc_lf.setReference(1.0f);
+        ch.agc_lf.setAttack(1.0f);
+        ch.agc_lf.setDecay(0.01f);
 
         ch.pos = get_audio_pos(ch_idx, settings.channels.size());
         ++ch_idx;
