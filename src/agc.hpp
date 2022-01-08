@@ -33,6 +33,9 @@ public:
     void setAttack(float attack) { attack_ = attack; }
     void setDecay(float decay) { decay_ = decay; }
     void setReference(float reference) { reference_ = reference; }
+    void setMaxGain(float max_gain) { max_gain_ = max_gain; }
+
+    float gain(void) { return gain_; }
 
     iqsample_t adjust(iqsample_t sample) {
         iqsample_t sample_adjusted = sample * gain_;
@@ -57,17 +60,39 @@ public:
         return sample_adjusted;
     }
 
+private:
+    float   attack_;
+    float   decay_;
+    float   reference_;
+    float   max_gain_;
+    float   gain_;
+};
+
+
+
+class LfAGC {
+public:
+    LfAGC(float attack=10.0f, float decay=0.01f, float reference=0.25f, float max_gain=200.0f)
+    : attack_(attack), decay_(decay), reference_(reference), max_gain_(max_gain), gain_(1.0f) {}
+
+    void setAttack(float attack) { attack_ = attack; }
+    void setDecay(float decay) { decay_ = decay; }
+    void setReference(float reference) { reference_ = reference; }
+    void setMaxGain(float max_gain) { max_gain_ = max_gain; }
+
+    float gain(void) { return gain_; }
+
     float adjust(float sample) {
         float sample_adjusted = sample * gain_;
 
-        float power = sample_adjusted * sample_adjusted;
-        float error = reference_ - power;
+        float level = std::abs(sample_adjusted);
+        float error = reference_ - level;
 
         if (error > 0.0f) {
-            // Adjusted signal power is under reference. Increase gain
+            // Adjusted signal level is under reference. Increase gain
             gain_ += decay_ * error;
         } else {
-            // Adjusted signal power is over reference. Decrease gain
+            // Adjusted signal level is over reference. Decrease gain
             gain_ += attack_ * error;
         }
 
