@@ -19,16 +19,15 @@ The dongles used during development are; [RTL-SDR Blog V3](https://www.rtl-sdr.c
 The program only support R820T(2)/R860 based devices and may be incompatible
 with other RTL dongles and less powerfull Raspberry Pi models. YMMV.
 
-`sdrx` is only available in source code form. It is easy to build using the
-instructions referenced below, but some basic Linux understanding and familiarity
-with a terminal/bash is expected from the user. Especially with respect to how to
+`sdrx` is a text console program intended to be run from a terminal. Basic Linux
+understanding is expecetd from the user, especially with respect to how to
 run programs from the command line.
 
 
 Download and build
 ====
-Instructions for how to download and build `sdrx` can be found on the
-[build instructions](doc/BUILD.md) page.
+`sdrx` is only available in source code form. It is easy to build using the
+instructions on the [build instructions](doc/BUILD.md) page.
 
 
 Using

@@ -32,18 +32,18 @@ On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
 Clone the repo and build
 ====
-> Note 1: _At the moment_, `sdrx` depend on the latest libairspy and librtlsdr
+> Note 1: At the moment `sdrx` depend on the latest libairspy and librtlsdr
 development/main branches from GitHub. Their respective source code is brought
 into the `sdrx` source tree as git submodules. With the commands below,
 everything you need is checked out properly.
 
-> Note 2: This bundling of librtlsdr and libairspy sources into `sdrx` will in
-no way interfere with what is allready installed on your system with respect to
-librtlsdr and libairspy. The `sdrx` binary will not link to the on-system
+> Note 2: This bundling of the librtlsdr and libairspy sources into `sdrx` will
+in no way interfere with what is allready installed on your system with respect
+to librtlsdr and libairspy. The `sdrx` binary will not link to the on-system
 librtlsdr and libairspy .so files.
 
 > Note 3: The librtlsdr and libairspy packages still need to be installed on
-your system to be able to run `sdrx` since they provide nessesary udev config
+your system to be able to run `sdrx` since they provide the nessesary udev config
 files for the unique USB ids that the dongles use.
 
 Clone `sdrx` from GitHub with the needed submodules:
