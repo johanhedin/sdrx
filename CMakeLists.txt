@@ -17,11 +17,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Import our local modules
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 
-# Default build type is Debug. Run cmake with -DCMAKE_BUILD_TYPE=Release to
-# build in release mode
+# Default build type is Release. Run cmake with -DCMAKE_BUILD_TYPE=Debug to
+# build in debug mode
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug)
-    message(STATUS "Build type not specified, defaulting to Debug. Change to Release with -DCMAKE_BUILD_TYPE=Release")
+    set(CMAKE_BUILD_TYPE Release)
+    message(STATUS "Build type not specified, defaulting to Release. Change to debug with -DCMAKE_BUILD_TYPE=Debug")
 endif(NOT CMAKE_BUILD_TYPE)
 
 # Our compiler flags. We run with optimization even in debug mode to be able
