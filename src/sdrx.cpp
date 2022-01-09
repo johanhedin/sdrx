@@ -243,6 +243,7 @@ public:
     Modulation           mod = Modulation::AM;
     bool                 use_lf_agc = false;
     bool                 verbose_printout = false;
+    bool                 bw_check_override = false;            // Ovveride the 80% bw check
 };
 
 
@@ -1137,6 +1138,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     int           normal_fq_fmt = 0;
     int           use_lf_agc = 0;
     int           verbose = 0;
+    int           bw_check_override = 0;
 
     struct poptOption options_table[] = {
         { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and their sample rates and quit", nullptr },
@@ -1147,8 +1149,9 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over channel noise floor. Can also be set per channel. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
         { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
-        { "modulation",  0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL", "MOD" },
-        { "lf-agc",      0, POPT_ARG_NONE,   &use_lf_agc, 0, "enable post demodulation AGC. EXPERIMENTAL", nullptr },
+        { "modulation",  0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL!", "MOD" },
+        { "lf-agc",      0, POPT_ARG_NONE,   &use_lf_agc, 0, "enable post demodulation AGC. EXPERIMENTAL!", nullptr },
+        { "bw-override", 0, POPT_ARG_NONE,   &bw_check_override, 0, "accept channels outside the normal 80% Fs bandwidth limit. EXPERTS ONLY!", nullptr },
         { "verbose",     0, POPT_ARG_NONE,   &verbose, 0, "enable verbose printouts", nullptr },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
@@ -1185,6 +1188,8 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         if (use_lf_agc == 1) settings.use_lf_agc = true;
 
         if (verbose == 1) settings.verbose_printout = true;
+
+        if (bw_check_override == 1) settings.bw_check_override = true;
 
         // Collect and free string arguments if given
         if (device) {
@@ -1364,6 +1369,8 @@ system:
 
 // Verify that the requested channels fit inside the bandwidth requested
 static bool verify_requested_bandwidth(const Settings &settings) {
+    if (settings.bw_check_override) return true;
+
     std::vector<Channel> tmp_channels = settings.channels;
 
     std::sort(tmp_channels.begin(), tmp_channels.end());
