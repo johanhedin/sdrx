@@ -2,7 +2,7 @@
 // Simple IF AGC to be used just before demodulation
 //
 // @author Johan Hedin
-// @date   2021-01-31
+// @date   2021-2022
 //
 // Implementation is based on the AGC in svxlink: https://github.com/sm0svx/svxlink
 //
