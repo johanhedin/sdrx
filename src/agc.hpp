@@ -73,7 +73,7 @@ private:
 class LfAGC {
 public:
     LfAGC(float attack=10.0f, float decay=0.01f, float reference=0.25f, float max_gain=200.0f)
-    : attack_(attack), decay_(decay), reference_(reference), max_gain_(max_gain), gain_(1.0f) {}
+    : attack_(attack), decay_(decay), reference_(reference), max_gain_(max_gain), gain_(1.0f), active_(false) {}
 
     void setAttack(float attack) { attack_ = attack; }
     void setDecay(float decay) { decay_ = decay; }
@@ -81,6 +81,9 @@ public:
     void setMaxGain(float max_gain) { max_gain_ = max_gain; }
 
     float gain(void) { return gain_; }
+    bool active(void) { return active_; }
+    void activate(void) { active_ = true; }
+    void deactivate(void) { active_ = false; }
 
     float adjust(float sample) {
         float sample_adjusted = sample * gain_;
@@ -102,7 +105,11 @@ public:
             gain_ = max_gain_;
         }
 
-        return sample_adjusted;
+        if (active_) {
+            return sample_adjusted;
+        } else {
+            return sample;
+        }
     }
 
 private:
@@ -111,6 +118,7 @@ private:
     float   reference_;
     float   max_gain_;
     float   gain_;
+    bool    active_;
 };
 
 #endif // AGC_HPP
