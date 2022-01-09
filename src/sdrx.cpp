@@ -44,6 +44,7 @@
 #include <cctype>
 #include <map>
 #include <iomanip>
+#include <regex>
 
 // Libs that we use
 #include <popt.h>
@@ -196,8 +197,8 @@ private:
 // Datatype to represent one channel in the IQ spectra
 class Channel {
 public:
-    Channel(const std::string &name, float sql_level = 9.0f)
-    : name(name), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0), mod(Modulation::AM) {}
+    Channel(const std::string &name, float sql_level = 9.0f, Modulation mod = Modulation::AM)
+    : name(name), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0), mod(mod), demod(mod) {}
 
     bool operator<(const Channel &rhv) { return name < rhv.name; }
     bool operator==(const Channel &rhv) { return name == rhv.name; }
@@ -240,6 +241,8 @@ public:
     unsigned             vga_gain_idx = 12;
     float                composit_gain = 30.0f;
     Modulation           mod = Modulation::AM;
+    bool                 use_lf_agc = false;
+    bool                 verbose_printout = false;
 };
 
 
@@ -384,6 +387,7 @@ static void alsa_write_cb(OutputState &ctx) {
     char                   tmp_str[256];
     char                   bar[75];
     std::vector<Channel>  &channels = ctx.settings.channels;
+    bool                   verbose = ctx.settings.verbose_printout;
 
     ret = snd_pcm_avail_update(ctx.pcm_handle);
     if (ret < 0) {
@@ -571,11 +575,17 @@ static void alsa_write_cb(OutputState &ctx) {
                 } else {
                     if (snr < 1.0f) snr = 0.0f;
                     if (ch.sql_state == SQL_OPEN) {
-                        fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
-                        //fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]/%5.1f/%5.1f", ch.name.c_str(), snr, ch.agc.gain(), ch.agc_lf.gain());
+                        if (verbose) {
+                            fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]/%5.1f/%5.1f", ch.name.c_str(), snr, ch.agc.gain(), ch.agc_lf.gain());
+                        } else {
+                            fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
+                        }
                     } else {
-                        fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
-                        //fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]/%5.1f/%5.1f", ch.name.c_str(), snr, ch.agc.gain(), ch.agc_lf.gain());
+                        if (verbose) {
+                            fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]/%5.1f/%5.1f", ch.name.c_str(), snr, ch.agc.gain(), ch.agc_lf.gain());
+                        } else {
+                            fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
+                        }
                     }
                 }
             }
@@ -1125,17 +1135,21 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     char         *modulation_str = nullptr;
     int           print_help = 0;
     int           normal_fq_fmt = 0;
+    int           use_lf_agc = 0;
+    int           verbose = 0;
 
     struct poptOption options_table[] = {
         { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and their sample rates and quit", nullptr },
         { "device",    'd', POPT_ARG_STRING, &device, 0, "serial for device to use. Defaults to first available if not set", "SERIAL" },
         { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm for RTL dongles. Defaults to 0 if not set", "FQCORR" },
-        { "gain",      'g', POPT_ARG_STRING, &gain_str, 0, "RF gain in dB in the range 0 to 49. Defaults to 30 if not set", "RFGAIN" },
+        { "gain",      'g', POPT_ARG_STRING, &gain_str, 0, "RF gain in dB in the range 0 to 49 or as LNA:MIX:VGA gain indexes. Defaults to 30dB if not set", "RFGAIN" },
         { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
-        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over current channel noise floor. Defaults to 9 if not set", "SQLLEVEL" },
+        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over channel noise floor. Can also be set per channel. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
         { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
-        { "modulation",  0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL!", "MOD" },
+        { "modulation",  0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL", "MOD" },
+        { "lf-agc",      0, POPT_ARG_NONE,   &use_lf_agc, 0, "enable post demodulation AGC. EXPERIMENTAL", nullptr },
+        { "verbose",     0, POPT_ARG_NONE,   &verbose, 0, "enable verbose printouts", nullptr },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
@@ -1168,7 +1182,11 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         // Options parsed without error
         ret = 0;
 
-        // Collect and free string argument if given
+        if (use_lf_agc == 1) settings.use_lf_agc = true;
+
+        if (verbose == 1) settings.verbose_printout = true;
+
+        // Collect and free string arguments if given
         if (device) {
             settings.device_serial = device;
             free(device);
@@ -1222,7 +1240,6 @@ the sampling frequency.
 
 The squelch is adaptive with respect to the current, per channel, noise floor
 and the squelch level is given as a SNR value in dB. Audio is played using ALSA.
-
 Volume and squelch can normally be left as is since the defaults work well.
 
 Examples:
@@ -1236,16 +1253,17 @@ device with serial "MY-DEVICE":
 
     $ sdrx --device MY-DEVICE --gain 40 --volume 3 122.450
 
-Listen to the channels 118.105 and 118.505 with 34dB of RF gain, 5dB squelch and
-a sample rate of 1.2 MS/s. Use first available device on the system:
+Listen to the channels 118.105 and 118.505 with gain indexes set to 5:8:10
+(LNA 1, MIX 8 and VGA 10), 6dB squelch and a sample rate of 1.92 MS/s. Use
+dedicated squelsh of 10 for channel 118.505. Use first available device on the
+system:
 
-    $ sdrx --gain 34 --sql-level 5 --sample-rate 1.2 118.105 118.505
+    $ sdrx --gain 5:8:10 --sql-level 6 --sample-rate 1.92 118.105 118.505/10
 )"
             << std::endl;
             ret = -1;
         } else if(list_devices) {
             // Listing of devices is done in main
-            list_available_devices();
             ret = -2;
         } else {
             if (settings.gain_mode == Settings::GainMode::COMPOSITE && (settings.composit_gain < 0.0f || settings.composit_gain > 50.0f)) {
@@ -1270,18 +1288,41 @@ a sample rate of 1.2 MS/s. Use first available device on the system:
                 bool fq_type = normal_fq_fmt ? NORMAL_FQ : AERONAUTICAL_CHANNEL;
                 const char *arg;
                 while ((arg = poptGetArg(popt_ctx)) != nullptr) {
-                    uint32_t fq_ret = parse_fq(arg, fq_type);
+                    std::string ch_arg = arg;
+                    std::regex ch_regex("^([0-9]{3}\\.[0-9]{3})(?:\\/([0-9]{1,2})(?:\\/(AM|FM))?)?$", std::regex::ECMAScript);
+                    std::smatch ch_match;
+
+                    std::regex_search(ch_arg, ch_match, ch_regex);
+
+                    std::string fq_str;
+                    float sql = settings.sql_level;
+                    Modulation mod = settings.mod;
+
+                    if (ch_match.size() > 1) {
+                        fq_str = ch_match.str(1);
+                    }
+                    if (ch_match.size() > 2 && !ch_match.str(2).empty()) {
+                        sql = std::stof(ch_match.str(2));
+                    }
+                    if (ch_match.size() > 3 && !ch_match.str(3).empty()) {
+                        mod = str_to_modulation(ch_match.str(3));
+                    }
+
+                    uint32_t fq_ret = parse_fq(fq_str, fq_type);
                     if (fq_ret == 0) {
                         std::cerr << "Error: Invalid " << (fq_type == NORMAL_FQ ? "frequency":"channel") <<
-                                     " given: " << arg << ". Use --help to learn how to use sdrx.\n";
+                                     " given: " << fq_str << ". Use --help to learn how to use sdrx.\n";
                         ret = -1;
                     } else if (fq_ret < 45000000 || fq_ret > 1800000000) {
                         std::cerr << "Error: Invalid frequency given: " << fq_ret << "Hz. Use --help to learn how to use sdrx.\n";
                         ret = -1;
+                    } else if (sql < 0.0f || sql > 50.0f) {
+                        std::cerr << "Error: Invalid SQL level given: " << sql << ". Use --help to learn how to use sdrx.\n";
+                        ret = -1;
                     } else {
                         // Add to channels list if not already present
-                        if (std::find(settings.channels.begin(), settings.channels.end(), arg) == settings.channels.end()) {
-                            settings.channels.push_back(Channel(arg, settings.sql_level));
+                        if (std::find(settings.channels.begin(), settings.channels.end(), fq_str) == settings.channels.end()) {
+                            settings.channels.push_back(Channel(fq_str, sql, mod));
                         }
                     }
                 }
@@ -1312,12 +1353,6 @@ a sample rate of 1.2 MS/s. Use first available device on the system:
                 std::cerr << "Error: No channel given. Use --help to learn how to use sdrx.\n";
                 ret = -1;
             }
-
-            /*
-            if (ret < 0) {
-                poptPrintHelp(popt_ctx, stderr, 0);
-            }
-            */
         }
     }
 
@@ -1414,6 +1449,7 @@ int main(int argc, char** argv) {
     if (ret < 0) {
         if (ret == -2) {
             // List devices and exit
+            list_available_devices();
             return 0;
         }
 
@@ -1599,9 +1635,6 @@ int main(int argc, char** argv) {
 
         ch.ch_flt = FIR3<iqsample_t>(fs_00016_16bit_ch_amdemod_lpf1);
 
-        ch.mod = settings.mod;
-        ch.demod = Demod(settings.mod);
-
         ch.agc.setReference(1.0f);
         ch.agc.setAttack(1.0f);
         ch.agc.setDecay(0.01f);
@@ -1610,6 +1643,7 @@ int main(int argc, char** argv) {
         ch.agc_lf.setReference(1.0f);
         ch.agc_lf.setAttack(1.0f);
         ch.agc_lf.setDecay(0.01f);
+        if (settings.use_lf_agc) ch.agc_lf.activate();
 
         ch.pos = get_audio_pos(ch_idx, settings.channels.size());
         ++ch_idx;
@@ -1630,11 +1664,14 @@ int main(int argc, char** argv) {
     std::cout << "    Modulation: " << modulation_to_str(settings.mod) << std::endl;
     std::cout << "    Volume: " << settings.lf_gain << "dB\n";
     std::cout << "    Squelch level: " << settings.sql_level << "dB\n";
+    std::cout << "    Audio AGC: " << (settings.use_lf_agc ? "On":"Off") << std::endl;
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
     std::cout << "    Tuner center frequency: " << settings.tuner_fq/1000 << " kHz\n";
-    std::cout << "    Available bandwidth: +/-" << (sample_rate_to_uint(settings.rate) * 8 / 20)/1000 << " kHz relative to center frequency\n";
+    std::cout << "    Bandwidth: +/-" << (sample_rate_to_uint(settings.rate) * 8 / 20)/1000 << " kHz relative to center frequency\n";
     std::cout << "    Channels:";
-    for (auto &ch : settings.channels) std::cout << " " << ch.name << "(" << ch.pos << ")";
+    for (auto &ch : settings.channels) {
+        std::cout << " " << ch.name << "/" << ch.sql_level << "/" << modulation_to_str(ch.mod) << "(" << ch.pos << ")";
+    }
     std::cout << std::endl;
 
     rb_t iq_rb(CH_IQ_BUF_SIZE * settings.channels.size(), 8); // 8 chunks or 256ms
