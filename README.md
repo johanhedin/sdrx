@@ -37,5 +37,5 @@ instructions on the [build](doc/BUILD.md) page.
 
 Using
 ====
-Instruction for how to run and use `sdrx` can be found on the [usage](doc/USAGE.md)
+Instruction for how to run and use `sdrx` can be found on the [usage](doc/USING.md)
 page.

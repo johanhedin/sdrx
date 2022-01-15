@@ -88,6 +88,6 @@ to the instruction above regularly to keep up with the changes. And always read
 the README to see how the program changes over time as new features are added,
 existing features are modified or features being removed.
 
-Instruction for how to run and use `sdrx` can be found on the [usage](USAGE.md)
+Instruction for how to run and use `sdrx` can be found on the [usage](USING.md)
 page.
 
