@@ -23,6 +23,11 @@ with other RTL dongles and less powerfull Raspberry Pi models. YMMV.
 understanding is expecetd from the user, especially with respect to how to
 run programs from the command line.
 
+The channelization is currently done with a translate, filter and downsampling
+approach in one single thread. This is simple, but not the most effective way
+when listening to many simultaneous channels. Other, more effective methods are
+being considered in the future.
+
 
 Download and build
 ====
@@ -32,4 +37,5 @@ instructions on the [build](doc/BUILD.md) page.
 
 Using
 ====
-Instructions for how to use `sdrx` can be found [here](doc/USING.md).
+Instruction for how to run and use `sdrx` can be found on the [usage](doc/USAGE.md)
+page.

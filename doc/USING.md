@@ -1,7 +1,7 @@
 Using sdrx
 ====
 `sdrx` is run from the command line in a terminal window. If you have not already
-build `sdrx`, look at the [build page](BUILD.md) for instructions.
+build `sdrx`, look at the [build](BUILD.md) page for instructions.
 
 `sdrx` takes an aeronautical channel to listen to as the argument. Besides the
 channel, some options are available and can be listed with `--help`:
@@ -18,20 +18,21 @@ windows.
 The defaults for volume and squelsh level should be good as is. RF gain
 can be adjusted according to the local signal environment.
 
-The channelization is currently done with a translate, filter and downsampling
-approach in one single thread. This is simple, but not the most effective way
-when listening to many simultaneous channels. Other, more effective methods are
-being considered in the future.
+The R820T(2)/R860 tuner chip has three gain stages, LNA, Mixer and VGA (sometimes
+referred to as IF). Each stage can be set to a value between 0 and 15 and each
+step represents a change in gain (typically an increase at about +3dB). The gain
+you give to `sdrx` as an argument will be translated into one value between 0 and
+15 for each stage according to an `sdrx` internal mapping table. This mapping
+table is the same as is used in the official librtlsdr library (look in the
+source code for the details). As an alternative, it is also possible to set the
+three gain stages directly with stage values like this (LNA = 5, MIX = 8 and
+VGA = 10):
 
-> Note 1: The R820T(2)/R860 tuner chip has three gain stages, LNA, Mixer and
-VGA (sometimes referred to as IF). Each stage can be set to a value between 0
-and 15 and each step represents a change in gain for the stage in question
-(typically an increase at about +3dB). The gain you give to `sdrx` as an
-argument will be translated into one value between 0 and 15 for each stage
-according to an `sdrx` internal mapping table. This mapping table is the same
-as is used in the official librtlsdr library. Look in the source code for the
-details. Support for other ways of setting the gain will be introduced in the
-near future.
+    $ ./sdrx --gain 5:8:10 122.455
+
+This gives very good control over how the total gain is distributed in the R820
+tuner and is the preferred way of setting gain when you run a external LNA in
+front of your device.
 
 `sdrx` use quite narrow filters so if your RTL dongle does not have a TCXO, take
 your time to find out the proper frequency correction and supply that with the
@@ -39,22 +40,26 @@ your time to find out the proper frequency correction and supply that with the
 all and any `--fq-corr` given is silently ignored.
 
 If you have multiple devices connected, use `--list` to list what devices that
-`sdrx` recognize on your system:
+`sdrx` recognize on your system and what sample rates they support:
 
     $ ./sdrx --list
 
-To use a specific device, it's serial _must_ be used and you must ensure that
-all devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from the standard
+To use a specific device, it's serial is used and you must ensure that all
+devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from the standard
 `librtlsdr` package to set unique serials for your RTL devices. Airspy devices
 normaly have unique serials and you do not have to worry about them.
 
-> Note 2: Unlike many other programs that support RTL and/or Airspy dongles,
+> Note 1: Unlike many other programs that support RTL and/or Airspy dongles,
 `sdrx` does not use the "device id" concept at all. An "id" (typically a low
 number like 0 or 1) is not a stable way to reference a dongle since the id
 may cange over time as devices are plugged in and removed from the USB bus.
 The serial number concept is, on the other hand, a stable and predictive way
 to reference a specific dongle as long as every dongle on the system have been
 given a unique name.
+
+> Note 2: The term "serial" is a bit missleading since it actually is a text
+string based on a USB descriptor. It is prefectly fine to set a serial on a RTL
+device containing text.
 
 > Note 3: Airspy R2 devices are described as "AirSpy NOS" when listing available
 devices. This is what they call themselves when queried over the USB bus and is
