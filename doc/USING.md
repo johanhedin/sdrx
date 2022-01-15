@@ -57,7 +57,7 @@ The serial number concept is, on the other hand, a stable and predictive way
 to reference a specific dongle as long as every dongle on the system have been
 given a unique name.
 
-> Note 2: The term "serial" is a bit missleading since it actually is a text
+> Note 2: The term "serial" is a bit misleading since it actually is a text
 string based on a USB descriptor. It is prefectly fine to set a serial on a RTL
 device containing text.
 
