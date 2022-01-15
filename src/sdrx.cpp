@@ -1340,18 +1340,18 @@ system:
                         // If here, we know that all channels in settings.channels
                         // are valid aeronautical and that we have at least one
                         // channel. Sort the vector and determine what tuner
-                        // frequency to use (truncated to nearest 100kHz)
+                        // frequency to use (round to nearest 100kHz)
                         std::vector<Channel> tmp_channels = settings.channels;
                         std::sort(tmp_channels.begin(), tmp_channels.end());
                         std::string lo_ch = (tmp_channels.begin())->name;
                         std::string hi_ch = (--tmp_channels.end())->name;
 
-                        uint32_t lo_fq = parse_fq(lo_ch, fq_type);
-                        uint32_t hi_fq = parse_fq(hi_ch, fq_type);
-                        uint32_t mid_fq = lo_fq + (hi_fq - lo_fq) / 2;
-                        uint32_t mid_fq_rounded = (mid_fq / 100000) * 100000;  // TODO: Use round instead of floor
+                        double lo_fq = (double)parse_fq(lo_ch, fq_type);
+                        double hi_fq = (double)parse_fq(hi_ch, fq_type);
+                        double mid_fq = lo_fq + (hi_fq - lo_fq) / 2;
+                        double mid_fq_rounded = std::round(mid_fq / 100000.0) * 100000.0;
 
-                        settings.tuner_fq = mid_fq_rounded;
+                        settings.tuner_fq = (uint32_t)mid_fq_rounded;
                     }
                 }
             } else {
@@ -1379,17 +1379,14 @@ static bool verify_requested_bandwidth(const Settings &settings) {
 
     uint32_t lo_fq = parse_fq(lo_ch, AERONAUTICAL_CHANNEL);
     uint32_t hi_fq = parse_fq(hi_ch, AERONAUTICAL_CHANNEL);
-    uint32_t mid_fq = lo_fq + (hi_fq - lo_fq) / 2;
-    uint32_t mid_fq_rounded = (mid_fq / 100000) * 100000;  // TODO: Use round instead of floor
+    uint32_t ch_bw = hi_fq - lo_fq;
+    uint32_t iq_bw = sample_rate_to_uint(settings.rate) * 8 / 10; // 80% of sample rate
 
-    uint32_t max_ch_offset = sample_rate_to_uint(settings.rate) * 8 / 20;
-
-    // Verify that the requested channels fit
-    if (lo_fq < (mid_fq_rounded - max_ch_offset) || hi_fq > (mid_fq_rounded + max_ch_offset)) {
-        return false;
+    if (ch_bw <= iq_bw) {
+        return true;
     }
 
-    return true;
+    return false;
 }
 
 
