@@ -4,7 +4,9 @@ Using sdrx
 build `sdrx`, look at the [build](BUILD.md) page for instructions.
 
 `sdrx` takes an aeronautical channel to listen to as the argument. Besides the
-channel, some options are available and can be listed with `--help`:
+channel, options are available and can be listed with `--help` (his page
+does not always cover all available options so use this page together with
+`--help` to get the full picture):
 
     $ cd sdrx/build
     $ ./sdrx --help
