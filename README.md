@@ -30,12 +30,12 @@ being considered in the future.
 
 
 Download and build
-====
+----
 `sdrx` is only available in source code form. It is easy to build using the
 instructions on the [build](doc/BUILD.md) page.
 
 
 Using
-====
+----
 Instruction for how to run and use `sdrx` can be found on the [usage](doc/USING.md)
 page.

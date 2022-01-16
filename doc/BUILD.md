@@ -6,7 +6,7 @@ this page.
 
 
 Build requirements
-====
+----
 Besides git, gcc, cmake and the standard set of development tools, `sdrx` depend
 on the following libraries. They, and their development parts, need to be
 installed on your machine in order to build and run `sdrx`:
@@ -31,7 +31,7 @@ On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
 
 Clone the repo and build
-====
+----
 > Note 1: At the moment `sdrx` depend on the latest libairspy and librtlsdr
 development/main branches from GitHub. Their respective source code is brought
 into the `sdrx` source tree as git submodules. With the commands below,
@@ -60,7 +60,7 @@ and then build with cmake:
 
 
 Keep up to date with changes
-====
+----
 To keep up to date with changes and updates to `sdrx`, simply run:
 
     $ cd sdrx

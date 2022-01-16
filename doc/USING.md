@@ -105,7 +105,7 @@ Do not set anything else other than what is shown with `--list`.
 
 
 Output in single channel mode
-====
+----
 Besides playing audio when the squelch is open, `sdrx` write signal power
 measurements to the console while running at approximately three times a
 second.
@@ -146,7 +146,7 @@ tuned to the transmitters frequency.
 
 
 Output in multi channel mode
-====
+----
 In multi channel mode, audio from the different channels are distributed between
 the left and right speaker in a virtual five speaker audio panorama. This will
 create the sense of a set of five speakers front of the listener.
