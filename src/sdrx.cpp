@@ -242,8 +242,9 @@ public:
     float                composit_gain = 30.0f;
     Modulation           mod = Modulation::AM;
     bool                 use_lf_agc = false;
-    bool                 verbose_printout = false;
+    bool                 verbose_printout = false;             // Print extra info while running as AGC gain values
     bool                 bw_check_override = false;            // Ovveride the 80% bw check
+    bool                 compact_printout = false;             // Compact printout. Will override verbose
 };
 
 
@@ -389,6 +390,7 @@ static void alsa_write_cb(OutputState &ctx) {
     char                   bar[75];
     std::vector<Channel>  &channels = ctx.settings.channels;
     bool                   verbose = ctx.settings.verbose_printout;
+    bool                   compact = ctx.settings.compact_printout;
 
     ret = snd_pcm_avail_update(ctx.pcm_handle);
     if (ret < 0) {
@@ -578,12 +580,16 @@ static void alsa_write_cb(OutputState &ctx) {
                     if (ch.sql_state == SQL_OPEN) {
                         if (verbose) {
                             fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]/%5.1f/%5.1f", ch.name.c_str(), snr, ch.agc.gain(), ch.agc_lf.gain());
+                        } else if (compact) {
+                            fprintf(stdout, "  \033[103m\033[30m%s\033[0m", ch.name.c_str());
                         } else {
                             fprintf(stdout, "  \033[103m\033[30m%s\033[0m[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
                         }
                     } else {
                         if (verbose) {
                             fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]/%5.1f/%5.1f", ch.name.c_str(), snr, ch.agc.gain(), ch.agc_lf.gain());
+                        } else if (compact) {
+                            fprintf(stdout, "  %s", ch.name.c_str());
                         } else {
                             fprintf(stdout, "  %s[\033[1;30m%4.1f\033[0m]", ch.name.c_str(), snr);
                         }
@@ -1139,6 +1145,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     int           use_lf_agc = 0;
     int           verbose = 0;
     int           bw_check_override = 0;
+    int           compact = 0;
 
     struct poptOption options_table[] = {
         { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and their sample rates and quit", nullptr },
@@ -1151,8 +1158,9 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
         { "modulation",  0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL!", "MOD" },
         { "lf-agc",      0, POPT_ARG_NONE,   &use_lf_agc, 0, "enable post demodulation AGC. EXPERIMENTAL!", nullptr },
-        { "bw-override", 0, POPT_ARG_NONE,   &bw_check_override, 0, "accept channels outside the normal 80% Fs bandwidth limit. EXPERTS ONLY!", nullptr },
+        { "bw-override", 0, POPT_ARG_NONE,   &bw_check_override, 0, "accept channels outside the 80% sample rate bandwidth limit. EXPERTS ONLY!", nullptr },
         { "verbose",     0, POPT_ARG_NONE,   &verbose, 0, "enable verbose printouts", nullptr },
+        { "compact",     0, POPT_ARG_NONE,   &compact, 0, "enable compact printouts. Will override --verbose if given at the same time", nullptr },
         { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
@@ -1187,9 +1195,11 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
 
         if (use_lf_agc == 1) settings.use_lf_agc = true;
 
+        if (bw_check_override == 1) settings.bw_check_override = true;
+
         if (verbose == 1) settings.verbose_printout = true;
 
-        if (bw_check_override == 1) settings.bw_check_override = true;
+        if (compact == 1) settings.compact_printout = true;
 
         // Collect and free string arguments if given
         if (device) {
