@@ -54,7 +54,7 @@ normaly have unique serials and you do not have to worry about them.
 > Note 1: Unlike many other programs that support RTL and/or Airspy dongles,
 `sdrx` does not use the "device id" concept at all. An "id" (typically a low
 number like 0 or 1) is not a stable way to reference a dongle since the id
-may cange over time as devices are plugged in and removed from the USB bus.
+may change over time as devices are plugged in and removed from the USB bus.
 The serial number concept is, on the other hand, a stable and predictive way
 to reference a specific dongle as long as every dongle on the system have been
 given a unique name.
@@ -155,7 +155,7 @@ Together with the visual presentation in the terminal, this will increase the
 awareness of what channels that are active. The channels will be placed in the
 panorma based on their order on the command line.
 
-Output in the terminal looks about the same as for signle channel but only the
+Output in the terminal looks about the same as for single channel but only the
 SNR is shown for each individual channel:
 
     $ ./sdrx -g 40 118.105 118.280 118.405
