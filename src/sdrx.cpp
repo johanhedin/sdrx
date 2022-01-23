@@ -245,6 +245,7 @@ public:
     bool                 verbose_printout = false;             // Print extra info while running as AGC gain values
     bool                 bw_check_override = false;            // Ovveride the 80% bw check
     bool                 compact_printout = false;             // Compact printout. Will override verbose
+    bool                 use_ftfir = false;                    // Use frequency translating FIR
 };
 
 
@@ -1146,6 +1147,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     int           verbose = 0;
     int           bw_check_override = 0;
     int           compact = 0;
+    int           use_ftfir = 0;
 
     struct poptOption options_table[] = {
         { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and their sample rates and quit", nullptr },
@@ -1158,6 +1160,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
         { "modulation",  0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL!", "MOD" },
         { "lf-agc",      0, POPT_ARG_NONE,   &use_lf_agc, 0, "enable post demodulation AGC. EXPERIMENTAL!", nullptr },
+        { "ftfir",       0, POPT_ARG_NONE,   &use_ftfir, 0, "use frequency translation FIR. EXPERIMENTAL!", nullptr },
         { "bw-override", 0, POPT_ARG_NONE,   &bw_check_override, 0, "accept channels outside the 80% sample rate bandwidth limit. EXPERTS ONLY!", nullptr },
         { "verbose",     0, POPT_ARG_NONE,   &verbose, 0, "enable verbose printouts", nullptr },
         { "compact",     0, POPT_ARG_NONE,   &compact, 0, "enable compact printouts. Will override --verbose if given at the same time", nullptr },
@@ -1200,6 +1203,8 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         if (verbose == 1) settings.verbose_printout = true;
 
         if (compact == 1) settings.compact_printout = true;
+
+        if (use_ftfir == 1) settings.use_ftfir = true;
 
         // Collect and free string arguments if given
         if (device) {
@@ -1595,7 +1600,7 @@ int main(int argc, char** argv) {
             N = 300; z = 1;
             break;
         case SampleRate::FS02560:
-            N = 1536; z = 5;
+            N = 1536; z = 5; // will not work for fq trans fir... Can be solved with a 16, 5, 2 stage layout
             stages = std::vector<MSD::Stage>{
                 { 20, fs_02560_08bit_ds_lpf1_02560_to_00128 },
                 {  4, fs_02560_08bit_ds_lpf2_00128_to_00032 },
@@ -1645,7 +1650,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        ch.msd = MSD(translator, stages);
+        ch.msd = MSD(translator, stages, settings.use_ftfir);
 
         ch.ch_flt = FIR3<iqsample_t>(fs_00016_16bit_ch_amdemod_lpf1);
 

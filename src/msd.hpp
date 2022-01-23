@@ -18,6 +18,9 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
+// See https://www.dsprelated.com/showarticle/1028.php for frequency translating
+// FIR filter.
+
 #ifndef MSD_HPP
 #define MSD_HPP
 
@@ -37,11 +40,15 @@ public:
     MSD(void) = default;
 
     // Construct a MSD. Argument is a translation vector and a list of stage configurations
-    MSD(const std::vector<iqsample_t> &translator, const std::vector<MSD::Stage> &stages) :
-      m_(1), translator_(translator), trans_pos_(0) {
+    MSD(const std::vector<iqsample_t> &translator, const std::vector<MSD::Stage> &stages, bool use_ftfir = false) :
+      m_(1), translator_(translator), trans_pos_(0), use_ftfir_(use_ftfir) {
         auto iter = stages.begin();
         while (iter != stages.end()) {
-            stages_.push_back(MSD::S(iter->m, iter->coef));
+            if (iter == stages.begin() && !translator.empty()) {
+                stages_.push_back(MSD::S(iter->m, iter->coef, translator));
+            } else {
+                stages_.push_back(MSD::S(iter->m, iter->coef));
+            }
             m_ = m_ * iter->m;
             ++iter;
         }
@@ -81,26 +88,56 @@ public:
             }
         } else {
             // Tune to requested channel
-            for (unsigned i = 0; i < in_len; ++i) {
-                sample = in[i] * translator_[trans_pos_];
-                if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
-
-                auto stage_iter = stages_.begin();
-                while (stage_iter != stages_.end()) {
+            if (use_ftfir_) {
+                for (unsigned i = 0; i < in_len; ++i) {
+                    sample = in[i];
+                    auto stage_iter = stages_.begin();
                     if (stage_iter->addSample(sample)) {
                         // The stage produced a out sample
-                        sample = stage_iter->calculateOutput();
+                        sample = stage_iter->calculateOutputTranslated();
+                        ++stage_iter;
+                        while (stage_iter != stages_.end()) {
+                            if (stage_iter->addSample(sample)) {
+                                // The stage produced a out sample
+                                sample = stage_iter->calculateOutput();
+                            } else {
+                                // The stage need more samples
+                                break;
+                            }
+                            ++stage_iter;
+                        }
                     } else {
-                        // The stage need more samples
-                        break;
+                        // The stage need more samples. Do nothing more
                     }
-                    ++stage_iter;
-                }
 
-                if (stage_iter == stages_.end()) {
-                    // Write out sample
-                    *(out++) = sample;
-                    out_len += 1;
+                    if (stage_iter == stages_.end()) {
+                        // Write out sample
+                        *(out++) = sample;
+                        out_len += 1;
+                    }
+                }
+            } else {
+                for (unsigned i = 0; i < in_len; ++i) {
+                    sample = in[i] * translator_[trans_pos_];
+                    if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
+
+                    auto stage_iter = stages_.begin();
+                    while (stage_iter != stages_.end()) {
+                        if (stage_iter->addSample(sample)) {
+                            // The stage produced a out sample
+                            sample = stage_iter->calculateOutput();
+                        } else {
+                            // The stage need more samples
+                            break;
+                        }
+                        ++stage_iter;
+                    }
+
+                    if (stage_iter == stages_.end()) {
+                        // Write out sample
+                        *(out++) = sample;
+                        out_len += 1;
+                    }
                 }
             }
         }
@@ -113,8 +150,28 @@ private:
     // in the form of a ring buffer
     class S {
     public:
-        S(unsigned m, const std::vector<float> c) : m_(m), c_(c),
-            rb_(c.size(), iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m) {}
+        S(unsigned m, const std::vector<float> c, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) : m_(m), c_(c),
+            rb_(c.size(), iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), ccs_(0) {
+            if (!translator.empty()) {
+                // Calculate coeffcient set based on m, c and translator. Size of
+                // translator is assumed to always be evenly divisalbe by m
+                unsigned num_sets = translator.size() / m_;
+                unsigned j = 0;
+                for (unsigned i = 0; i < num_sets; i++) {
+                    std::vector<iqsample_t> cc;
+                    auto iter = c_.begin();
+                    unsigned k = j;
+                    while (iter != c_.end()) {
+                        cc.push_back(*iter * translator[k]);
+                        if (++k == translator.size()) k = 0;
+                        ++iter;
+                    }
+
+                    cs_.push_back(cc);
+                    j += m_;
+                }
+            }
+        }
 
         // Add one new sample to the delay line
         inline bool addSample(iqsample_t sample) {
@@ -150,18 +207,38 @@ private:
             return out_sample;
         }
 
+        // Calculat one output sample based on the in samples in the delay line
+        // and the filter coefficients using translation
+        inline iqsample_t calculateOutputTranslated(void) {
+            auto rb_pos = pos_;
+
+            iqsample_t out_sample(0.0f, 0.0f);
+            for (unsigned i = 0; i < c_.size(); ++i) {
+                out_sample += rb_[rb_pos] * cs_[ccs_][i];
+                if (++rb_pos == rb_.size()) rb_pos = 0;
+            }
+
+            // Advance to next coefficient set. Wrap around if necessary
+            if (++ccs_ == cs_.size()) ccs_ = 0;
+
+            return out_sample;
+        }
+
     private:
         unsigned                 m_;     // Decimation factor
         std::vector<float>       c_;     // FIR coefficients
         std::vector<iqsample_t>  rb_;    // Calculation ring buffer
         unsigned                 pos_;   // Current position in the ring buffer
         unsigned                 isn_;   // New in-samples needed before an output sample can be calculated
+        std::vector<std::vector<iqsample_t>> cs_; // Coefficient sets
+        unsigned                 ccs_;    // Current coefficient set
     };
 
     std::vector<MSD::S>     stages_;     // List of stages
     unsigned                m_;          // Total decimation factor
     std::vector<iqsample_t> translator_; // Fq tuning sequence
     unsigned                trans_pos_;  // Position in translator
+    bool                    use_ftfir_;  // Use frequency translating FIR for firts stage
 };
 
 #endif // MSD_HPP
