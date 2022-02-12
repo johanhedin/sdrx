@@ -10,8 +10,8 @@ part. It's also a program for experimenting with different SDR implementation
 aspects such as translation, downsampling, filtering, channelization,
 demodulation, interaction between clock domains, threading and audio processing.
 `sdrx` is written in C++17 and is tested on a x86_64 machine running Fedora 35,
-on a Raspberry Pi 4 Model B 4GiB and on a Raspberry Pi Zero 2 W running Raspberry
-Pi OS. Audio is played using ALSA.
+on a Raspberry Pi 4 Model B 4GiB and on a Raspberry Pi Zero 2 W running the
+latest Raspberry Pi OS (mostly the 64-bit version). Audio is played using ALSA.
 
 The dongles used during development are; [RTL-SDR Blog V3](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles),
 [Nooelec NESDR SMArt v4](https://www.nooelec.com/store/sdr/sdr-receivers/smart/nesdr-smart-sdr.html),

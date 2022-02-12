@@ -26,7 +26,7 @@ On Fedora they can be installed with:
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
-    $ sudo apt-get install git g++-8 cmake build-essential libpopt-dev libsigc++-2.0-dev \
+    $ sudo apt-get install git g++-9 cmake build-essential libpopt-dev libsigc++-2.0-dev \
       libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
 
 
