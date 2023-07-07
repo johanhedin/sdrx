@@ -1274,7 +1274,7 @@ device with serial "MY-DEVICE":
     $ sdrx --device MY-DEVICE --gain 40 --volume 3 122.450
 
 Listen to the channels 118.105 and 118.505 with gain indexes set to 5:8:10
-(LNA 1, MIX 8 and VGA 10), 6dB squelch and a sample rate of 1.92 MS/s. Use
+(LNA 5, MIX 8 and VGA 10), 6dB squelch and a sample rate of 1.92 MS/s. Use
 dedicated squelsh of 10 for channel 118.505. Use first available device on the
 system:
 
