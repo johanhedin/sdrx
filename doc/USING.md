@@ -22,13 +22,13 @@ can be adjusted according to the local signal environment.
 
 The R820T(2)/R860 tuner chip has three gain stages, LNA, Mixer and VGA (sometimes
 referred to as IF). Each stage can be set to a value between 0 and 15 and each
-step represents a change in gain (typically an increase at about +3dB). The gain
-you give to `sdrx` as an argument will be translated into one value between 0 and
-15 for each stage according to an `sdrx` internal mapping table. This mapping
-table is the same as is used in the official librtlsdr library (look in the
-source code for the details). As an alternative, it is also possible to set the
-three gain stages directly with stage values like this (LNA = 5, MIX = 8 and
-VGA = 10):
+increment of the value represents a change in gain (typically an increase of
+about +3dB). The gain you give to `sdrx` as an argument will be translated into
+one value between 0 and 15 for each stage according to an `sdrx` internal
+mapping table. This mapping table is the same as is used in the official
+librtlsdr library (look in the source code for the details). As an alternative,
+it is also possible to set the three gain stages directly with stage values
+like this (LNA = 5, MIX = 8 and VGA = 10):
 
     $ ./sdrx --gain 5:8:10 122.455
 
@@ -179,4 +179,3 @@ SNR is shown for each individual channel:
     10:57:06: Level[XX    -39.6] 118.105[ 1.8] 118.205[ 0.0] 118.280[ 1.2] 118.405[ 0.0]
     10:57:06: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
     ...
-

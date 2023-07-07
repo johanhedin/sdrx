@@ -6,14 +6,12 @@ sdrx
 
 `sdrx` is a software defined multichannel narrow band AM airband receiver that
 uses R820T(2)/R860 based RTL-SDR or Airspy Mini/R2 dongles as it's hardware
-part. It's also a program for experimenting with different SDR implementation
-aspects such as translation, downsampling, filtering, channelization,
-demodulation, interaction between clock domains, threading and audio processing.
-`sdrx` is written in C++17 and is tested on a x86_64 machine running Fedora 35,
-on a Raspberry Pi 4 Model B 4GiB and on a Raspberry Pi Zero 2 W running the
-latest Raspberry Pi OS (mostly the 64-bit version). Audio is played using ALSA.
+part. Audio is played using ALSA. `sdrx` is written in C++17 and is tested on a
+x86_64 machine running Fedora 38, on a Raspberry Pi 4 Model B 4GiB and on a
+Raspberry Pi Zero 2 W running the latest Raspberry Pi OS (mostly the 64-bit
+version).
 
-The dongles used during development are; [RTL-SDR Blog V3](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles),
+The dongles used for development are; [RTL-SDR Blog V3](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles),
 [Nooelec NESDR SMArt v4](https://www.nooelec.com/store/sdr/sdr-receivers/smart/nesdr-smart-sdr.html),
 [Airspy Mini](https://airspy.com/airspy-mini) and [Airspy R2](https://airspy.com/airspy-r2).
 The program only support R820T(2)/R860 based devices and may be incompatible
@@ -34,7 +32,7 @@ Features
 Below is a list of the current main features of `sdrx`:
 
  * Multichannel. Listen to multiple channels simultaneously
- * Airspy R2/Mini and RTL dongle support
+ * Airspy R2/Mini and R820T(2)/R860 based RTL dongle support
  * Up to 8MHz of RF bandwidth (Airspy R2 or Mini in 10 MS/s IQ)
  * Per-channel auto SNR based squelsh
  * Auto restart of dongles if they are unplugged and then plugged in again
