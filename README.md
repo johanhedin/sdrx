@@ -12,7 +12,7 @@ Raspberry Pi Zero 2 W running the latest Raspberry Pi OS (mostly the 64-bit
 version).
 
 The dongles used for development are; [RTL-SDR Blog V3](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles),
-[Nooelec NESDR SMArt v4](https://www.nooelec.com/store/sdr/sdr-receivers/smart/nesdr-smart-sdr.html),
+[Nooelec NESDR SMArt v5](https://www.nooelec.com/store/sdr/sdr-receivers/smart/nesdr-smart-sdr.html),
 [Airspy Mini](https://airspy.com/airspy-mini) and [Airspy R2](https://airspy.com/airspy-r2).
 The program only support R820T(2)/R860 based devices and may be incompatible
 with other RTL dongles and less powerfull Raspberry Pi models. YMMV.
