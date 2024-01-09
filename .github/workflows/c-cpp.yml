@@ -1,4 +1,4 @@
-name: "Build"
+name: "C/C++ CI"
 
 on:
   push:
@@ -16,23 +16,32 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build and install
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        runner: [ ubuntu-22.04 ]
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
-      with:
-        submodules: 'true'
+      - name: Install build requirements
+        run: sudo apt-get update ; sudo apt-get install -y g++-9 cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev libsigc++-2.0-dev
 
-    - name: Install packages
-      run: sudo apt-get update ; sudo apt-get install -y g++-9 cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev libsigc++-2.0-dev
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
 
-    - name: Build sdrx
-      uses: ashutoshvarma/action-cmake-build@master
-      with:
-        build-dir: ${{ runner.workspace }}/build
-        build-type: Debug
-        parallel: 4
+      - name: Configure
+        run: rm -rf build ; cmake -B build
+
+      - name: Build
+        run: cd build && make
+
+#      - name: Build sdrx
+#        uses: ashutoshvarma/action-cmake-build@master
+#        with:
+#          build-dir: ${{ runner.workspace }}/build
+#          build-type: Debug
+#          parallel: 4
 
 #    - name: Build sdrx
 #      run: make
