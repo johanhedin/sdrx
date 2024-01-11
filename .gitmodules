@@ -4,3 +4,4 @@
 [submodule "librtlsdr"]
 	path = librtlsdr
 	url = https://github.com/johanhedin/librtlsdr.git
+	branch = sdrxfixes2
