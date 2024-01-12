@@ -26,7 +26,7 @@ On Fedora they can be installed with:
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
-    $ sudo apt-get install git g++-9 cmake build-essential libpopt-dev libsigc++-2.0-dev \
+    $ sudo apt-get install git g++ cmake build-essential libpopt-dev libsigc++-2.0-dev \
       libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
 
 
@@ -55,7 +55,7 @@ and then build with cmake:
 
     $ mkdir build
     $ cd build
-    $ cmake ../
+    $ cmake ..
     $ make
 
 
@@ -67,7 +67,7 @@ To keep up to date with changes and updates to `sdrx`, simply run:
     $ git pull --ff-only
     $ git submodule update --init --recursive
     $ cd build
-    $ cmake ../
+    $ cmake ..
     $ make
 
 Please always run the `git submodule update`-part as stated above since it is
@@ -80,7 +80,7 @@ inside the build directory and start over:
 
     $ cd build
     $ rm -rf *
-    $ cmake ../
+    $ cmake ..
     $ make
 
 Make sure to `git pull` according to the instruction above regularly to keep up
@@ -88,5 +88,27 @@ with the changes. And always read the README to see how the program changes
 over time as new features are added, existing features are modified or features
 being removed.
 
-Instruction for how to run and use `sdrx` can be found on the [usage](USING.md)
-page.
+Install/uninstall
+---
+If you like, you can install the `sdrx` executable on your system. Default
+install directory default to `/usr/local/bin` but can be set to a different
+location with `-DCMAKE_INSTALL_PREFIX=<your_custom_dir>`:
+
+    $ cd build
+    $ rm -rf *
+    $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr
+    $ make
+    $ sudo make install
+
+To uninstall, you need to install like above first and have the build directory
+available as it was after the install (the files installed are written to
+a file in the build directory and then used in the uninstall stage):
+
+    $ cd build
+    $ sudo make uninstall
+
+`sudo` is only needed if your install directory is owned by root.
+
+Using `sdrx`
+---
+Instruction for how to use `sdrx` can be found on the [usage](USING.md) page.
