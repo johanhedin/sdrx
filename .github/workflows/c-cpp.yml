@@ -31,20 +31,13 @@ jobs:
           submodules: 'true'
 
       - name: Configure
-        run: rm -rf build ; cmake -B build
+        run: rm -rf build ; cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
 
       - name: Build
         run: cd build && make
 
-#      - name: Build sdrx
-#        uses: ashutoshvarma/action-cmake-build@master
-#        with:
-#          build-dir: ${{ runner.workspace }}/build
-#          build-type: Debug
-#          parallel: 4
+      - name: Install
+        run: cd build && sudo make install
 
-#    - name: Build sdrx
-#      run: make
-
-        #    - name: Build dts
-        #      run: make dts
+      - name: Uninstall
+        run: cd build && sudo make uninstall
