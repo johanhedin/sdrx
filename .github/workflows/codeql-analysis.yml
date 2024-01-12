@@ -30,41 +30,47 @@ jobs:
         # https://docs.github.com/en/free-pro-team@latest/github/finding-security-vulnerabilities-and-errors-in-your-code/configuring-code-scanning#changing-the-languages-that-are-analyzed
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
-      with:
-        submodules: 'true'
+      - name: Install build requirements
+        run: sudo apt-get update ; sudo apt-get install -y g++ cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev libsigc++-2.0-dev
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
-      with:
-        languages: ${{ matrix.language }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
 
-    - name: Install packages
-      run: sudo apt-get update ; sudo apt-get install -y g++-9 cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev libsigc++-2.0-dev
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
 
-    - name: Build
-      uses: ashutoshvarma/action-cmake-build@master
-      with:
-        build-dir: ${{ runner.workspace }}/build
-        build-type: Debug
-        parallel: 4
+      - name: Configure
+        run: rm -rf build ; cmake -B build
 
-    # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
-    # If this step fails, then you should remove it and run the build manually (see below)
-    #- name: Autobuild
-    #  uses: github/codeql-action/autobuild@v1
+      - name: Build
+        run: cd build && make
 
-    # ℹ️ Command-line programs to run using the OS shell.
-    # 📚 https://git.io/JvXDl
+      #- name: Build
+      #  uses: ashutoshvarma/action-cmake-build@master
+      #  with:
+      #    build-dir: ${{ runner.workspace }}/build
+      #    build-type: Debug
+      #    parallel: 4
 
-    # ✏️ If the Autobuild fails above, remove it and uncomment the following three lines
-    #    and modify them (or add more) to build your code if your project
-    #    uses a compiled language
+      # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
+      # If this step fails, then you should remove it and run the build manually (see below)
+      #- name: Autobuild
+      #  uses: github/codeql-action/autobuild@v1
 
-    #   make dts
-    #   make bootstrap
-    #   make release
+      # ℹ️ Command-line programs to run using the OS shell.
+      # 📚 https://git.io/JvXDl
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      # ✏️ If the Autobuild fails above, remove it and uncomment the following three lines
+      #    and modify them (or add more) to build your code if your project
+      #    uses a compiled language
+
+      #   make dts
+      #   make bootstrap
+      #   make release
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
