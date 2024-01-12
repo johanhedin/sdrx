@@ -90,8 +90,8 @@ being removed.
 
 Install/uninstall
 ---
-If you like, you can install the `sdrx` executable on your system. Default
-install directory default to `/usr/local/bin` but can be set to a different
+If you like, you can install the `sdrx` executable on your system. Install
+directory defaults to `/usr/local/bin`. It can be set to a different
 location with `-DCMAKE_INSTALL_PREFIX=<your_custom_dir>`:
 
     $ cd build
