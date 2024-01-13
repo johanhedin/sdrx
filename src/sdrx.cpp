@@ -58,6 +58,7 @@
 #include "fir.hpp"
 #include "agc.hpp"
 #include "r820_dev.hpp"
+#include "ds.hpp"
 
 // Down sampling filters
 #include "filters/fs_00960_08bit_ds_to_00016.hpp"
@@ -198,7 +199,7 @@ private:
 class Channel {
 public:
     Channel(const std::string &name, float sql_level = 9.0f, Modulation mod = Modulation::AM)
-    : name(name), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0), mod(mod), demod(mod) {}
+    : name(name), ds_ptr(nullptr), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0), mod(mod), demod(mod) {}
 
     bool operator<(const Channel &rhv) { return name < rhv.name; }
     bool operator==(const Channel &rhv) { return name == rhv.name; }
@@ -208,6 +209,7 @@ public:
 
     std::string      name;           // Channel name, e.g "118.105"
     MSD              msd;            // Multi stage down sampler with tuner
+    DS              *ds_ptr;         // Threaded downsampler
     AGC              agc;            // AGC
     float            sql_level;      // Squelch level for the channel
     sql_state_t      sql_state;      // Squelch state (open/closed)
@@ -246,6 +248,7 @@ public:
     bool                 bw_check_override = false;            // Ovveride the 80% bw check
     bool                 compact_printout = false;             // Compact printout. Will override verbose
     bool                 use_ftfir = false;                    // Use frequency translating FIR
+    bool                 use_threaded_ds = false;              // Use threaded downsamplers
 };
 
 
@@ -305,9 +308,18 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
     if (ctx.rb_ptr->acquireWrite(&iq_buf_ptr, &metadata_ptr)) {
         // Channelize the IQ data and write output into ring buffer one
         // channel after the other
-        for (auto &ch : channels) {
-            ch.msd.decimate(data, data_len, iq_buf_ptr);
-            iq_buf_ptr += CH_IQ_BUF_SIZE;
+        if (ctx.settings.use_threaded_ds) {
+            std::latch latch(channels.size());
+            for (auto &ch : channels) {
+                ch.ds_ptr->addJob(data, data_len, iq_buf_ptr, latch);
+                iq_buf_ptr += CH_IQ_BUF_SIZE;
+            }
+            latch.wait();
+        } else {
+            for (auto &ch : channels) {
+                ch.msd.decimate(data, data_len, iq_buf_ptr);
+                iq_buf_ptr += CH_IQ_BUF_SIZE;
+            }
         }
 
         // Store IQ metadata in the chunk
@@ -1148,23 +1160,25 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
     int           bw_check_override = 0;
     int           compact = 0;
     int           use_ftfir = 0;
+    int           use_threaded_ds = 0;
 
     struct poptOption options_table[] = {
-        { "list",      'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and their sample rates and quit", nullptr },
-        { "device",    'd', POPT_ARG_STRING, &device, 0, "serial for device to use. Defaults to first available if not set", "SERIAL" },
-        { "fq-corr",   'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm for RTL dongles. Defaults to 0 if not set", "FQCORR" },
-        { "gain",      'g', POPT_ARG_STRING, &gain_str, 0, "RF gain in dB in the range 0 to 49 or as LNA:MIX:VGA gain indexes. Defaults to 30dB if not set", "RFGAIN" },
-        { "volume",    'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
-        { "sql-level", 's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over channel noise floor. Can also be set per channel. Defaults to 9 if not set", "SQLLEVEL" },
-        { "audio-dev",   0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
-        { "sample-rate", 0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
-        { "modulation",  0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL!", "MOD" },
-        { "lf-agc",      0, POPT_ARG_NONE,   &use_lf_agc, 0, "enable post demodulation AGC. EXPERIMENTAL!", nullptr },
-        { "ftfir",       0, POPT_ARG_NONE,   &use_ftfir, 0, "use frequency translation FIR. EXPERIMENTAL!", nullptr },
-        { "bw-override", 0, POPT_ARG_NONE,   &bw_check_override, 0, "accept channels outside the 80% sample rate bandwidth limit. EXPERTS ONLY!", nullptr },
-        { "verbose",     0, POPT_ARG_NONE,   &verbose, 0, "enable verbose printouts", nullptr },
-        { "compact",     0, POPT_ARG_NONE,   &compact, 0, "enable compact printouts. Will override --verbose if given at the same time", nullptr },
-        { "help",      'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
+        { "list",        'l', POPT_ARG_NONE,   &list_devices, 0, "list available devices and their sample rates and quit", nullptr },
+        { "device",      'd', POPT_ARG_STRING, &device, 0, "serial for device to use. Defaults to first available if not set", "SERIAL" },
+        { "fq-corr",     'c', POPT_ARG_INT,    &settings.fq_corr, 0, "frequency correction in ppm for RTL dongles. Defaults to 0 if not set", "FQCORR" },
+        { "gain",        'g', POPT_ARG_STRING, &gain_str, 0, "RF gain in dB in the range 0 to 49 or as LNA:MIX:VGA gain indexes. Defaults to 30dB if not set", "RFGAIN" },
+        { "volume",      'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
+        { "sql-level",   's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over channel noise floor. Can also be set per channel. Defaults to 9 if not set", "SQLLEVEL" },
+        { "audio-dev",     0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
+        { "sample-rate",   0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
+        { "modulation",    0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL!", "MOD" },
+        { "lf-agc",        0, POPT_ARG_NONE,   &use_lf_agc, 0, "enable post demodulation AGC. EXPERIMENTAL!", nullptr },
+        { "ftfir",         0, POPT_ARG_NONE,   &use_ftfir, 0, "use frequency translation FIR. EXPERIMENTAL!", nullptr },
+        { "threaded-ds", 't', POPT_ARG_NONE,   &use_threaded_ds, 0, "use dedicated threads for downsampling", nullptr },
+        { "bw-override",   0, POPT_ARG_NONE,   &bw_check_override, 0, "accept channels outside the 80% sample rate bandwidth limit. EXPERTS ONLY!", nullptr },
+        { "verbose",       0, POPT_ARG_NONE,   &verbose, 0, "enable verbose printouts", nullptr },
+        { "compact",       0, POPT_ARG_NONE,   &compact, 0, "enable compact printouts. Will override --verbose if given at the same time", nullptr },
+        { "help",        'h', POPT_ARG_NONE,   &print_help, 0, "show full help and quit", nullptr },
         POPT_TABLEEND
     };
 
@@ -1205,6 +1219,8 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         if (compact == 1) settings.compact_printout = true;
 
         if (use_ftfir == 1) settings.use_ftfir = true;
+
+        if (use_threaded_ds == 1) settings.use_threaded_ds = true;
 
         // Collect and free string arguments if given
         if (device) {
@@ -1652,6 +1668,10 @@ int main(int argc, char** argv) {
 
         ch.msd = MSD(translator, stages, settings.use_ftfir);
 
+        if (settings.use_threaded_ds) {
+            ch.ds_ptr = new DS(ch.msd);
+        }
+
         ch.ch_flt = FIR3<iqsample_t>(fs_00016_16bit_ch_amdemod_lpf1);
 
         ch.agc.setReference(1.0f);
@@ -1761,6 +1781,10 @@ int main(int argc, char** argv) {
 
 quit:
     delete device;
+
+    for (auto &ch : settings.channels) {
+        if (ch.ds_ptr) delete ch.ds_ptr;
+    }
 
     alsa_thread.join();
 
