@@ -10,8 +10,8 @@ cmake_minimum_required(VERSION 3.10...3.27)
 
 project(sdrx CXX)
 
-# We use C++17 stuff
-set(CMAKE_CXX_STANDARD 17)
+# We use C++20 stuff
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # This property is needed to handle the uninstall custom target added by
@@ -36,7 +36,8 @@ find_package(PkgConfig REQUIRED)
 include(GNUInstallDirs)
 
 # Create a uninstall target if it does not already exist. We need this before
-# any add_subdirectory so that uninstall targets from them do not propagate here
+# any add_subdirectory so that uninstall targets from them do not propagate here.
+# https://gitlab.kitware.com/cmake/community/-/wikis/FAQ#can-i-do-make-uninstall-with-cmake
 if(NOT TARGET uninstall)
     configure_file("${PROJECT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
                    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" @ONLY)
