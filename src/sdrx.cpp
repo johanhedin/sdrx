@@ -30,6 +30,7 @@
 // Standard C++ includes
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <atomic>
 #include <new>
 #include <cstring>
@@ -125,6 +126,8 @@
 
 static bool run = true;
 static std::atomic_flag cout_lock = ATOMIC_FLAG_INIT;
+static std::mutex              stop_mutex;
+static std::condition_variable stop_condition;
 
 // Metadata associated with one chunk of IQ data (32ms at the moment)
 struct Metadata {
@@ -282,7 +285,10 @@ struct OutputState {
 
 static void signal_handler(int signo) {
     std::cout << "Signal '" << strsignal(signo) << "' received. Stopping...\n";
+    std::unique_lock<std::mutex> lock(stop_mutex);
     run = false;
+    lock.unlock();
+    stop_condition.notify_one();
 }
 
 
@@ -1769,10 +1775,12 @@ int main(int argc, char** argv) {
         goto quit;
     }
 
-    // Sleep until Crtl-C is pressed
+    // Sleep until the stop_condition is signaled from the sigint handler
+    std::unique_lock<std::mutex> lock(stop_mutex);
     while (run) {
-        sleep(1);
+        stop_condition.wait(lock);
     }
+    lock.unlock();
 
     ret = device->stop();
     if (ret < 0) {
