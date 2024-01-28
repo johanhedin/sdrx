@@ -249,7 +249,7 @@ void AirspyDev::worker_(AirspyDev &self) {
                                   reinterpret_cast<airspy_sample_block_cb_fn>(AirspyDev::data_cb_),
                                   &self);
             if (ret == AIRSPY_SUCCESS) {
-                self.state_ = State::RUNNING;
+                self.state_ = State::RUNNING;  // TODO: Move to above airspy_start_rx? How to revert on error then?
                 while (self.run_ && airspy_is_streaming((struct airspy_device*)self.dev_) == AIRSPY_TRUE) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
@@ -271,7 +271,7 @@ void AirspyDev::worker_(AirspyDev &self) {
 
             airspy_close((struct airspy_device*)self.dev_);
             self.dev_ = nullptr;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            if (self.run_) std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
