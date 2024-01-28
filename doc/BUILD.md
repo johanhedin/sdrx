@@ -21,13 +21,17 @@ installed on your machine in order to build and run `sdrx`:
 
 On Fedora they can be installed with:
 
-    $ sudo dnf install git gcc-c++ cmake popt-devel libsigc++20-devel libusb1-devel fftw-devel \
-      fftw-libs-single alsa-lib-devel rtl-sdr-devel airspyone_host-devel
+```console
+$ sudo dnf install git gcc-c++ cmake popt-devel libsigc++20-devel libusb1-devel fftw-devel \
+  fftw-libs-single alsa-lib-devel rtl-sdr-devel airspyone_host-devel
+```
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
-    $ sudo apt-get install git g++ cmake build-essential libpopt-dev libsigc++-2.0-dev \
-      libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
+```console
+$ sudo apt-get install git g++ cmake build-essential libpopt-dev libsigc++-2.0-dev \
+  libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev librtlsdr-dev libairspy-dev
+```
 
 
 Clone the repo and build
@@ -55,22 +59,26 @@ $ cd sdrx
 
 and then build with cmake:
 
-    $ mkdir build
-    $ cd build
-    $ cmake ..
-    $ make
+```console
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make
+```
 
 
 Keep up to date with changes
 ----
 To keep up to date with changes and updates to `sdrx`, simply run:
 
-    $ cd sdrx
-    $ git pull --ff-only
-    $ git submodule update --init --recursive
-    $ cd build
-    $ cmake ..
-    $ make
+```console
+$ cd sdrx
+$ git pull --ff-only
+$ git submodule update --init --recursive
+$ cd build
+$ cmake ..
+$ make
+```
 
 Please always run the `git submodule update`-part as stated above since it is
 required for the submodule linking to work as indended. The `--init` and
@@ -80,10 +88,12 @@ properly. For existing submodules, they are a no-op.
 If the build for some reason fails after a update, try to remove all files
 inside the build directory and start over:
 
-    $ cd build
-    $ rm -rf *
-    $ cmake ..
-    $ make
+```console
+$ cd build
+$ rm -rf *
+$ cmake ..
+$ make
+```
 
 Make sure to `git pull` according to the instruction above regularly to keep up
 with the changes. And always read the README to see how the program changes
@@ -96,18 +106,22 @@ If you like, you can install the `sdrx` executable on your system. Install
 directory defaults to `/usr/local/bin`. It can be set to a different
 location with `-DCMAKE_INSTALL_PREFIX=<your_custom_dir>`:
 
-    $ cd build
-    $ rm -rf *
-    $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr
-    $ make
-    $ sudo make install
+```console
+$ cd build
+$ rm -rf *
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/usr
+$ make
+$ sudo make install
+```
 
 To uninstall, you need to install like above first and have the build directory
 available as it was after the install (the files installed are written to
 a file in the build directory and then used in the uninstall stage):
 
-    $ cd build
-    $ sudo make uninstall
+```console
+$ cd build
+$ sudo make uninstall
+```
 
 `sudo` is only needed if your install directory is owned by root.
 

@@ -8,9 +8,11 @@ channel, options are available and can be listed with `--help` (his page
 does not always cover all available options so use this page together with
 `--help` to get the full picture):
 
-    $ cd sdrx/build
-    $ ./sdrx --help
-    $ ./sdrx --gain 30 122.455
+```console
+$ cd sdrx/build
+$ ./sdrx --help
+$ ./sdrx --gain 30 122.455
+```
 
 To stop the program, just press Crtl-C in the terminal and wait. This will stop
 `sdr` cleanly as Ctrl-C is handled properly. If you have multiple devices
@@ -30,7 +32,9 @@ librtlsdr library (look in the source code for the details). As an alternative,
 it is also possible to set the three gain stages directly with stage values
 like this (LNA = 5, MIX = 8 and VGA = 10):
 
-    $ ./sdrx --gain 5:8:10 122.455
+```console
+$ ./sdrx --gain 5:8:10 122.455
+```
 
 This gives very good control over how the total gain is distributed in the R820
 tuner and is the preferred way of setting gain when you run a external LNA in
@@ -44,7 +48,9 @@ all and any `--fq-corr` given is silently ignored.
 If you have multiple devices connected, use `--list` to list what devices that
 `sdrx` recognize on your system and what sample rates they support:
 
-    $ ./sdrx --list
+```console
+$ ./sdrx --list
+```
 
 To use a specific device, it's serial is used and you must ensure that all
 devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from the standard
@@ -71,7 +77,9 @@ Support for multiple channels is available as well. Just specify the channels as
 arguments. The channels must fit inside 80% of the sampling frequency used (see
 below for explanation):
 
-    $ ./sdrx --gain 40 118.105 118.280 118.405 118.505
+```console
+$ ./sdrx --gain 40 118.105 118.280 118.405 118.505
+```
 
 The more channels you specify, the more loaded the channelization thread will be.
 Please monitor your system load when running `sdrx` with many channels to get an
@@ -88,7 +96,9 @@ USB connectors and a device easily disconnects by just moving it sligthly.
 Sample rate defaults to 1.44MS/s for RTL devices and 6MS/s for Airspy devices
 if not set explicitly. Change to your liking with the `--sample-rate` option:
 
-    $ ./sdrx --sample-rate 2.56 118.280 118.405 118.505
+```console
+$ ./sdrx --sample-rate 2.56 118.280 118.405 118.505
+```
 
 As stated earlier, the sample rate dictates the RF bandwidth that can be
 used. If, for example, a sample rate of 2.56 MS/s is used, the available RF
@@ -112,15 +122,17 @@ second.
 
 A typical output look like this:
 
-    $ ./sdrx -g 45 118.105
-    ...
-    10:57:00: Level[X   -37.2] 118.105[ 0.0] [-22.5|-22.6|-23.4] [  0.00] [SNR][low|mid|hig][imbalance]
-    10:57:01: Level[X   -39.6] 118.105[ 0.0] [-22.1|-22.9|-22.2] [  0.00] [SNR][low|mid|hig][imbalance]
-    10:57:01: Level[X   -39.5] 118.105[ 0.0] [-21.1|-22.3|-22.8] [  0.00] [SNR][low|mid|hig][imbalance]
-    10:57:01: Level[XXX -27.5] 118.105[38.0] [-21.4| 16.5|-21.7] [-12.28] [SNR][low|mid|hig][imbalance]
-    10:57:02: Level[XXX -27.5] 118.105[38.7] [-22.7| 16.6|-21.6] [-30.74] [SNR][low|mid|hig][imbalance]
-    10:57:02: Level[XXX -27.5] 118.105[39.7] [-21.8| 16.9|-24.2] [-30.66] [SNR][low|mid|hig][imbalance]
-    ...
+```console
+$ ./sdrx -g 45 118.105
+...
+10:57:00: Level[X   -37.2] 118.105[ 0.0] [-22.5|-22.6|-23.4] [  0.00] [SNR][low|mid|hig][imbalance]
+10:57:01: Level[X   -39.6] 118.105[ 0.0] [-22.1|-22.9|-22.2] [  0.00] [SNR][low|mid|hig][imbalance]
+10:57:01: Level[X   -39.5] 118.105[ 0.0] [-21.1|-22.3|-22.8] [  0.00] [SNR][low|mid|hig][imbalance]
+10:57:01: Level[XXX -27.5] 118.105[38.0] [-21.4| 16.5|-21.7] [-12.28] [SNR][low|mid|hig][imbalance]
+10:57:02: Level[XXX -27.5] 118.105[38.7] [-22.7| 16.6|-21.6] [-30.74] [SNR][low|mid|hig][imbalance]
+10:57:02: Level[XXX -27.5] 118.105[39.7] [-21.8| 16.9|-24.2] [-30.66] [SNR][low|mid|hig][imbalance]
+...
+```
 
 Open squelch is indicated by the channel name getting a yellow background.
 **Level** is a measurement of the signal level before the ADC in dB (dBFS) and
@@ -158,24 +170,26 @@ panorma based on their order on the command line.
 Output in the terminal looks about the same as for single channel but only the
 SNR is shown for each individual channel:
 
-    $ ./sdrx -g 40 118.105 118.280 118.405
-    ...
-    10:57:00: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
-    10:57:01: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
-    10:57:01: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 1.0] 118.280[ 0.0] 118.405[ 0.0]
-    10:57:01: Level[XXXX  -27.5] 118.105[ 1.3] 118.205[ 0.0] 118.280[27.0] 118.405[ 0.0]
-    10:57:02: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.5] 118.405[ 0.0]
-    10:57:02: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.9] 118.405[ 0.0]
-    10:57:02: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[29.0] 118.405[ 0.0]
-    10:57:03: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[29.4] 118.405[ 0.0]
-    10:57:03: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.2] 118.405[ 0.0]
-    10:57:03: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.4] 118.405[ 0.0]
-    10:57:04: Level[XXXX  -27.5] 118.105[ 1.1] 118.205[ 0.0] 118.280[29.8] 118.405[ 0.0]
-    10:57:04: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.9] 118.405[ 0.0]
-    10:57:04: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.5] 118.405[ 0.0]
-    10:57:05: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[27.9] 118.405[ 0.0]
-    10:57:05: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.8] 118.405[ 0.0]
-    10:57:05: Level[XX    -39.6] 118.105[ 1.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
-    10:57:06: Level[XX    -39.6] 118.105[ 1.8] 118.205[ 0.0] 118.280[ 1.2] 118.405[ 0.0]
-    10:57:06: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
-    ...
+```console
+$ ./sdrx -g 40 118.105 118.280 118.405
+...
+10:57:00: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
+10:57:01: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
+10:57:01: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 1.0] 118.280[ 0.0] 118.405[ 0.0]
+10:57:01: Level[XXXX  -27.5] 118.105[ 1.3] 118.205[ 0.0] 118.280[27.0] 118.405[ 0.0]
+10:57:02: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.5] 118.405[ 0.0]
+10:57:02: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.9] 118.405[ 0.0]
+10:57:02: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[29.0] 118.405[ 0.0]
+10:57:03: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[29.4] 118.405[ 0.0]
+10:57:03: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.2] 118.405[ 0.0]
+10:57:03: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.4] 118.405[ 0.0]
+10:57:04: Level[XXXX  -27.5] 118.105[ 1.1] 118.205[ 0.0] 118.280[29.8] 118.405[ 0.0]
+10:57:04: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.9] 118.405[ 0.0]
+10:57:04: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.5] 118.405[ 0.0]
+10:57:05: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[27.9] 118.405[ 0.0]
+10:57:05: Level[XXXX  -27.5] 118.105[ 0.0] 118.205[ 0.0] 118.280[28.8] 118.405[ 0.0]
+10:57:05: Level[XX    -39.6] 118.105[ 1.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
+10:57:06: Level[XX    -39.6] 118.105[ 1.8] 118.205[ 0.0] 118.280[ 1.2] 118.405[ 0.0]
+10:57:06: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
+...
+```
