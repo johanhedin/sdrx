@@ -48,8 +48,10 @@ files for the unique USB ids that the dongles use.
 
 Clone `sdrx` from GitHub with the needed submodules:
 
-    $ git clone --recurse-submodules https://github.com/johanhedin/sdrx.git
-    $ cd sdrx
+```console
+$ git clone --recurse-submodules https://github.com/johanhedin/sdrx.git
+$ cd sdrx
+```
 
 and then build with cmake:
 
