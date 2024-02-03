@@ -2,7 +2,7 @@
 // Multi-Stage translating down sampler for tuning and decimating a IQ stream
 //
 // @author Johan Hedin
-// @date   2021
+// @date   2021 - 2024
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -162,7 +162,10 @@ private:
                     auto iter = c_.begin();
                     unsigned k = j;
                     while (iter != c_.end()) {
-                        cc.push_back(*iter * translator[k]);
+                        // Frequency translating FIR filter has a gain of 0.5
+                        // so we need to compensate that with a factor 2 on
+                        // the coefficients
+                        cc.push_back(*iter * translator[k] * 2.0f);
                         if (++k == translator.size()) k = 0;
                         ++iter;
                     }
@@ -196,12 +199,42 @@ private:
         // Calculat one output sample based on the in samples in the delay line
         // and the filter coefficients
         inline iqsample_t calculateOutput(void) {
-            auto rb_pos = pos_;
-
+            auto       rb_pos = pos_;
             iqsample_t out_sample(0.0f, 0.0f);
-            for (unsigned i = 0; i < c_.size(); ++i) {
+            unsigned   i = 0;
+            unsigned   iterations;
+
+            /*
+            // Simple loop. Vectorize friendly version below
+            for (; i < c_.size(); ++i) {
                 out_sample += rb_[rb_pos] * c_[i];
                 if (++rb_pos == rb_.size()) rb_pos = 0;
+            }
+            */
+
+            // Vectorize friendly loop by splitting the delay line into two
+            // and then split each part into a four-block-part and a rest-part
+            iterations = (c_.size() - pos_) / 4;
+            for (; i < iterations; i += 4, rb_pos += 4) {
+                out_sample += (rb_[rb_pos + 0] * c_[i + 0]
+                             + rb_[rb_pos + 1] * c_[i + 1]
+                             + rb_[rb_pos + 2] * c_[i + 2]
+                             + rb_[rb_pos + 3] * c_[i + 3]);
+            }
+            for (; i < c_.size() - pos_; ++i, ++rb_pos) {
+                out_sample += rb_[rb_pos] * c_[i];
+            }
+
+            rb_pos = 0;
+            iterations = c_.size() / 4;
+            for (; i < iterations; i += 4, rb_pos += 4) {
+                out_sample += (rb_[rb_pos + 0] * c_[i + 0]
+                             + rb_[rb_pos + 1] * c_[i + 1]
+                             + rb_[rb_pos + 2] * c_[i + 2]
+                             + rb_[rb_pos + 3] * c_[i + 3]);
+            }
+            for (; i < c_.size(); ++i, ++rb_pos) {
+                out_sample += rb_[rb_pos] * c_[i];
             }
 
             return out_sample;
@@ -210,13 +243,90 @@ private:
         // Calculat one output sample based on the in samples in the delay line
         // and the filter coefficients using translation
         inline iqsample_t calculateOutputTranslated(void) {
-            auto rb_pos = pos_;
-
+            auto       rb_pos = pos_;
             iqsample_t out_sample(0.0f, 0.0f);
+            unsigned   i = 0;
+            unsigned   iterations;
+
+            /*
+            // Simple loop. Not vectorize friendly
             for (unsigned i = 0; i < c_.size(); ++i) {
                 out_sample += rb_[rb_pos] * cs_[ccs_][i];
                 if (++rb_pos == rb_.size()) rb_pos = 0;
             }
+            */
+
+            /*
+            // Vectorize friendly loop by splitting the delay line into two
+            // and then split each part into a four-block-part and a rest-part.
+            // Does for some reason not work. The complex multiplications we
+            // do here are apperently not vectorize friendly...
+            iterations = (c_.size() - pos_) / 4;
+            for (; i < iterations; i += 4, rb_pos += 4) {
+                out_sample += (rb_[rb_pos + 0] * cs_[ccs_][i + 0]
+                             + rb_[rb_pos + 1] * cs_[ccs_][i + 1]
+                             + rb_[rb_pos + 2] * cs_[ccs_][i + 2]
+                             + rb_[rb_pos + 3] * cs_[ccs_][i + 3]);
+            }
+            for (; i < c_.size() - pos_; ++i, ++rb_pos) {
+                out_sample += rb_[rb_pos] * cs_[ccs_][i];
+            }
+
+            rb_pos = 0;
+            iterations = c_.size() / 4;
+            for (; i < iterations; i += 4, rb_pos += 4) {
+                out_sample += (rb_[rb_pos + 0] * cs_[ccs_][i + 0]
+                             + rb_[rb_pos + 1] * cs_[ccs_][i + 1]
+                             + rb_[rb_pos + 2] * cs_[ccs_][i + 2]
+                             + rb_[rb_pos + 3] * cs_[ccs_][i + 3]);
+            }
+            for (; i < c_.size(); ++i, ++rb_pos) {
+                out_sample += rb_[rb_pos] * cs_[ccs_][i];
+            }
+            */
+
+            // Vectorize friendly loop by splitting the delay line into two
+            // and then split each part into a four-block-part and a rest-part.
+            // Hand write the complex multiplications to trick g++ into
+            // vectorizaion.
+            iterations = (c_.size() - pos_) / 4;
+            float real = 0.0f, imag = 0.0f;
+            for (; i < iterations; i += 4, rb_pos += 4) {
+                real += ((rb_[rb_pos + 0].real() * cs_[ccs_][i + 0].real() - rb_[rb_pos + 0].imag() * cs_[ccs_][i + 0].imag())
+                       + (rb_[rb_pos + 1].real() * cs_[ccs_][i + 1].real() - rb_[rb_pos + 1].imag() * cs_[ccs_][i + 1].imag())
+                       + (rb_[rb_pos + 2].real() * cs_[ccs_][i + 2].real() - rb_[rb_pos + 2].imag() * cs_[ccs_][i + 2].imag())
+                       + (rb_[rb_pos + 3].real() * cs_[ccs_][i + 3].real() - rb_[rb_pos + 3].imag() * cs_[ccs_][i + 3].imag()));
+
+                imag += ((rb_[rb_pos + 0].real() * cs_[ccs_][i + 0].imag() + rb_[rb_pos + 0].imag() * cs_[ccs_][i + 0].real())
+                       + (rb_[rb_pos + 1].real() * cs_[ccs_][i + 1].imag() + rb_[rb_pos + 1].imag() * cs_[ccs_][i + 1].real())
+                       + (rb_[rb_pos + 2].real() * cs_[ccs_][i + 2].imag() + rb_[rb_pos + 2].imag() * cs_[ccs_][i + 2].real())
+                       + (rb_[rb_pos + 3].real() * cs_[ccs_][i + 3].imag() + rb_[rb_pos + 3].imag() * cs_[ccs_][i + 3].real()));
+            }
+            for (; i < c_.size() - pos_; ++i, ++rb_pos) {
+                real += ((rb_[rb_pos].real() * cs_[ccs_][i].real() - rb_[rb_pos].imag() * cs_[ccs_][i].imag()));
+                imag += ((rb_[rb_pos].real() * cs_[ccs_][i].imag() + rb_[rb_pos].imag() * cs_[ccs_][i].real()));
+            }
+
+            rb_pos = 0;
+            iterations = c_.size() / 4;
+            for (; i < iterations; i += 4, rb_pos += 4) {
+                real += ((rb_[rb_pos + 0].real() * cs_[ccs_][i + 0].real() - rb_[rb_pos + 0].imag() * cs_[ccs_][i + 0].imag())
+                       + (rb_[rb_pos + 1].real() * cs_[ccs_][i + 1].real() - rb_[rb_pos + 1].imag() * cs_[ccs_][i + 1].imag())
+                       + (rb_[rb_pos + 2].real() * cs_[ccs_][i + 2].real() - rb_[rb_pos + 2].imag() * cs_[ccs_][i + 2].imag())
+                       + (rb_[rb_pos + 3].real() * cs_[ccs_][i + 3].real() - rb_[rb_pos + 3].imag() * cs_[ccs_][i + 3].imag()));
+
+                imag += ((rb_[rb_pos + 0].real() * cs_[ccs_][i + 0].imag() + rb_[rb_pos + 0].imag() * cs_[ccs_][i + 0].real())
+                       + (rb_[rb_pos + 1].real() * cs_[ccs_][i + 1].imag() + rb_[rb_pos + 1].imag() * cs_[ccs_][i + 1].real())
+                       + (rb_[rb_pos + 2].real() * cs_[ccs_][i + 2].imag() + rb_[rb_pos + 2].imag() * cs_[ccs_][i + 2].real())
+                       + (rb_[rb_pos + 3].real() * cs_[ccs_][i + 3].imag() + rb_[rb_pos + 3].imag() * cs_[ccs_][i + 3].real()));
+            }
+            for (; i < c_.size(); ++i, ++rb_pos) {
+                real += ((rb_[rb_pos].real() * cs_[ccs_][i].real() - rb_[rb_pos].imag() * cs_[ccs_][i].imag()));
+                imag += ((rb_[rb_pos].real() * cs_[ccs_][i].imag() + rb_[rb_pos].imag() * cs_[ccs_][i].real()));
+            }
+
+            out_sample.real(real);
+            out_sample.imag(imag);
 
             // Advance to next coefficient set. Wrap around if necessary
             if (++ccs_ == cs_.size()) ccs_ = 0;
