@@ -1710,6 +1710,7 @@ int main(int argc, char** argv) {
     std::cout << "    Volume: " << settings.lf_gain << "dB\n";
     std::cout << "    Squelch level: " << settings.sql_level << "dB\n";
     std::cout << "    Audio AGC: " << (settings.use_lf_agc ? "On":"Off") << std::endl;
+    std::cout << "    Frequency Translating FIR: " << (settings.use_ftfir ? "On":"Off") << std::endl;
     std::cout << "    ALSA device: " << settings.audio_device << std::endl;
     std::cout << "    Tuner center frequency: " << settings.tuner_fq/1000 << " kHz\n";
     std::cout << "    Bandwidth: +/-" << (sample_rate_to_uint(settings.rate) * 8 / 20)/1000 << " kHz relative to center frequency\n";
