@@ -18,22 +18,27 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-// See https://www.dsprelated.com/showarticle/1028.php for frequency translating
-// FIR filter.
-
 #ifndef MSD_HPP
 #define MSD_HPP
 
 #include <vector>
 #include <iqsample.hpp>
 
-// Multi-Stage Down sampler
+#if defined __AVX2__
+#include <immintrin.h>
+#elif defined __ARM_NEON
+#include <arm_neon.h>
+#else
+//#pragma message "NO AVX2 or NEON SMID available. Using normal code"
+#endif
+
+// Multi-Stage Translating Down sampler
 class MSD {
 public:
-    // Configuration for one stage. We need to know the decimation factor and
-    // the coefficients that make up the FIR low pass filter
+    // Configuration for one down sampling stage. We need the down sampling
+    // factor and the coefficients that make up the low pass FIR filter
     struct Stage {
-        unsigned           m;    // Decimation factor
+        unsigned           m;    // Down sampling factor
         std::vector<float> coef; // Low pass filter FIR coefficients
     };
 
@@ -150,11 +155,12 @@ private:
     // in the form of a ring buffer
     class S {
     public:
-        S(unsigned m, const std::vector<float> c, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) : m_(m), c_(c),
-            rb_(c.size(), iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), ccs_(0) {
+        S(unsigned m, const std::vector<float> c, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
+          m_(m), c_(c), rb_(c.size() * 2, iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), ccs_(0) {
             if (!translator.empty()) {
-                // Calculate coeffcient set based on m, c and translator. Size of
-                // translator is assumed to always be evenly divisalbe by m
+                // Construct frequency translating filter coeffcient set based
+                // on m, c and translator vector. Size of translator is assumed
+                // to always be evenly divisalbe by m.
                 unsigned num_sets = translator.size() / m_;
                 unsigned j = 0;
                 for (unsigned i = 0; i < num_sets; i++) {
@@ -174,20 +180,31 @@ private:
                     j += m_;
                 }
             }
+
+            // Create a second coefficient vector where every coefficent from
+            // the original vector is dubbled. This is used for SIMD if
+            // available
+            auto iter = c_.begin();
+            while (iter != c_.end()) {
+                c2_.push_back(iqsample_t(*iter, *iter));
+                ++iter;
+            }
         }
 
         // Add one new sample to the delay line
         inline bool addSample(iqsample_t sample) {
             bool ret = false;
 
-            // Add sample to the ring buffer at current position
+            // Add sample to the ring buffer at current position. Ring buffer
+            // has doubble length and we add the sample at two positions
             rb_[pos_] = sample;
+            rb_[pos_ + c_.size()] = sample;
 
-            // Advance and if at the end, wrap around
-            if (++pos_ == rb_.size()) pos_ = 0;
+            // Advance sample pointer. If at the end, wrap around
+            if (++pos_ == c_.size()) pos_ = 0;
 
             // Decrease samples needed. If 0, we have enough new in samples
-            // to calculate one output sample
+            // in the ring buffer to calculate one output sample
             if (--isn_ == 0) {
                 isn_ = m_;
                 ret = true;
@@ -199,130 +216,114 @@ private:
         // Calculat one output sample based on the in samples in the delay line
         // and the filter coefficients
         inline iqsample_t calculateOutput(void) {
-            auto       rb_pos = pos_;
-            iqsample_t out_sample(0.0f, 0.0f);
             unsigned   i = 0;
-            unsigned   iterations;
+            auto rb_ptr = &rb_[pos_];
+            auto c_ptr  = &c_[0];
+            float real_sum = 0.0f, imag_sum = 0.0f;
+            unsigned rounded_size = (c_.size() >> 2) << 2;
 
             /*
-            // Simple loop. Vectorize friendly version below
+            // Simple calculation. Not vectorize friendly. Not used
+            iqsample_t out_sample(0.0f, 0.0f);
             for (; i < c_.size(); ++i) {
-                out_sample += rb_[rb_pos] * c_[i];
-                if (++rb_pos == rb_.size()) rb_pos = 0;
+                out_sample += rb_ptr[i] * c_ptr[i];
             }
+            real_sum = out_sample.real();
+            imag_sum = out_sample.imag();
             */
 
-            // Vectorize friendly loop by splitting the delay line into two
-            // and then split each part into a four-block-part and a rest-part
-            iterations = (c_.size() - pos_) / 4;
-            for (; i < iterations; i += 4, rb_pos += 4) {
-                out_sample += (rb_[rb_pos + 0] * c_[i + 0]
-                             + rb_[rb_pos + 1] * c_[i + 1]
-                             + rb_[rb_pos + 2] * c_[i + 2]
-                             + rb_[rb_pos + 3] * c_[i + 3]);
-            }
-            for (; i < c_.size() - pos_; ++i, ++rb_pos) {
-                out_sample += rb_[rb_pos] * c_[i];
+            // TODO: We can turn the for loop the other way around and start
+            //       at pos_ + c_.size() - 1. Then check for >= 4 without the
+            //       need to shift. And then the next loop can unroll by 2
+            //       and so on.
+
+            // TODO: Optimize the for loop for folding FIR filter since our
+            //       coefficients are symetrical
+
+            // Vectorize friendly loops. We loop in batches of 4 as long as we
+            // can and unroll the calculations. Then we clean up with a final
+            // loop of 3, 2 or 1 iteration(s). We need to split the complex
+            // multiplications into real and imaginary to trick g++ into
+            // vectorization.
+#ifdef __AVX2__
+            // Intel AVX SIMD variant.
+            __m256 vec_sum = _mm256_set1_ps(0.0f);
+            for (; i < rounded_size; i += 4) {
+                __m256 a = _mm256_loadu_ps((float*)&rb_ptr[i]); // 4 samples is 8 floats (I and Q interleaved)
+                __m256 b = _mm256_loadu_ps((float*)&c2_[i]);    // We multiply with our special coefficent vector
+                vec_sum = _mm256_fmadd_ps(a, b, vec_sum);
             }
 
-            rb_pos = 0;
-            iterations = c_.size() / 4;
-            for (; i < iterations; i += 4, rb_pos += 4) {
-                out_sample += (rb_[rb_pos + 0] * c_[i + 0]
-                             + rb_[rb_pos + 1] * c_[i + 1]
-                             + rb_[rb_pos + 2] * c_[i + 2]
-                             + rb_[rb_pos + 3] * c_[i + 3]);
-            }
-            for (; i < c_.size(); ++i, ++rb_pos) {
-                out_sample += rb_[rb_pos] * c_[i];
+            // Need to complete the summation
+            for (auto j = 0; j < 8; j += 2) {
+                real_sum += vec_sum[j + 0];
+                imag_sum += vec_sum[j + 1];
             }
 
-            return out_sample;
+            for (; i < c_.size(); ++i) {
+                real_sum += rb_ptr[i].real() * c_ptr[i];
+                imag_sum += rb_ptr[i].imag() * c_ptr[i];
+            }
+#else
+            // Portable variant.
+            for (; i < rounded_size; i += 4) {
+                real_sum += (rb_ptr[i + 0].real() * c_ptr[i + 0]
+                           + rb_ptr[i + 1].real() * c_ptr[i + 1]
+                           + rb_ptr[i + 2].real() * c_ptr[i + 2]
+                           + rb_ptr[i + 3].real() * c_ptr[i + 3]
+                );
+                imag_sum += (rb_ptr[i + 0].imag() * c_ptr[i + 0]
+                           + rb_ptr[i + 1].imag() * c_ptr[i + 1]
+                           + rb_ptr[i + 2].imag() * c_ptr[i + 2]
+                           + rb_ptr[i + 3].imag() * c_ptr[i + 3]
+                );
+            }
+            for (; i < c_.size(); ++i) {
+                real_sum += rb_ptr[i].real() * c_ptr[i];
+                imag_sum += rb_ptr[i].imag() * c_ptr[i];
+            }
+#endif
+
+            return iqsample_t(real_sum, imag_sum);
         }
 
         // Calculat one output sample based on the in samples in the delay line
-        // and the filter coefficients using translation
+        // and the frequency translating filter coefficient set. This function
+        // is called as the first one if ftfir is used. All subsequent calls
+        // use the "normal" calculateOutput() above.
         inline iqsample_t calculateOutputTranslated(void) {
-            auto       rb_pos = pos_;
             iqsample_t out_sample(0.0f, 0.0f);
             unsigned   i = 0;
-            unsigned   iterations;
+            auto rb_ptr = &rb_[pos_];
+            auto c_ptr  = cs_[ccs_];
 
             /*
-            // Simple loop. Not vectorize friendly
-            for (unsigned i = 0; i < c_.size(); ++i) {
-                out_sample += rb_[rb_pos] * cs_[ccs_][i];
-                if (++rb_pos == rb_.size()) rb_pos = 0;
+            // Simple calculation. Not vectorize friendly
+            for (; i < c_.size(); ++i) {
+                out_sample += rb_ptr[i] * c_ptr[i];
             }
             */
 
-            /*
-            // Vectorize friendly loop by splitting the delay line into two
-            // and then split each part into a four-block-part and a rest-part.
-            // Does for some reason not work. The complex multiplications we
-            // do here are apperently not vectorize friendly...
-            iterations = (c_.size() - pos_) / 4;
-            for (; i < iterations; i += 4, rb_pos += 4) {
-                out_sample += (rb_[rb_pos + 0] * cs_[ccs_][i + 0]
-                             + rb_[rb_pos + 1] * cs_[ccs_][i + 1]
-                             + rb_[rb_pos + 2] * cs_[ccs_][i + 2]
-                             + rb_[rb_pos + 3] * cs_[ccs_][i + 3]);
-            }
-            for (; i < c_.size() - pos_; ++i, ++rb_pos) {
-                out_sample += rb_[rb_pos] * cs_[ccs_][i];
-            }
-
-            rb_pos = 0;
-            iterations = c_.size() / 4;
-            for (; i < iterations; i += 4, rb_pos += 4) {
-                out_sample += (rb_[rb_pos + 0] * cs_[ccs_][i + 0]
-                             + rb_[rb_pos + 1] * cs_[ccs_][i + 1]
-                             + rb_[rb_pos + 2] * cs_[ccs_][i + 2]
-                             + rb_[rb_pos + 3] * cs_[ccs_][i + 3]);
-            }
-            for (; i < c_.size(); ++i, ++rb_pos) {
-                out_sample += rb_[rb_pos] * cs_[ccs_][i];
-            }
-            */
-
-            // Vectorize friendly loop by splitting the delay line into two
-            // and then split each part into a four-block-part and a rest-part.
-            // Hand write the complex multiplications to trick g++ into
-            // vectorizaion.
-            iterations = (c_.size() - pos_) / 4;
+            // Vectorize friendly loop. We loop in batches of 4 as long as we
+            // can and unroll the calculations. Then we clean up with a final
+            // loop of 3, 2 or 1 iteration. We need to split the complex multiplications
+            // into real and imaginary to trick g++ into vectorization.
+            unsigned rounded_size = (c_.size() >> 2) << 2;
             float real = 0.0f, imag = 0.0f;
-            for (; i < iterations; i += 4, rb_pos += 4) {
-                real += ((rb_[rb_pos + 0].real() * cs_[ccs_][i + 0].real() - rb_[rb_pos + 0].imag() * cs_[ccs_][i + 0].imag())
-                       + (rb_[rb_pos + 1].real() * cs_[ccs_][i + 1].real() - rb_[rb_pos + 1].imag() * cs_[ccs_][i + 1].imag())
-                       + (rb_[rb_pos + 2].real() * cs_[ccs_][i + 2].real() - rb_[rb_pos + 2].imag() * cs_[ccs_][i + 2].imag())
-                       + (rb_[rb_pos + 3].real() * cs_[ccs_][i + 3].real() - rb_[rb_pos + 3].imag() * cs_[ccs_][i + 3].imag()));
+            for (; i < rounded_size; i += 4) {
+                real += ((rb_ptr[i + 0].real() * c_ptr[i + 0].real() - rb_ptr[i + 0].imag() * c_ptr[i + 0].imag())
+                       + (rb_ptr[i + 1].real() * c_ptr[i + 1].real() - rb_ptr[i + 1].imag() * c_ptr[i + 1].imag())
+                       + (rb_ptr[i + 2].real() * c_ptr[i + 2].real() - rb_ptr[i + 2].imag() * c_ptr[i + 2].imag())
+                       + (rb_ptr[i + 3].real() * c_ptr[i + 3].real() - rb_ptr[i + 3].imag() * c_ptr[i + 3].imag()));
 
-                imag += ((rb_[rb_pos + 0].real() * cs_[ccs_][i + 0].imag() + rb_[rb_pos + 0].imag() * cs_[ccs_][i + 0].real())
-                       + (rb_[rb_pos + 1].real() * cs_[ccs_][i + 1].imag() + rb_[rb_pos + 1].imag() * cs_[ccs_][i + 1].real())
-                       + (rb_[rb_pos + 2].real() * cs_[ccs_][i + 2].imag() + rb_[rb_pos + 2].imag() * cs_[ccs_][i + 2].real())
-                       + (rb_[rb_pos + 3].real() * cs_[ccs_][i + 3].imag() + rb_[rb_pos + 3].imag() * cs_[ccs_][i + 3].real()));
+                imag += ((rb_ptr[i + 0].real() * c_ptr[i + 0].imag() + rb_ptr[i + 0].imag() * c_ptr[i + 0].real())
+                       + (rb_ptr[i + 1].real() * c_ptr[i + 1].imag() + rb_ptr[i + 1].imag() * c_ptr[i + 1].real())
+                       + (rb_ptr[i + 2].real() * c_ptr[i + 2].imag() + rb_ptr[i + 2].imag() * c_ptr[i + 2].real())
+                       + (rb_ptr[i + 3].real() * c_ptr[i + 3].imag() + rb_ptr[i + 3].imag() * c_ptr[i + 3].real()));
             }
-            for (; i < c_.size() - pos_; ++i, ++rb_pos) {
-                real += ((rb_[rb_pos].real() * cs_[ccs_][i].real() - rb_[rb_pos].imag() * cs_[ccs_][i].imag()));
-                imag += ((rb_[rb_pos].real() * cs_[ccs_][i].imag() + rb_[rb_pos].imag() * cs_[ccs_][i].real()));
-            }
-
-            rb_pos = 0;
-            iterations = c_.size() / 4;
-            for (; i < iterations; i += 4, rb_pos += 4) {
-                real += ((rb_[rb_pos + 0].real() * cs_[ccs_][i + 0].real() - rb_[rb_pos + 0].imag() * cs_[ccs_][i + 0].imag())
-                       + (rb_[rb_pos + 1].real() * cs_[ccs_][i + 1].real() - rb_[rb_pos + 1].imag() * cs_[ccs_][i + 1].imag())
-                       + (rb_[rb_pos + 2].real() * cs_[ccs_][i + 2].real() - rb_[rb_pos + 2].imag() * cs_[ccs_][i + 2].imag())
-                       + (rb_[rb_pos + 3].real() * cs_[ccs_][i + 3].real() - rb_[rb_pos + 3].imag() * cs_[ccs_][i + 3].imag()));
-
-                imag += ((rb_[rb_pos + 0].real() * cs_[ccs_][i + 0].imag() + rb_[rb_pos + 0].imag() * cs_[ccs_][i + 0].real())
-                       + (rb_[rb_pos + 1].real() * cs_[ccs_][i + 1].imag() + rb_[rb_pos + 1].imag() * cs_[ccs_][i + 1].real())
-                       + (rb_[rb_pos + 2].real() * cs_[ccs_][i + 2].imag() + rb_[rb_pos + 2].imag() * cs_[ccs_][i + 2].real())
-                       + (rb_[rb_pos + 3].real() * cs_[ccs_][i + 3].imag() + rb_[rb_pos + 3].imag() * cs_[ccs_][i + 3].real()));
-            }
-            for (; i < c_.size(); ++i, ++rb_pos) {
-                real += ((rb_[rb_pos].real() * cs_[ccs_][i].real() - rb_[rb_pos].imag() * cs_[ccs_][i].imag()));
-                imag += ((rb_[rb_pos].real() * cs_[ccs_][i].imag() + rb_[rb_pos].imag() * cs_[ccs_][i].real()));
+            for (; i < c_.size(); ++i) {
+                real += ((rb_ptr[i].real() * c_ptr[i].real() - rb_ptr[i].imag() * c_ptr[i].imag()));
+                imag += ((rb_ptr[i].real() * c_ptr[i].imag() + rb_ptr[i].imag() * c_ptr[i].real()));
             }
 
             out_sample.real(real);
@@ -337,16 +338,17 @@ private:
     private:
         unsigned                 m_;     // Decimation factor
         std::vector<float>       c_;     // FIR coefficients
+        std::vector<iqsample_t>  c2_;    // FIR coefficients doubbled for SIMD use. Wee cheet with complex
         std::vector<iqsample_t>  rb_;    // Calculation ring buffer
         unsigned                 pos_;   // Current position in the ring buffer
         unsigned                 isn_;   // New in-samples needed before an output sample can be calculated
-        std::vector<std::vector<iqsample_t>> cs_; // Coefficient sets
-        unsigned                 ccs_;    // Current coefficient set
+        std::vector<std::vector<iqsample_t>> cs_; // FT FIR coefficient sets
+        unsigned                 ccs_;    // Current coefficient set for FT FIR
     };
 
     std::vector<MSD::S>     stages_;     // List of stages
-    unsigned                m_;          // Total decimation factor
-    std::vector<iqsample_t> translator_; // Fq tuning sequence
+    unsigned                m_;          // Total down sampling factor
+    std::vector<iqsample_t> translator_; // Frequency tuning sequence
     unsigned                trans_pos_;  // Position in translator
     bool                    use_ftfir_;  // Use frequency translating FIR for firts stage
 };
