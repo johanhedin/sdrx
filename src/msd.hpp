@@ -29,7 +29,7 @@
 #elif defined __ARM_NEON
 #include <arm_neon.h>
 #else
-//#pragma message "NO AVX2 or NEON SMID available. Using normal code"
+//#pragma message "NO AVX2 or NEON SIMD available. Using normal code"
 #endif
 
 // Multi-Stage Translating Down sampler
@@ -240,6 +240,11 @@ private:
             // TODO: Optimize the for loop for folding FIR filter since our
             //       coefficients are symetrical
 
+            // TODO: Convert c_ to an array of complex instead. Store the
+            //       same coefficient in both real and imag. This will
+            //       streamline the SIMD. Just need to att .real() or .imad()
+            //       for the old scalar cases.
+
             // Vectorize friendly loops. We loop in batches of 4 as long as we
             // can and unroll the calculations. Then we clean up with a final
             // loop of 3, 2 or 1 iteration(s). We need to split the complex
@@ -292,47 +297,92 @@ private:
         // is called as the first one if ftfir is used. All subsequent calls
         // use the "normal" calculateOutput() above.
         inline iqsample_t calculateOutputTranslated(void) {
-            iqsample_t out_sample(0.0f, 0.0f);
             unsigned   i = 0;
             auto rb_ptr = &rb_[pos_];
-            auto c_ptr  = cs_[ccs_];
+            auto c_ptr  = &cs_[ccs_][0];
+            unsigned rounded_size = (c_.size() >> 2) << 2;
+            float real_sum = 0.0f, imag_sum = 0.0f;
 
             /*
             // Simple calculation. Not vectorize friendly
+            iqsample_t out_sample(0.0f, 0.0f);
             for (; i < c_.size(); ++i) {
                 out_sample += rb_ptr[i] * c_ptr[i];
             }
+            real_sum = out_sample.real();
+            imag_sum = out_sample.imag();
             */
 
-            // Vectorize friendly loop. We loop in batches of 4 as long as we
+            // Vectorize friendly loops. We loop in batches of 4 as long as we
             // can and unroll the calculations. Then we clean up with a final
-            // loop of 3, 2 or 1 iteration. We need to split the complex multiplications
-            // into real and imaginary to trick g++ into vectorization.
-            unsigned rounded_size = (c_.size() >> 2) << 2;
-            float real = 0.0f, imag = 0.0f;
+            // loop of 3, 2 or 1 iteration(s). We need to split the complex
+            // multiplications into real and imaginary to trick g++ into
+            // vectorization.
+#ifdef __AVX2__
+            // Intel AVX SIMD variant.
+            __m256 sumr = _mm256_set1_ps(0.0f);
+            __m256 sumi = _mm256_set1_ps(0.0f);
+            const __m256 conj = _mm256_set_ps(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
             for (; i < rounded_size; i += 4) {
-                real += ((rb_ptr[i + 0].real() * c_ptr[i + 0].real() - rb_ptr[i + 0].imag() * c_ptr[i + 0].imag())
+                __m256 a = _mm256_loadu_ps((float*)&rb_ptr[i]);
+                __m256 b = _mm256_loadu_ps((float*)&c_ptr[i]);
+
+                /*
+                // Normal
+                __m256 b_conj = _mm256_mul_ps(b, conj);
+                __m256 cr = _mm256_mul_ps(a, b_conj);
+                __m256 b_flip = _mm256_permute_ps(b, 0b10110001);
+                __m256 ci = _mm256_mul_ps(a, b_flip);
+                sumr = _mm256_add_ps(sumr, cr);
+                sumi = _mm256_add_ps(sumi, ci);
+                */
+
+                // Fused multipy-add
+                __m256 b_conj = _mm256_mul_ps(b, conj);
+                sumr = _mm256_fmadd_ps(a, b_conj, sumr);
+                __m256 b_flip = _mm256_permute_ps(b, 0b10110001);
+                sumi = _mm256_fmadd_ps(a, b_flip, sumi);
+            }
+
+            // Complete the summation
+            sumr = _mm256_hadd_ps(sumr, sumr);
+            sumr = _mm256_hadd_ps(sumr, sumr);
+            sumr = _mm256_add_ps(sumr, _mm256_permute2f128_ps(sumr, sumr, 1));
+
+            sumi = _mm256_hadd_ps(sumi, sumi);
+            sumi = _mm256_hadd_ps(sumi, sumi);
+            sumi = _mm256_add_ps(sumi, _mm256_permute2f128_ps(sumi, sumi, 1));
+
+            real_sum = sumr[0];
+            imag_sum = sumi[0];
+
+            for (; i < c_.size(); ++i) {
+                real_sum += ((rb_ptr[i].real() * c_ptr[i].real() - rb_ptr[i].imag() * c_ptr[i].imag()));
+                imag_sum += ((rb_ptr[i].real() * c_ptr[i].imag() + rb_ptr[i].imag() * c_ptr[i].real()));
+            }
+#else
+            // Portable variant.
+            for (; i < rounded_size; i += 4) {
+                real_sum += ((rb_ptr[i + 0].real() * c_ptr[i + 0].real() - rb_ptr[i + 0].imag() * c_ptr[i + 0].imag())
                        + (rb_ptr[i + 1].real() * c_ptr[i + 1].real() - rb_ptr[i + 1].imag() * c_ptr[i + 1].imag())
                        + (rb_ptr[i + 2].real() * c_ptr[i + 2].real() - rb_ptr[i + 2].imag() * c_ptr[i + 2].imag())
                        + (rb_ptr[i + 3].real() * c_ptr[i + 3].real() - rb_ptr[i + 3].imag() * c_ptr[i + 3].imag()));
 
-                imag += ((rb_ptr[i + 0].real() * c_ptr[i + 0].imag() + rb_ptr[i + 0].imag() * c_ptr[i + 0].real())
+                imag_sum += ((rb_ptr[i + 0].real() * c_ptr[i + 0].imag() + rb_ptr[i + 0].imag() * c_ptr[i + 0].real())
                        + (rb_ptr[i + 1].real() * c_ptr[i + 1].imag() + rb_ptr[i + 1].imag() * c_ptr[i + 1].real())
                        + (rb_ptr[i + 2].real() * c_ptr[i + 2].imag() + rb_ptr[i + 2].imag() * c_ptr[i + 2].real())
                        + (rb_ptr[i + 3].real() * c_ptr[i + 3].imag() + rb_ptr[i + 3].imag() * c_ptr[i + 3].real()));
             }
             for (; i < c_.size(); ++i) {
-                real += ((rb_ptr[i].real() * c_ptr[i].real() - rb_ptr[i].imag() * c_ptr[i].imag()));
-                imag += ((rb_ptr[i].real() * c_ptr[i].imag() + rb_ptr[i].imag() * c_ptr[i].real()));
+                real_sum += ((rb_ptr[i].real() * c_ptr[i].real() - rb_ptr[i].imag() * c_ptr[i].imag()));
+                imag_sum += ((rb_ptr[i].real() * c_ptr[i].imag() + rb_ptr[i].imag() * c_ptr[i].real()));
             }
-
-            out_sample.real(real);
-            out_sample.imag(imag);
+#endif
 
             // Advance to next coefficient set. Wrap around if necessary
             if (++ccs_ == cs_.size()) ccs_ = 0;
 
-            return out_sample;
+            return iqsample_t(real_sum, imag_sum);
         }
 
     private:
