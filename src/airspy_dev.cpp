@@ -22,6 +22,14 @@
 #include <algorithm>
 #include <cinttypes>
 
+#if defined __AVX2__
+#include <immintrin.h>
+#elif defined __ARM_NEON
+#include <arm_neon.h>
+#else
+//#pragma message "NO AVX2 or NEON SIMD available. Using normal code"
+#endif
+
 #include "../libairspy/libairspy/src/airspy.h"
 
 #include "airspy_dev.hpp"
@@ -360,11 +368,38 @@ int AirspyDev::data_cb_(void *t) {
 
             // Calculate average power in the chunk by squaring the amplitude RMS.
             // ampl_rms = sqrt( ( sum( abs(iq_sample)^2 ) ) / N )
+#ifdef __AVX2__
+            // Intel AVX SIMD variant.
+            unsigned rounded_size = (self.block_size_ >> 2) << 2;
+            unsigned i = 0;
+            iqsample_t *sample_ptr = &self.iq_buffer_[self.part_pos_];
+            __m256 sum = _mm256_set1_ps(0.0f);
+            for (; i < rounded_size; i += 4) {
+                __m256 a = _mm256_loadu_ps((float*)&sample_ptr[i]);
+
+                // Fused multipy-add
+                sum = _mm256_fmadd_ps(a, a, sum);
+            }
+
+            // Complete the summation
+            sum = _mm256_hadd_ps(sum, sum);
+            sum = _mm256_hadd_ps(sum, sum);
+            sum = _mm256_add_ps(sum, _mm256_permute2f128_ps(sum, sum, 1));
+
+            pwr_rms = sum[0];
+
+            for (; i < self.block_size_; ++i) {
+                pwr_rms += std::norm(sample_ptr[i]);
+            }
+            pwr_rms = pwr_rms / self.block_size_;
+#else
+            // Portable variant.
             for (unsigned i = 0; i < self.block_size_; i++) {
                 float ampl_squared = std::norm(self.iq_buffer_[self.part_pos_ + i]);
                 pwr_rms += ampl_squared;
             }
             pwr_rms = pwr_rms / self.block_size_;
+#endif
 
             // Calculate power dBFS with full scale sine wave as reference (amplitude
             // of 1/sqrt(2) or power 1/2 or -3 dB).
