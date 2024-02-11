@@ -22,6 +22,7 @@
 #define MSD_HPP
 
 #include <vector>
+#include <cassert>
 #include <iqsample.hpp>
 
 #if defined __AVX2__
@@ -39,7 +40,7 @@ public:
     // factor and the coefficients that make up the low pass FIR filter
     struct Stage {
         unsigned           m;    // Down sampling factor
-        std::vector<float> coef; // Low pass filter FIR coefficients
+        std::vector<float> h;    // Low pass filter FIR coefficients
     };
 
     MSD(void) = default;
@@ -50,9 +51,9 @@ public:
         auto iter = stages.begin();
         while (iter != stages.end()) {
             if (iter == stages.begin() && !translator.empty()) {
-                stages_.push_back(MSD::S(iter->m, iter->coef, translator));
+                stages_.push_back(MSD::S(iter->m, iter->h, translator));
             } else {
-                stages_.push_back(MSD::S(iter->m, iter->coef));
+                stages_.push_back(MSD::S(iter->m, iter->h));
             }
             m_ = m_ * iter->m;
             ++iter;
@@ -151,23 +152,43 @@ public:
     }
 
 private:
-    // Internal class representing one stage with its associated delay line
-    // in the form of a ring buffer
+    // Internal class representing one stage. Contains the delay line and
+    // filter coefficients
     class S {
     public:
-        S(unsigned m, const std::vector<float> c, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
-          m_(m), c_(c), rb_(c.size() * 2, iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), ccs_(0) {
-            if (!translator.empty()) {
-                // Construct frequency translating filter coeffcient set based
-                // on m, c and translator vector. Size of translator is assumed
+        S(unsigned m, const std::vector<float> h, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
+          m_(m), d_(h.size() * 2, iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), k_(0) {
+            // Make sure that the filter coefficients can be used for folded FIR
+            assert(h.size() > 0);
+            assert((h.size() - 1) % 2 == 0);
+
+            // Make sure the translator size and down sampling factor supports
+            // frequency translating FIR
+            assert(translator.size() % m_ == 0);
+
+            // We store our filter coefficients in a complex vector with
+            // the same value in the real and imaginary parts. This is then
+            // used in the SIMD optimized code to allow easy loding into
+            // SIMD registers. When we just need "real" coefficients, we
+            // can read the value from the real or imag part since it
+            // is the same.
+            auto iter = h.begin();
+            while (iter != h.end()) {
+                h_.push_back(iqsample_t(*iter, *iter));
+                ++iter;
+            }
+
+            if (translator.size() > 0) {
+                // Construct frequency translating filter coefficient set based
+                // on m, h and translator vector. Size of translator is assumed
                 // to always be evenly divisalbe by m.
                 unsigned num_sets = translator.size() / m_;
                 unsigned j = 0;
-                for (unsigned i = 0; i < num_sets; i++) {
+                for (unsigned set = 0; set < num_sets; set++) {
                     std::vector<iqsample_t> cc;
-                    auto iter = c_.begin();
+                    auto iter = h.begin();
                     unsigned k = j;
-                    while (iter != c_.end()) {
+                    while (iter != h.end()) {
                         // Frequency translating FIR filter has a gain of 0.5
                         // so we need to compensate that with a factor 2 on
                         // the coefficients
@@ -176,18 +197,9 @@ private:
                         ++iter;
                     }
 
-                    cs_.push_back(cc);
+                    hk_.push_back(cc);
                     j += m_;
                 }
-            }
-
-            // Create a second coefficient vector where every coefficent from
-            // the original vector is dubbled. This is used for SIMD if
-            // available
-            auto iter = c_.begin();
-            while (iter != c_.end()) {
-                c2_.push_back(iqsample_t(*iter, *iter));
-                ++iter;
             }
         }
 
@@ -195,16 +207,16 @@ private:
         inline bool addSample(iqsample_t sample) {
             bool ret = false;
 
-            // Add sample to the ring buffer at current position. Ring buffer
-            // has doubble length and we add the sample at two positions
-            rb_[pos_] = sample;
-            rb_[pos_ + c_.size()] = sample;
+            // Add sample to the delay line at current position. Delay line
+            // has doubble length and we also add the sample to pos + size
+            d_[pos_] = sample;
+            d_[pos_ + h_.size()] = sample;
 
-            // Advance sample pointer. If at the end, wrap around
-            if (++pos_ == c_.size()) pos_ = 0;
+            // Advance delay line write pointer. If at the end, wrap around
+            if (++pos_ == h_.size()) pos_ = 0;
 
-            // Decrease samples needed. If 0, we have enough new in samples
-            // in the ring buffer to calculate one output sample
+            // Decrease samples needed. If 0, we have enough new samples in
+            // the delay line to calculate one output sample
             if (--isn_ == 0) {
                 isn_ = m_;
                 ret = true;
@@ -213,101 +225,111 @@ private:
             return ret;
         }
 
-        // Calculat one output sample based on the in samples in the delay line
+        // Calculate one output sample based on the samples in the delay line
         // and the filter coefficients
         inline iqsample_t calculateOutput(void) {
-            unsigned   i = 0;
-            auto rb_ptr = &rb_[pos_];
-            auto c_ptr  = &c_[0];
-            float real_sum = 0.0f, imag_sum = 0.0f;
-            unsigned rounded_size = (c_.size() >> 2) << 2;
+            unsigned half_h_size = (h_.size() - 1) >> 1;
+            unsigned rounded_half_h_size = (half_h_size >> 2) << 2;
+            unsigned i = 0;
+            unsigned j = h_.size();
+            float    real_sum = 0.0f;
+            float    imag_sum = 0.0f;
+            auto     d_ptr = &d_[pos_];
+            auto     h_ptr = &h_[0];
 
             /*
             // Simple calculation. Not vectorize friendly. Not used
-            iqsample_t out_sample(0.0f, 0.0f);
-            for (; i < c_.size(); ++i) {
-                out_sample += rb_ptr[i] * c_ptr[i];
+            for (; i < h_.size(); ++i) {
+                real_sum += d_ptr[i].real() * h_ptr[i].real();
+                imag_sum += d_ptr[i].imag() * h_ptr[i].imag();
             }
-            real_sum = out_sample.real();
-            imag_sum = out_sample.imag();
             */
-
-            // TODO: We can turn the for loop the other way around and start
-            //       at pos_ + c_.size() - 1. Then check for >= 4 without the
-            //       need to shift. And then the next loop can unroll by 2
-            //       and so on.
-
-            // TODO: Optimize the for loop for folding FIR filter since our
-            //       coefficients are symetrical
-
-            // TODO: Convert c_ to an array of complex instead. Store the
-            //       same coefficient in both real and imag. This will
-            //       streamline the SIMD. Just need to att .real() or .imad()
-            //       for the old scalar cases.
 
             // Vectorize friendly loops. We loop in batches of 4 as long as we
             // can and unroll the calculations. Then we clean up with a final
-            // loop of 3, 2 or 1 iteration(s). We need to split the complex
-            // multiplications into real and imaginary to trick g++ into
-            // vectorization.
+            // loop of 3, 2 or 1 iteration(s). We split the complex multiplications
+            // into real and imaginary parts ourselves to trick g++ into some
+            // vectorization for the portable version.
 #ifdef __AVX2__
-            // Intel AVX SIMD variant.
+            // Intel AVX SIMD variant of a folded FIR
             __m256 vec_sum = _mm256_set1_ps(0.0f);
-            for (; i < rounded_size; i += 4) {
-                __m256 a = _mm256_loadu_ps((float*)&rb_ptr[i]); // 4 samples is 8 floats (I and Q interleaved)
-                __m256 b = _mm256_loadu_ps((float*)&c2_[i]);    // We multiply with our special coefficent vector
-                vec_sum = _mm256_fmadd_ps(a, b, vec_sum);
+            for (; i < rounded_half_h_size; i += 4, j -= 4) {
+                __m256 vec_h    = _mm256_loadu_ps((float*)&h_ptr[i]);
+                __m256 vec_d    = _mm256_loadu_ps((float*)&d_ptr[i]);
+                __m256 vec_d_hi = _mm256_loadu_ps((float*)&d_ptr[j - 4]);
+
+                // vec_d_hi need to be reversed
+                vec_d_hi = _mm256_permute_ps(vec_d_hi, 0b01001110);
+                vec_d_hi = _mm256_permute2f128_ps(vec_d_hi, vec_d_hi, 1);
+
+                // Sum vec_d with reversed vec_d_hi
+                vec_d = _mm256_add_ps(vec_d, vec_d_hi);
+
+                // Fused multipy-add
+                vec_sum = _mm256_fmadd_ps(vec_h, vec_d, vec_sum);
+            }
+            // Complete the vector summation
+            for (auto q = 0; q < 8; q += 2) {
+                real_sum += vec_sum[q + 0];
+                imag_sum += vec_sum[q + 1];
+            }
+            --j;
+
+            // Clean up the trailing 3, 2 or 1 samples with normal code
+            for (; i < half_h_size; ++i, --j) {
+                real_sum += (d_ptr[i].real() + d_ptr[j].real()) * h_ptr[i].real();
+                imag_sum += (d_ptr[i].imag() + d_ptr[j].imag()) * h_ptr[i].imag();
             }
 
-            // Need to complete the summation
-            for (auto j = 0; j < 8; j += 2) {
-                real_sum += vec_sum[j + 0];
-                imag_sum += vec_sum[j + 1];
-            }
-
-            for (; i < c_.size(); ++i) {
-                real_sum += rb_ptr[i].real() * c_ptr[i];
-                imag_sum += rb_ptr[i].imag() * c_ptr[i];
-            }
+            // Finalize by adding the "center" sample * coefficient
+            real_sum += d_ptr[i].real() * h_ptr[i].real();
+            imag_sum += d_ptr[i].imag() * h_ptr[i].imag();
 #else
-            // Portable variant.
-            for (; i < rounded_size; i += 4) {
-                real_sum += (rb_ptr[i + 0].real() * c_ptr[i + 0]
-                           + rb_ptr[i + 1].real() * c_ptr[i + 1]
-                           + rb_ptr[i + 2].real() * c_ptr[i + 2]
-                           + rb_ptr[i + 3].real() * c_ptr[i + 3]
-                );
-                imag_sum += (rb_ptr[i + 0].imag() * c_ptr[i + 0]
-                           + rb_ptr[i + 1].imag() * c_ptr[i + 1]
-                           + rb_ptr[i + 2].imag() * c_ptr[i + 2]
-                           + rb_ptr[i + 3].imag() * c_ptr[i + 3]
-                );
+            // Portable version of a folded FIR
+            --j;
+            for (; i < rounded_half_h_size; i += 4, j -= 4) {
+                real_sum += (d_ptr[i + 0].real() + d_ptr[j - 0].real()) * h_ptr[i + 0].real();
+                real_sum += (d_ptr[i + 1].real() + d_ptr[j - 1].real()) * h_ptr[i + 1].real();
+                real_sum += (d_ptr[i + 2].real() + d_ptr[j - 2].real()) * h_ptr[i + 2].real();
+                real_sum += (d_ptr[i + 3].real() + d_ptr[j - 3].real()) * h_ptr[i + 3].real();
+
+                imag_sum += (d_ptr[i + 0].imag() + d_ptr[j - 0].imag()) * h_ptr[i + 0].imag();
+                imag_sum += (d_ptr[i + 1].imag() + d_ptr[j - 1].imag()) * h_ptr[i + 1].imag();
+                imag_sum += (d_ptr[i + 2].imag() + d_ptr[j - 2].imag()) * h_ptr[i + 2].imag();
+                imag_sum += (d_ptr[i + 3].imag() + d_ptr[j - 3].imag()) * h_ptr[i + 3].imag();
             }
-            for (; i < c_.size(); ++i) {
-                real_sum += rb_ptr[i].real() * c_ptr[i];
-                imag_sum += rb_ptr[i].imag() * c_ptr[i];
+
+            // Clean up the trailing 3, 2 or 1 samples
+            for (; i < half_h_size; ++i, --j) {
+                real_sum += (d_ptr[i].real() + d_ptr[j].real()) * h_ptr[i].real();
+                imag_sum += (d_ptr[i].imag() + d_ptr[j].imag()) * h_ptr[i].imag();
             }
+
+            // Finalize by adding the "center" sample * coefficient
+            real_sum += d_ptr[i].real() * h_ptr[i].real();
+            imag_sum += d_ptr[i].imag() * h_ptr[i].imag();
 #endif
 
             return iqsample_t(real_sum, imag_sum);
         }
 
-        // Calculat one output sample based on the in samples in the delay line
-        // and the frequency translating filter coefficient set. This function
+        // Calculate one output sample based on the samples in the delay line
+        // and the frequency translating filter coefficient sets. This function
         // is called as the first one if ftfir is used. All subsequent calls
         // use the "normal" calculateOutput() above.
         inline iqsample_t calculateOutputTranslated(void) {
-            unsigned   i = 0;
-            auto rb_ptr = &rb_[pos_];
-            auto c_ptr  = &cs_[ccs_][0];
-            unsigned rounded_size = (c_.size() >> 2) << 2;
-            float real_sum = 0.0f, imag_sum = 0.0f;
+            unsigned rounded_h_size = (h_.size() >> 2) << 2;
+            unsigned i = 0;
+            float real_sum = 0.0f;
+            float imag_sum = 0.0f;
+            auto d_ptr = &d_[pos_];
+            auto h_ptr = &hk_[k_][0];
 
             /*
             // Simple calculation. Not vectorize friendly
             iqsample_t out_sample(0.0f, 0.0f);
-            for (; i < c_.size(); ++i) {
-                out_sample += rb_ptr[i] * c_ptr[i];
+            for (; i < h_.size(); ++i) {
+                out_sample += d_ptr[i] * h_ptr[i];
             }
             real_sum = out_sample.real();
             imag_sum = out_sample.imag();
@@ -320,80 +342,75 @@ private:
             // vectorization.
 #ifdef __AVX2__
             // Intel AVX SIMD variant.
-            __m256 sumr = _mm256_set1_ps(0.0f);
-            __m256 sumi = _mm256_set1_ps(0.0f);
-            const __m256 conj = _mm256_set_ps(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
-            for (; i < rounded_size; i += 4) {
-                __m256 a = _mm256_loadu_ps((float*)&rb_ptr[i]);
-                __m256 b = _mm256_loadu_ps((float*)&c_ptr[i]);
-
-                /*
-                // Normal
-                __m256 b_conj = _mm256_mul_ps(b, conj);
-                __m256 cr = _mm256_mul_ps(a, b_conj);
-                __m256 b_flip = _mm256_permute_ps(b, 0b10110001);
-                __m256 ci = _mm256_mul_ps(a, b_flip);
-                sumr = _mm256_add_ps(sumr, cr);
-                sumi = _mm256_add_ps(sumi, ci);
-                */
+            __m256 real_sum_vec = _mm256_set1_ps(0.0f);
+            __m256 imag_sum_vec = _mm256_set1_ps(0.0f);
+            const __m256 neg_vec = _mm256_set_ps(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+            for (; i < rounded_h_size; i += 4) {
+                __m256 d_vec = _mm256_loadu_ps((float*)&d_ptr[i]);
+                __m256 h_vec = _mm256_loadu_ps((float*)&h_ptr[i]);
 
                 // Fused multipy-add
-                __m256 b_conj = _mm256_mul_ps(b, conj);
-                sumr = _mm256_fmadd_ps(a, b_conj, sumr);
-                __m256 b_flip = _mm256_permute_ps(b, 0b10110001);
-                sumi = _mm256_fmadd_ps(a, b_flip, sumi);
+                __m256 h_vec_neg = _mm256_mul_ps(h_vec, neg_vec);
+                real_sum_vec = _mm256_fmadd_ps(d_vec, h_vec_neg, real_sum_vec);
+
+                __m256 h_vec_perm = _mm256_permute_ps(h_vec, 0b10110001);
+                imag_sum_vec = _mm256_fmadd_ps(d_vec, h_vec_perm, imag_sum_vec);
             }
 
             // Complete the summation
-            sumr = _mm256_hadd_ps(sumr, sumr);
-            sumr = _mm256_hadd_ps(sumr, sumr);
-            sumr = _mm256_add_ps(sumr, _mm256_permute2f128_ps(sumr, sumr, 1));
+            real_sum_vec = _mm256_hadd_ps(real_sum_vec, real_sum_vec);
+            real_sum_vec = _mm256_hadd_ps(real_sum_vec, real_sum_vec);
+            real_sum_vec = _mm256_add_ps(real_sum_vec, _mm256_permute2f128_ps(real_sum_vec, real_sum_vec, 1));
 
-            sumi = _mm256_hadd_ps(sumi, sumi);
-            sumi = _mm256_hadd_ps(sumi, sumi);
-            sumi = _mm256_add_ps(sumi, _mm256_permute2f128_ps(sumi, sumi, 1));
+            imag_sum_vec = _mm256_hadd_ps(imag_sum_vec, imag_sum_vec);
+            imag_sum_vec = _mm256_hadd_ps(imag_sum_vec, imag_sum_vec);
+            imag_sum_vec = _mm256_add_ps(imag_sum_vec, _mm256_permute2f128_ps(imag_sum_vec, imag_sum_vec, 1));
 
-            real_sum = sumr[0];
-            imag_sum = sumi[0];
+            real_sum = real_sum_vec[0];
+            imag_sum = imag_sum_vec[0];
 
-            for (; i < c_.size(); ++i) {
-                real_sum += ((rb_ptr[i].real() * c_ptr[i].real() - rb_ptr[i].imag() * c_ptr[i].imag()));
-                imag_sum += ((rb_ptr[i].real() * c_ptr[i].imag() + rb_ptr[i].imag() * c_ptr[i].real()));
+            // Clean up the trailing 3, 2 or 1 samples with normal code
+            for (; i < h_.size(); ++i) {
+                real_sum += (d_ptr[i].real() * h_ptr[i].real() - d_ptr[i].imag() * h_ptr[i].imag());
+                imag_sum += (d_ptr[i].real() * h_ptr[i].imag() + d_ptr[i].imag() * h_ptr[i].real());
             }
 #else
             // Portable variant.
-            for (; i < rounded_size; i += 4) {
-                real_sum += ((rb_ptr[i + 0].real() * c_ptr[i + 0].real() - rb_ptr[i + 0].imag() * c_ptr[i + 0].imag())
-                       + (rb_ptr[i + 1].real() * c_ptr[i + 1].real() - rb_ptr[i + 1].imag() * c_ptr[i + 1].imag())
-                       + (rb_ptr[i + 2].real() * c_ptr[i + 2].real() - rb_ptr[i + 2].imag() * c_ptr[i + 2].imag())
-                       + (rb_ptr[i + 3].real() * c_ptr[i + 3].real() - rb_ptr[i + 3].imag() * c_ptr[i + 3].imag()));
+            for (; i < rounded_h_size; i += 4) {
+                real_sum += (d_ptr[i + 0].real() * h_ptr[i + 0].real() - d_ptr[i + 0].imag() * h_ptr[i + 0].imag());
+                real_sum += (d_ptr[i + 1].real() * h_ptr[i + 1].real() - d_ptr[i + 1].imag() * h_ptr[i + 1].imag());
+                real_sum += (d_ptr[i + 2].real() * h_ptr[i + 2].real() - d_ptr[i + 2].imag() * h_ptr[i + 2].imag());
+                real_sum += (d_ptr[i + 3].real() * h_ptr[i + 3].real() - d_ptr[i + 3].imag() * h_ptr[i + 3].imag());
 
-                imag_sum += ((rb_ptr[i + 0].real() * c_ptr[i + 0].imag() + rb_ptr[i + 0].imag() * c_ptr[i + 0].real())
-                       + (rb_ptr[i + 1].real() * c_ptr[i + 1].imag() + rb_ptr[i + 1].imag() * c_ptr[i + 1].real())
-                       + (rb_ptr[i + 2].real() * c_ptr[i + 2].imag() + rb_ptr[i + 2].imag() * c_ptr[i + 2].real())
-                       + (rb_ptr[i + 3].real() * c_ptr[i + 3].imag() + rb_ptr[i + 3].imag() * c_ptr[i + 3].real()));
+                imag_sum += (d_ptr[i + 0].real() * h_ptr[i + 0].imag() + d_ptr[i + 0].imag() * h_ptr[i + 0].real());
+                imag_sum += (d_ptr[i + 1].real() * h_ptr[i + 1].imag() + d_ptr[i + 1].imag() * h_ptr[i + 1].real());
+                imag_sum += (d_ptr[i + 2].real() * h_ptr[i + 2].imag() + d_ptr[i + 2].imag() * h_ptr[i + 2].real());
+                imag_sum += (d_ptr[i + 3].real() * h_ptr[i + 3].imag() + d_ptr[i + 3].imag() * h_ptr[i + 3].real());
             }
-            for (; i < c_.size(); ++i) {
-                real_sum += ((rb_ptr[i].real() * c_ptr[i].real() - rb_ptr[i].imag() * c_ptr[i].imag()));
-                imag_sum += ((rb_ptr[i].real() * c_ptr[i].imag() + rb_ptr[i].imag() * c_ptr[i].real()));
+
+            // Clean up the trailing 3, 2 or 1 samples
+            for (; i < h_.size(); ++i) {
+                real_sum += (d_ptr[i].real() * h_ptr[i].real() - d_ptr[i].imag() * h_ptr[i].imag());
+                imag_sum += (d_ptr[i].real() * h_ptr[i].imag() + d_ptr[i].imag() * h_ptr[i].real());
             }
 #endif
 
             // Advance to next coefficient set. Wrap around if necessary
-            if (++ccs_ == cs_.size()) ccs_ = 0;
+            if (++k_ == hk_.size()) k_ = 0;
 
             return iqsample_t(real_sum, imag_sum);
         }
 
     private:
-        unsigned                 m_;     // Decimation factor
-        std::vector<float>       c_;     // FIR coefficients
-        std::vector<iqsample_t>  c2_;    // FIR coefficients doubbled for SIMD use. Wee cheet with complex
-        std::vector<iqsample_t>  rb_;    // Calculation ring buffer
-        unsigned                 pos_;   // Current position in the ring buffer
-        unsigned                 isn_;   // New in-samples needed before an output sample can be calculated
-        std::vector<std::vector<iqsample_t>> cs_; // FT FIR coefficient sets
-        unsigned                 ccs_;    // Current coefficient set for FT FIR
+        using hk_t = std::vector<std::vector<iqsample_t>>; // Vector of FIR filter coefficients, hk
+
+        unsigned                m_;     // Downsampling factor M
+        std::vector<iqsample_t> h_;     // FIR coefficients, h, in complex form (same value in real and imag)
+        std::vector<iqsample_t> d_;     // Delay line with input samples. 2 * h_.size() to avoid wrap around
+        unsigned                pos_;   // Current write position in the delay line
+        unsigned                isn_;   // New in-samples needed in the delay line before an output sample can be calculated
+        hk_t                    hk_;    // Frequency translating FIR filter coefficient sets
+        unsigned                k_;     // Current frequency translating FIR filter coefficient set
     };
 
     std::vector<MSD::S>     stages_;     // List of stages
