@@ -1,16 +1,16 @@
-name: "C/C++ CI"
+name: "C++ CI"
 
 on:
   push:
     branches:
-      - *
+      - '*'
     paths-ignore:
       - 'README**'
       - 'doc/**'
       - 'octave/**'
   pull_request:
     branches:
-      - *
+      - '*'
     paths-ignore:
       - 'README**'
       - 'doc/**'
