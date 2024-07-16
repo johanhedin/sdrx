@@ -818,7 +818,7 @@ static void alsa_worker(struct OutputState &ctx) {
     std::cout << "Number of ALSA descriptors to poll: " << num_poll_descs << std::endl;
 
     // Allocate space and get the descriptors
-    poll_descs = (struct pollfd*)calloc(sizeof(struct pollfd), num_poll_descs);
+    poll_descs = (struct pollfd*)calloc(num_poll_descs, sizeof(struct pollfd));
     ret = snd_pcm_poll_descriptors(pcm_handle, poll_descs, num_poll_descs);
     if (ret < 0) {
         std::cerr << "Error. Unable to get ALSA poll descriptors: " << snd_strerror(ret) << std::endl;
