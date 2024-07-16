@@ -17,7 +17,7 @@ function ret = fltboxch(fs, f_pass, f_rej, rej)
     box on;
     hold on;
     grid on;
-    axis([ 0 fs/2 noise_floor 5 ]);
+    axis([ 0 (fs/2)/10 noise_floor 5 ]);
     xlabel('Frequency [kHz]');
     ylabel('Filter attenuation [dB]');
     title_str = sprintf('Fs: %dkS/s, pass band: 0 - %dkHz, stop band: %dkHz - %dkHz, rejection: %ddB ',
