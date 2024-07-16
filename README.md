@@ -1,7 +1,7 @@
 sdrx
 ====
 
-[![Build](https://github.com/johanhedin/sdrx/actions/workflows/ci.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/ci.yml)
+[![Build](https://github.com/johanhedin/sdrx/actions/workflows/ci.yaml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/ci.yaml)
 [![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yml)
 
 `sdrx` is a software defined multichannel narrowband AM airband receiver that
