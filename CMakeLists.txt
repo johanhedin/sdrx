@@ -53,6 +53,7 @@ endif()
 # target later on since we are only interested in libairspy and not the host
 # tools. Setting airspy_all_SOURCE_DIR is to prevent libairspy to add uninstall
 # target
+set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE) # Needed to silence < 3.5 version warning
 set(airspy_all_SOURCE_DIR "dummy")
 add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 
