@@ -8,6 +8,10 @@ cmake_minimum_required(VERSION 3.10...3.27)
 # Check here for how to use external project: https://github.com/ogdf/ogdf/issues/22
 #
 
+# TODO: - Refactor to be more in line with cte/ctl.
+#       - Add option to build with gprof (add -pg as both compile and link flag).
+#       - Only use pkg-config to find dependencies
+
 project(sdrx CXX)
 
 # We use C++20 stuff
