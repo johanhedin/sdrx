@@ -3,5 +3,5 @@
  */
 
 #ifndef __cplusplus
-#define printf(x, ...)
+#define printf(...)
 #endif

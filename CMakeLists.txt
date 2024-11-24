@@ -102,7 +102,7 @@ target_compile_options(usockets PRIVATE "-Wno-deprecated-declarations")
 target_compile_options(usockets PRIVATE "-DLIBUS_USE_OPENSSL")
 target_compile_options(usockets PRIVATE "-DLIBUS_USE_LIBUV")
 # Uggly hack to get rid of some annoying printf in crypto/openssl.c
-#target_compile_options(usockets PRIVATE "-include${PROJECT_SOURCE_DIR}/src/silence_printf.h")
+target_compile_options(usockets PRIVATE "-include${PROJECT_SOURCE_DIR}/src/silence_printf.h")
 
 # Uggly hack to get rid of some std::cout in App.h
 add_custom_command(OUTPUT App-fixed.h
