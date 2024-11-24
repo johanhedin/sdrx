@@ -12,10 +12,12 @@ cmake_minimum_required(VERSION 3.10...3.27)
 #       - Add option to build with gprof (add -pg as both compile and link flag).
 #       - Only use pkg-config to find dependencies
 
-project(sdrx CXX)
+project(sdrx C CXX)
 
 # We use C++20 stuff
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # This property is needed to handle the uninstall custom target added by
@@ -81,6 +83,35 @@ add_library(r820dev src/r820_dev.cpp src/rtl_dev.cpp src/airspy_dev.cpp)
 add_executable(sdrx src/sdrx.cpp)
 add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
 
+
+# We take care of building uSockets ourselvs
+FILE(GLOB USOCKET_SRCS "uSockets/src/*.c"
+                       "uSockets/src/eventing/*.c"
+                       "uSockets/src/crypto/*.c"
+                       "uSockets/src/io_uring/*.c"
+                       "uSockets/src/crypto/*.cpp"
+)
+add_library(usockets ${USOCKET_SRCS})
+target_include_directories(usockets PRIVATE ${PROJECT_SOURCE_DIR}/uSockets/src)
+# Silence some annoying build warnings
+target_compile_options(usockets PRIVATE "-Wno-unused-parameter")
+target_compile_options(usockets PRIVATE "-Wno-sign-compare")
+target_compile_options(usockets PRIVATE "-Wno-use-after-free")
+target_compile_options(usockets PRIVATE "-Wno-deprecated-declarations")
+# Use openssl and libuv from system
+target_compile_options(usockets PRIVATE "-DLIBUS_USE_OPENSSL")
+target_compile_options(usockets PRIVATE "-DLIBUS_USE_LIBUV")
+# Uggly hack to get rid of some annoying printf in crypto/openssl.c
+target_compile_options(usockets PRIVATE "-include${PROJECT_SOURCE_DIR}/src/silence_printf.h")
+
+# Uggly hack to get rid of some std::cout in App.h
+add_custom_command(OUTPUT App-fixed.h
+    COMMAND sed -e "s/std::cout/\\/\\/std::cout/g" ${PROJECT_SOURCE_DIR}/uWebSockets/src/App.h > App-fixed.h
+    DEPENDS ${PROJECT_SOURCE_DIR}/uWebSockets/src/App.h
+    VERBATIM)
+target_sources(sdrx PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/App-fixed.h")
+target_include_directories(sdrx PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
 # Add our project root and the linked libairspy/librtlsdr as include directories
 # TODO: Look over this and make it possible to build with both in-tree or
 # system libs. Need to adjust the includes in rtl_dev.cpp and airspy_dev.cpp
@@ -88,6 +119,8 @@ add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
 target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
+target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/uSockets/src)
+target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/src)
 
 target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR})
 target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
@@ -97,6 +130,7 @@ target_link_libraries(sdrx r820dev)
 target_link_libraries(sdrx m)
 target_link_libraries(sdrx airspy-static)
 target_link_libraries(sdrx rtlsdr_static)
+target_link_libraries(sdrx usockets)
 
 target_link_libraries(dts r820dev)
 target_link_libraries(dts m)
@@ -153,6 +187,15 @@ if (PkgConfig_FOUND)
     target_link_libraries(sdrx ${SIGC2_LIBRARIES})
     target_link_libraries(dts ${SIGC2_LIBRARIES})
 endif(PkgConfig_FOUND)
+
+find_package(ZLIB REQUIRED)
+target_link_libraries(usockets ZLIB::ZLIB)
+find_package(OpenSSL REQUIRED)
+target_link_libraries(usockets OpenSSL::SSL)
+
+pkg_check_modules(LIBUV REQUIRED libuv)
+include_directories(${LIBUV_INCLUDE_DIRS})
+target_link_libraries(usockets ${LIBUV_LIBRARIES})
 
 #find_package(Volk REQUIRED)
 #if (VOLK_FOUND)

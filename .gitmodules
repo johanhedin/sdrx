@@ -5,3 +5,9 @@
 	path = librtlsdr
 	url = https://github.com/johanhedin/librtlsdr.git
 	branch = sdrxfixes2
+[submodule "uWebSockets"]
+	path = uWebSockets
+	url = https://github.com/uNetworking/uWebSockets.git
+[submodule "uSockets"]
+	path = uSockets
+	url = https://github.com/johanhedin/uSockets.git
