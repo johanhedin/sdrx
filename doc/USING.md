@@ -1,17 +1,18 @@
-Using sdrx
-====
+# Using sdrx
 `sdrx` is run from the command line in a terminal window. If you have not already
 build `sdrx`, look at the [build](BUILD.md) page for instructions.
 
+
+## Basic usage
 `sdrx` takes an aeronautical channel to listen to as the argument. Besides the
 channel, options are available and can be listed with `--help` (his page
 does not always cover all available options so use this page together with
 `--help` to get the full picture):
 
 ```console
-$ cd sdrx/build
-$ ./sdrx --help
-$ ./sdrx --gain 30 122.455
+cd sdrx/build
+./sdrx --help
+./sdrx --gain 30 122.455
 ```
 
 To stop the program, just press Crtl-C in the terminal and wait. This will stop
@@ -33,7 +34,7 @@ it is also possible to set the three gain stages directly with stage values
 like this (LNA = 5, MIX = 8 and VGA = 10):
 
 ```console
-$ ./sdrx --gain 5:8:10 122.455
+./sdrx --gain 5:8:10 122.455
 ```
 
 This gives very good control over how the total gain is distributed in the R820
@@ -49,7 +50,7 @@ If you have multiple devices connected, use `--list` to list what devices that
 `sdrx` recognize on your system and what sample rates they support:
 
 ```console
-$ ./sdrx --list
+./sdrx --list
 ```
 
 To use a specific device, it's serial is used and you must ensure that all
@@ -78,7 +79,7 @@ arguments. The channels must fit inside 80% of the sampling frequency used (see
 below for explanation):
 
 ```console
-$ ./sdrx --gain 40 118.105 118.280 118.405 118.505
+./sdrx --gain 40 118.105 118.280 118.405 118.505
 ```
 
 The more channels you specify, the more loaded the channelization thread will be.
@@ -97,7 +98,7 @@ Sample rate defaults to 1.44MS/s for RTL devices and 6MS/s for Airspy devices
 if not set explicitly. Change to your liking with the `--sample-rate` option:
 
 ```console
-$ ./sdrx --sample-rate 2.56 118.280 118.405 118.505
+./sdrx --sample-rate 2.56 118.280 118.405 118.505
 ```
 
 As stated earlier, the sample rate dictates the RF bandwidth that can be
@@ -114,8 +115,7 @@ include "MS/s" after the rate value. Do not use comma (,) as decimal separator.
 Do not set anything else other than what is shown with `--list`.
 
 
-Output in single channel mode
-----
+## Output in single channel mode
 Besides playing audio when the squelch is open, `sdrx` write signal power
 measurements to the console while running at approximately three times a
 second.
@@ -123,7 +123,7 @@ second.
 A typical output look like this:
 
 ```console
-$ ./sdrx -g 45 118.105
+./sdrx -g 45 118.105
 ...
 10:57:00: Level[X   -37.2] 118.105[ 0.0] [-22.5|-22.6|-23.4] [  0.00] [SNR][low|mid|hig][imbalance]
 10:57:01: Level[X   -39.6] 118.105[ 0.0] [-22.1|-22.9|-22.2] [  0.00] [SNR][low|mid|hig][imbalance]
@@ -157,8 +157,7 @@ symmetric modulation around the carrier, the imbalance should be 0 if you are
 tuned to the transmitters frequency.
 
 
-Output in multi channel mode
-----
+## Output in multi channel mode
 In multi channel mode, audio from the different channels are distributed between
 the left and right speaker in a virtual five speaker audio panorama. This will
 create the sense of a set of five speakers front of the listener.
