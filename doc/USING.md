@@ -170,7 +170,7 @@ Output in the terminal looks about the same as for single channel but only the
 SNR is shown for each individual channel:
 
 ```console
-$ ./sdrx -g 40 118.105 118.280 118.405
+./sdrx -g 40 118.105 118.280 118.405
 ...
 10:57:00: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
 10:57:01: Level[XX    -39.6] 118.105[ 0.0] 118.205[ 0.0] 118.280[ 0.0] 118.405[ 0.0]
