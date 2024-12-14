@@ -1,6 +1,6 @@
 # Download and build sdrx
 `sdrx` is only available in source code form and the easiest way to get it
-is to clone the GitHub repo and complile the code using the instructions on
+is to clone the GitHub repo and compile the code using the instructions on
 this page.
 
 
