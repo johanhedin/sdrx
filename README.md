@@ -1,13 +1,11 @@
-sdrx
-====
-
+# sdrx
 [![Build](https://github.com/johanhedin/sdrx/actions/workflows/ci.yaml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/ci.yaml)
 [![CodeQL](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yaml/badge.svg)](https://github.com/johanhedin/sdrx/actions/workflows/codeql-analysis.yaml)
 
 `sdrx` is a software defined multichannel narrowband AM airband receiver that
 uses R820T(2)/R860 based RTL-SDR or Airspy Mini/R2 dongles as it's hardware
 part. `sdrx` is written in C++ (C++-20) and regularly tested on a x86_64 machine
-running Fedora 40, on a Raspberry Pi 4 Model B 4GiB and on a Raspberry Pi Zero 2 W
+running Fedora 41, on a Raspberry Pi 4 Model B 4GiB and on a Raspberry Pi Zero 2 W
 running the latest Raspberry Pi OS (mostly the 64-bit version). Audio handling
 is done with ALSA.
 
@@ -30,8 +28,7 @@ when listening to many simultaneous channels. Other methods are being considered
 in the future.
 
 
-Features
-----
+## Features
 Below is a list of the current main features of `sdrx`:
 
  * Multichannel. Listen to multiple channels simultaneously
@@ -45,13 +42,11 @@ Below is a list of the current main features of `sdrx`:
  * Channel based waterfall (-ish) in the terminal
 
 
-Download and build
-----
+## Download and build
 `sdrx` is only available in source code form. It is easy to build using the
 instructions on the [build](doc/BUILD.md) page.
 
 
-Using
-----
+## Using
 Instruction for how to run and use `sdrx` can be found on the [usage](doc/USING.md)
 page.
