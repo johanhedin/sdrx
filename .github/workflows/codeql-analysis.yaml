@@ -42,7 +42,6 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          source-root: 'src'
 
       - name: Configure
         run: rm -rf build ; cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
