@@ -84,34 +84,23 @@ add_executable(sdrx src/sdrx.cpp)
 add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
 
 
-# We take care of building uSockets ourselvs
-FILE(GLOB USOCKET_SRCS "uSockets/src/*.c"
-                       "uSockets/src/eventing/*.c"
-                       "uSockets/src/crypto/*.c"
-                       "uSockets/src/io_uring/*.c"
-                       "uSockets/src/crypto/*.cpp"
+# We build the bundled uSockets ourselves
+FILE(GLOB USOCKET_SRCS
+    "uWebSockets/uSockets/src/bsd.c"
+    "uWebSockets/uSockets/src/context.c"
+    "uWebSockets/uSockets/src/loop.c"
+    "uWebSockets/uSockets/src/socket.c"
+    "uWebSockets/uSockets/src/eventing/libuv.c"
+    "uWebSockets/uSockets/src/crypto/openssl.c"
+    "uWebSockets/uSockets/src/crypto/sni_tree.cpp"
 )
 add_library(usockets ${USOCKET_SRCS})
-target_include_directories(usockets PRIVATE ${PROJECT_SOURCE_DIR}/uSockets/src)
-# Silence some annoying build warnings
-target_compile_options(usockets PRIVATE "-Wno-unused-parameter")
-target_compile_options(usockets PRIVATE "-Wno-sign-compare")
-target_compile_options(usockets PRIVATE "-Wno-use-after-free")
-target_compile_options(usockets PRIVATE "-Wno-deprecated-declarations")
-# Use openssl and libuv from system
-target_compile_options(usockets PRIVATE "-DLIBUS_USE_OPENSSL")
-target_compile_options(usockets PRIVATE "-DLIBUS_USE_LIBUV")
-# Uggly hack to get rid of some annoying printf in crypto/openssl.c. Does
-# not work in the CI-pipeline so commented out for the time being
-#target_compile_options(usockets PRIVATE "-include${PROJECT_SOURCE_DIR}/src/silence_printf.h")
+target_compile_options(usockets PRIVATE -Wno-deprecated-declarations)
+target_compile_options(usockets PRIVATE -DLIBUS_USE_OPENSSL)
+target_compile_options(usockets PRIVATE -DLIBUS_USE_LIBUV)
 
-# Uggly hack to get rid of some std::cout in App.h
-add_custom_command(OUTPUT App-fixed.h
-    COMMAND sed -e "s/std::cout/\\/\\/std::cout/g" ${PROJECT_SOURCE_DIR}/uWebSockets/src/App.h > App-fixed.h
-    DEPENDS ${PROJECT_SOURCE_DIR}/uWebSockets/src/App.h
-    VERBATIM)
-target_sources(sdrx PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/App-fixed.h")
-target_include_directories(sdrx PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(usockets PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
+
 
 # Add our project root and the linked libairspy/librtlsdr as include directories
 # TODO: Look over this and make it possible to build with both in-tree or
