@@ -7,7 +7,5 @@
 	branch = sdrxfixes2
 [submodule "uWebSockets"]
 	path = uWebSockets
-	url = https://github.com/uNetworking/uWebSockets.git
-[submodule "uSockets"]
-	path = uSockets
-	url = https://github.com/johanhedin/uSockets.git
+	url = https://github.com/johanhedin/uWebSockets.git
+	branch = sdrx-adaptations
