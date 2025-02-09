@@ -27,7 +27,12 @@ jobs:
         runner: [ ubuntu-22.04, ubuntu-24.04 ]
     steps:
       - name: Install build requirements
-        run: sudo apt-get update ; sudo apt-get install -y g++ cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev libsigc++-2.0-dev zlib1g-dev libuv1-dev libssl-dev
+        run: >-
+          sudo apt-get update ;
+          sudo apt-get install -y
+          g++ cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev
+          libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev
+          libsigc++-2.0-dev zlib1g-dev libuv1-dev libssl-dev
 
       - name: Checkout git repository
         uses: actions/checkout@v4
