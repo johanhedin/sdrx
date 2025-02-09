@@ -16,19 +16,24 @@ installed on your machine in order to build and run `sdrx`:
  * alsa
  * librtlsdr
  * libairspy
+ * libuv
+ * zlib
+ * openssl
 
 On Fedora they can be installed with:
 
 ```console
-sudo dnf install git gcc-c++ cmake popt-devel libsigc++20-devel libusb1-devel fftw-devel \
-fftw-libs-single alsa-lib-devel rtl-sdr-devel libuv-devel airspyone_host-devel
+sudo dnf install git gcc-c++ cmake popt-devel libsigc++20-devel libusb1-devel \
+fftw-devel fftw-libs-single alsa-lib-devel rtl-sdr-devel libuv-devel \
+airspyone_host-devel zlib-devel libuv-devel openssl-devel
 ```
 
 On Raspberry Pi OS/Debian/Ubuntu they can be installed with:
 
 ```console
 sudo apt-get install git g++ cmake build-essential libpopt-dev libsigc++-2.0-dev \
-libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev libuv1-dev librtlsdr-dev libairspy-dev
+libusb-1.0-0-dev libfftw3-dev libfftw3-single3 libasound2-dev libuv1-dev \
+librtlsdr-dev libairspy-dev zlib1g-dev libuv1-dev libssl-dev
 ```
 
 
