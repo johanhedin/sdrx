@@ -30,7 +30,7 @@
 //#pragma message "NO AVX2 or NEON SIMD available. Using normal code"
 #endif
 
-#include "../libairspy/libairspy/src/airspy.h"
+#include <airspy.h>
 
 #include "airspy_dev.hpp"
 

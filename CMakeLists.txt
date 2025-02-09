@@ -75,6 +75,10 @@ add_library(r820dev ${R820DEV_SRCS})
 target_compile_options(r820dev PRIVATE -Wall)
 target_compile_options(r820dev PRIVATE -Wextra)
 target_compile_options(r820dev PRIVATE -pedantic)
+
+target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
+target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
+
 #add_executable(sdrx src/sdrx.cpp)
 #add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
 
@@ -113,8 +117,6 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -mtune=native)
 # system libs. Need to adjust the includes in rtl_dev.cpp and airspy_dev.cpp
 # as well
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/src)
 
