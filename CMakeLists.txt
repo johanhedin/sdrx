@@ -1,20 +1,7 @@
 cmake_minimum_required(VERSION 3.10...3.27)
-
-#
-# Run with make VERBOSE=1 to see how things are build
-#
-
-#
-# Check here for how to use external project: https://github.com/ogdf/ogdf/issues/22
-#
-
-# TODO: - Refactor to be more in line with cte/ctl.
-#       - Add option to build with gprof (add -pg as both compile and link flag).
-#       - Only use pkg-config to find dependencies
-
 project(sdrx C CXX)
 
-# We use C++20 stuff
+# We use C17 and C++20
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD_REQUIRED True)
@@ -71,17 +58,25 @@ add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
 # Extra flags for reporting around vectorization are:
 #   -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=7
 #   -fopt-info-vec -fopt-info-vec-note
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -march=native -mtune=native")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O2")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+#set(CMAKE_CXX_FLAGS "-Wall -Wextra -march=native -mtune=native")
+#set(CMAKE_CXX_FLAGS_DEBUG "-g -O2")
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -march=native -mtune=native")
-set(CMAKE_C_FLAGS_DEBUG "-g -O2")
-set(CMAKE_C_FLAGS_RELEASE "-O3")
+#set(CMAKE_C_FLAGS "-Wall -Wextra -march=native -mtune=native")
+#set(CMAKE_C_FLAGS_DEBUG "-g -O2")
+#set(CMAKE_C_FLAGS_RELEASE "-O3")
 
-add_library(r820dev src/r820_dev.cpp src/rtl_dev.cpp src/airspy_dev.cpp)
-add_executable(sdrx src/sdrx.cpp)
-add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
+FILE(GLOB R820DEV_SRCS
+    "src/r820_dev.cpp"
+    "src/rtl_dev.cpp"
+    "src/airspy_dev.cpp"
+)
+add_library(r820dev ${R820DEV_SRCS})
+target_compile_options(r820dev PRIVATE -Wall)
+target_compile_options(r820dev PRIVATE -Wextra)
+target_compile_options(r820dev PRIVATE -pedantic)
+#add_executable(sdrx src/sdrx.cpp)
+#add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
 
 
 # We build the bundled uSockets ourselves
@@ -101,34 +96,45 @@ target_compile_options(usockets PRIVATE -DLIBUS_USE_LIBUV)
 
 target_include_directories(usockets PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
 
+# Main program
+FILE(GLOB SRCS
+    "src/sdrx.cpp"
+)
+add_executable(${CMAKE_PROJECT_NAME} ${SRCS})
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall)
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wextra)
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -pedantic)
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -march=native)
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -mtune=native)
+
 
 # Add our project root and the linked libairspy/librtlsdr as include directories
 # TODO: Look over this and make it possible to build with both in-tree or
 # system libs. Need to adjust the includes in rtl_dev.cpp and airspy_dev.cpp
 # as well
-target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
-target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
-target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/uSockets/src)
-target_include_directories(sdrx PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/src)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/src)
 
-target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR})
-target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
-target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
+#target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR})
+#target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
+#target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
 
-target_link_libraries(sdrx r820dev)
-target_link_libraries(sdrx m)
-target_link_libraries(sdrx airspy-static)
-target_link_libraries(sdrx rtlsdr_static)
-target_link_libraries(sdrx usockets)
+target_link_libraries(${CMAKE_PROJECT_NAME} r820dev)
+target_link_libraries(${CMAKE_PROJECT_NAME} m)
+target_link_libraries(${CMAKE_PROJECT_NAME} airspy-static)
+target_link_libraries(${CMAKE_PROJECT_NAME} rtlsdr_static)
+target_link_libraries(${CMAKE_PROJECT_NAME} usockets)
 
-target_link_libraries(dts r820dev)
-target_link_libraries(dts m)
-target_link_libraries(dts airspy-static)
-target_link_libraries(dts rtlsdr_static)
+#target_link_libraries(dts r820dev)
+#target_link_libraries(dts m)
+#target_link_libraries(dts airspy-static)
+#target_link_libraries(dts rtlsdr_static)
 
 # Add support for installing our program
-install(TARGETS sdrx RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+install(TARGETS ${CMAKE_PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
 # Create empty install_manifest.txt so that it does not get owned by root on sudo make install
 execute_process(COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/install_manifest.txt")
@@ -136,59 +142,92 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/i
 # Same but to manage unwanted uninstall target inside librtlsdr
 execute_process(COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/librtlsdr/install_manifest.txt")
 
-# Look for all required packages
-find_package(POPT REQUIRED)
-if (POPT_FOUND)
-    include_directories(${POPT_INCLUDE_DIRS})
-    target_link_libraries (sdrx ${POPT_LIBRARIES})
-    target_link_libraries (dts ${POPT_LIBRARIES})
-endif(POPT_FOUND)
+pkg_check_modules(POPT REQUIRED popt)
+include_directories(${POPT_INCLUDE_DIRS})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${POPT_LIBRARIES})
 
-find_package(Threads REQUIRED)
-if (Threads_FOUND)
-    include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
-    target_link_libraries (sdrx Threads::Threads)
-    target_link_libraries (dts Threads::Threads)
-endif(Threads_FOUND)
+pkg_check_modules(FFTW3F REQUIRED fftw3f)
+include_directories(${FFTW3F_INCLUDE_DIRS})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${FFTW3F_LIBRARIES})
 
-find_package(FFTW REQUIRED)
-if (FFTW_FLOAT_LIB_FOUND)
-    include_directories(${FFTW_INCLUDE_DIRS})
-    target_link_libraries (sdrx ${FFTW_FLOAT_LIB})
-endif(FFTW_FLOAT_LIB_FOUND)
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+include_directories(${LIBUSB_INCLUDE_DIRS})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBUSB_LIBRARIES})
 
-find_package(LIBUSB REQUIRED)
-if (LIBUSB_FOUND)
-    include_directories(${LIBUSB_INCLUDE_DIRS})
-    target_link_libraries (sdrx ${LIBUSB_LIBRARIES})
-    target_link_libraries (dts ${LIBUSB_LIBRARIES})
-endif(LIBUSB_FOUND)
+pkg_check_modules(SIGCPP2 REQUIRED sigc++-2.0)
+include_directories(${SIGCPP2_INCLUDE_DIRS})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${SIGCPP2_LIBRARIES})
 
-find_package(ALSA REQUIRED)
-if (ALSA_FOUND)
-    include_directories(${ALSA_INCLUDE_DIRS})
-    target_link_libraries (sdrx ${ALSA_LIBRARIES})
-endif(ALSA_FOUND)
-
-find_package(PkgConfig REQUIRED)
-if (PkgConfig_FOUND)
-    pkg_check_modules(SIGC2 REQUIRED sigc++-2.0)
-    include_directories(${SIGC2_INCLUDE_DIRS})
-    target_link_libraries(sdrx ${SIGC2_LIBRARIES})
-    target_link_libraries(dts ${SIGC2_LIBRARIES})
-endif(PkgConfig_FOUND)
-
-find_package(ZLIB REQUIRED)
-target_link_libraries(usockets ZLIB::ZLIB)
-find_package(OpenSSL REQUIRED)
-target_link_libraries(usockets OpenSSL::SSL)
+pkg_check_modules(ALSA REQUIRED alsa)
+include_directories(${ALSA_INCLUDE_DIRS})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${ALSA_LIBRARIES})
 
 pkg_check_modules(LIBUV REQUIRED libuv)
 include_directories(${LIBUV_INCLUDE_DIRS})
-target_link_libraries(usockets ${LIBUV_LIBRARIES})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBUV_LIBRARIES})
+
+pkg_check_modules(ZLIB REQUIRED zlib)
+include_directories(${ZLIB_INCLUDE_DIRS})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${ZLIB_LIBRARIES})
+
+pkg_check_modules(OPENSSL REQUIRED openssl>=3)
+include_directories(${OPENSSL_INCLUDE_DIRS})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${OPENSSL_LIBRARIES})
+
+
+# Look for all required packages
+#find_package(POPT REQUIRED)
+#if (POPT_FOUND)
+#    include_directories(${POPT_INCLUDE_DIRS})
+#    target_link_libraries (${CMAKE_PROJECT_NAME} ${POPT_LIBRARIES})
+#    target_link_libraries (dts ${POPT_LIBRARIES})
+#endif(POPT_FOUND)
+
+#find_package(Threads REQUIRED)
+#if (Threads_FOUND)
+#    include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
+#    target_link_libraries (${CMAKE_PROJECT_NAME} Threads::Threads)
+#    target_link_libraries (dts Threads::Threads)
+#endif(Threads_FOUND)
+
+#find_package(FFTW REQUIRED)
+#if (FFTW_FLOAT_LIB_FOUND)
+#    include_directories(${FFTW_INCLUDE_DIRS})
+#    target_link_libraries (${CMAKE_PROJECT_NAME} ${FFTW_FLOAT_LIB})
+#endif(FFTW_FLOAT_LIB_FOUND)
+
+#find_package(LIBUSB REQUIRED)
+#if (LIBUSB_FOUND)
+#    include_directories(${LIBUSB_INCLUDE_DIRS})
+#    target_link_libraries (${CMAKE_PROJECT_NAME} ${LIBUSB_LIBRARIES})
+#    target_link_libraries (dts ${LIBUSB_LIBRARIES})
+#endif(LIBUSB_FOUND)
+
+#find_package(ALSA REQUIRED)
+#if (ALSA_FOUND)
+#    include_directories(${ALSA_INCLUDE_DIRS})
+#    target_link_libraries (${CMAKE_PROJECT_NAME} ${ALSA_LIBRARIES})
+#endif(ALSA_FOUND)
+
+#find_package(PkgConfig REQUIRED)
+#if (PkgConfig_FOUND)
+#    pkg_check_modules(SIGC2 REQUIRED sigc++-2.0)
+#    include_directories(${SIGC2_INCLUDE_DIRS})
+#    target_link_libraries(${CMAKE_PROJECT_NAME} ${SIGC2_LIBRARIES})
+#    target_link_libraries(dts ${SIGC2_LIBRARIES})
+#endif(PkgConfig_FOUND)
+
+#find_package(ZLIB REQUIRED)
+#target_link_libraries(usockets ZLIB::ZLIB)
+#find_package(OpenSSL REQUIRED)
+#target_link_libraries(usockets OpenSSL::SSL)
+
+#pkg_check_modules(LIBUV REQUIRED libuv)
+#include_directories(${LIBUV_INCLUDE_DIRS})
+#target_link_libraries(usockets ${LIBUV_LIBRARIES})
 
 #find_package(Volk REQUIRED)
 #if (VOLK_FOUND)
 #    include_directories(${VOLK_INCLUDE_DIRS})
-#    target_link_libraries (sdrx ${VOLK_LIBRARIES})
+#    target_link_libraries (${CMAKE_PROJECT_NAME} ${VOLK_LIBRARIES})
 #endif(VOLK_FOUND)
