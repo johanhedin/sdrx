@@ -8,6 +8,7 @@ on:
       - 'README**'
       - 'doc/**'
       - 'octave/**'
+      - '.github/workflows/ci.yaml'
   pull_request:
     branches:
       - '*'
@@ -15,6 +16,7 @@ on:
       - 'README**'
       - 'doc/**'
       - 'octave/**'
+      - '.github/workflows/ci.yaml'
   schedule:
     - cron: '25 0 * * 2'
 
@@ -26,9 +28,6 @@ jobs:
       fail-fast: false
       matrix:
         language: [ 'cpp' ]
-        # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python' ]
-        # Learn more:
-        # https://docs.github.com/en/free-pro-team@latest/github/finding-security-vulnerabilities-and-errors-in-your-code/configuring-code-scanning#changing-the-languages-that-are-analyzed
     steps:
       - name: Install build requirements
         run: sudo apt-get update ; sudo apt-get install -y g++ cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev libsigc++-2.0-dev zlib1g-dev libuv1-dev libssl-dev
