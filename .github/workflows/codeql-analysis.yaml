@@ -42,11 +42,11 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - name: Configure
-        run: rm -rf build ; cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
-
-      - name: Build
-        run: cd build && make
+#      - name: Configure
+#        run: rm -rf build ; cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
+#
+#      - name: Build
+#        run: cd build && make
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
