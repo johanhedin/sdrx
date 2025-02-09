@@ -2,13 +2,15 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - '*'
     paths-ignore:
       - 'README**'
       - 'doc/**'
       - 'octave/**'
   pull_request:
-    branches: [ main ]
+    branches:
+      - '*'
     paths-ignore:
       - 'README**'
       - 'doc/**'
@@ -20,7 +22,6 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
@@ -28,49 +29,25 @@ jobs:
         # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python' ]
         # Learn more:
         # https://docs.github.com/en/free-pro-team@latest/github/finding-security-vulnerabilities-and-errors-in-your-code/configuring-code-scanning#changing-the-languages-that-are-analyzed
-
     steps:
       - name: Install build requirements
-        run: sudo apt-get update ; sudo apt-get install -y g++ cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev libsigc++-2.0-dev libuv1-dev
+        run: sudo apt-get update ; sudo apt-get install -y g++ cmake git libusb-1.0-0-dev librtlsdr-dev libasound2-dev libfftw3-dev libfftw3-single3 libpopt-dev libairspy-dev libsigc++-2.0-dev zlib1g-dev libuv1-dev libssl-dev
 
-      - name: Checkout repository
+      - name: Checkout git repository
         uses: actions/checkout@v4
         with:
-          submodules: 'true'
+          submodules: 'recursive'
+
+      - name: Configure
+        run: rm -rf build ; cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cd build && make
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-
-      - name: Configure
-        run: rm -rf build ; cmake -B build
-
-      - name: Build
-        run: cd build && make
-
-      #- name: Build
-      #  uses: ashutoshvarma/action-cmake-build@master
-      #  with:
-      #    build-dir: ${{ runner.workspace }}/build
-      #    build-type: Debug
-      #    parallel: 4
-
-      # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
-      # If this step fails, then you should remove it and run the build manually (see below)
-      #- name: Autobuild
-      #  uses: github/codeql-action/autobuild@v1
-
-      # ℹ️ Command-line programs to run using the OS shell.
-      # 📚 https://git.io/JvXDl
-
-      # ✏️ If the Autobuild fails above, remove it and uncomment the following three lines
-      #    and modify them (or add more) to build your code if your project
-      #    uses a compiled language
-
-      #   make dts
-      #   make bootstrap
-      #   make release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
