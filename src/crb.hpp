@@ -200,14 +200,14 @@ private:
     alignas(64) size_t               end_ptr_;    // Current end of buffer for wrap around. Atomic not needed since write_ptr_ will fence
     alignas(64) bool                 streaming_;
 
-    // Variables used only by the writing thread
-    const size_t capacity_;            // Capacity. Const and can not be changed. +1 from requested to accommodate for sentinel
+    // Variables used only by the writing thread. alignas on first variable to isolate from the previous ones
+    alignas(64) const size_t capacity_;            // Capacity. Const and can not be changed. +1 from requested to accommodate for sentinel
     size_t       acquired_write_ptr_;  // Acquired write pointer
     size_t       acquired_write_len_;  // Acquired write len
     size_t       acquired_end_ptr_;    // Acquired end pointer
 
-    // Variables used only by the reading thread
-    size_t acquired_read_ptr_;  // Acquired read pointer
+    // Variables used only by the reading thread. alignas on first variable to isolate from the previous ones
+    alignas(64) size_t acquired_read_ptr_;  // Acquired read pointer
     size_t acquired_read_len_;  // Acquired read len
 };
 
