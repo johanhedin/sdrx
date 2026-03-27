@@ -120,7 +120,9 @@ public:
 
         // The write to end_prt_ will be syncronized by the store operation on
         // write_ptr_ below
-        end_ptr_ = acquired_end_ptr_;
+        if (acquired_write_ptr_ == 0) {
+            end_ptr_.store(acquired_end_ptr_, std::memory_order_relaxed);
+        }
 
         acquired_write_len_ = 0;
 
@@ -151,9 +153,10 @@ public:
             //
             // We can read up to, but not including or beond, end_ptr_
 
-            if (rd_ptr < end_ptr_) {
+            const size_t end_ptr = end_ptr_.load(std::memory_order_relaxed);
+            if (rd_ptr < end_ptr) {
                 acquired_read_ptr_ = rd_ptr;
-                acquired_read_len_ = end_ptr_ - rd_ptr;
+                acquired_read_len_ = end_ptr - rd_ptr;
             } else {
                 // Wrap around
                 acquired_read_ptr_ = 0;
@@ -197,7 +200,7 @@ private:
     alignas(64) std::vector<Chunk>   chunks_;
     alignas(64) std::atomic<size_t>  write_ptr_;  // Write pointer
     alignas(64) std::atomic<size_t>  read_ptr_;   // Read pointer
-    alignas(64) size_t               end_ptr_;    // Current end of buffer for wrap around. Atomic not needed since write_ptr_ will fence
+    alignas(64) std::atomic<size_t>  end_ptr_;    // Current end of buffer for wrap around
     alignas(64) bool                 streaming_;
 
     // Variables used only by the writing thread. alignas on first variable to isolate from the previous ones
