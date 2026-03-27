@@ -61,8 +61,8 @@ public:
     CRB(const CRB&) = delete;
     CRB& operator=(const CRB&) = delete;
 
-    void setStreaming(bool streaming) { streaming_ = streaming; }
-    bool isStreaming(void) { return streaming_; }
+    void setStreaming(bool streaming) { streaming_.store(streaming, std::memory_order_relaxed); }
+    bool isStreaming(void) { return streaming_.load(std::memory_order_relaxed); }
 
     bool acquireWrite(T **buf,  M **m) {
         const size_t rd_ptr = read_ptr_.load(std::memory_order_acquire);
@@ -201,7 +201,7 @@ private:
     alignas(64) std::atomic<size_t>  write_ptr_;  // Write pointer
     alignas(64) std::atomic<size_t>  read_ptr_;   // Read pointer
     alignas(64) std::atomic<size_t>  end_ptr_;    // Current end of buffer for wrap around
-    alignas(64) bool                 streaming_;
+    alignas(64) std::atomic<bool>    streaming_;
 
     // Variables used only by the writing thread. alignas on first variable to isolate from the previous ones
     alignas(64) const size_t capacity_;            // Capacity. Const and can not be changed. +1 from requested to accommodate for sentinel
