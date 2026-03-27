@@ -107,7 +107,7 @@ public:
         // No space in the buffer or zero items requested
         if (acquired_write_len_ == 0) return false;
 
-        *buf = &chunks_[acquired_write_ptr_].buf_[64];
+        *buf = &chunks_[acquired_write_ptr_].buf_[ALIGN_LEN];
         *m   = &chunks_[acquired_write_ptr_].m_;
 
         return true;
@@ -167,7 +167,7 @@ public:
         // Return false if the buffer is empty
         if (acquired_read_len_ == 0) return false;
 
-        *buf = &chunks_[acquired_read_ptr_].buf_[64];
+        *buf = &chunks_[acquired_read_ptr_].buf_[ALIGN_LEN];
         *m   = &chunks_[acquired_read_ptr_].m_;
 
         return true;
