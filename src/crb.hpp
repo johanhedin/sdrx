@@ -25,6 +25,7 @@
 #include <memory>
 #include <atomic>
 #include <vector>
+#include <new>
 
 // Lock-free thread safe Single Producer, Single Consumer chunked ring buffer
 // with continuous write and read and chunk metadata block.
@@ -52,7 +53,7 @@ public:
     acquired_write_ptr_(0), acquired_write_len_(0), acquired_end_ptr_(0), acquired_read_ptr_(0),
     acquired_read_len_(0) {
         for (auto &c : chunks_) {
-            c.buf_ = std::make_unique<T[]>(chunk_size + ALIGN_LEN * 2);
+            c.buf_.reset(static_cast<T*>(::operator new[](chunk_size * sizeof(T), std::align_val_t{CACHE_LINE_SIZE})));
         }
     }
 
@@ -106,7 +107,7 @@ public:
         // No space in the buffer or zero items requested
         if (acquired_write_len_ == 0) return false;
 
-        *buf = &chunks_[acquired_write_ptr_].buf_[ALIGN_LEN];
+        *buf = &chunks_[acquired_write_ptr_].buf_[0];
         *m   = &chunks_[acquired_write_ptr_].m_;
 
         return true;
@@ -166,7 +167,7 @@ public:
         // Return false if the buffer is empty
         if (acquired_read_len_ == 0) return false;
 
-        *buf = &chunks_[acquired_read_ptr_].buf_[ALIGN_LEN];
+        *buf = &chunks_[acquired_read_ptr_].buf_[0];
         *m   = &chunks_[acquired_read_ptr_].m_;
 
         return true;
@@ -188,28 +189,36 @@ public:
     }
 
 private:
-    static constexpr size_t ALIGN_LEN = 64; // Typical cache line size
-    class alignas(64) Chunk {
+    // Cache line size most appropriate for x86_64 and AARCH64
+    static constexpr size_t CACHE_LINE_SIZE = 64;
+
+    class alignas(CACHE_LINE_SIZE) Chunk {
     public:
-        std::unique_ptr<T[]>  buf_;
-        M                     m_;
+        struct AlignedDeleter {
+            void operator()(T* p) const noexcept {
+                ::operator delete[](p, std::align_val_t{CACHE_LINE_SIZE});
+            }
+        };
+
+        std::unique_ptr<T[], AlignedDeleter>  buf_;
+        M                                     m_;
     };
 
     // Variables used by both threads
-    alignas(64) std::vector<Chunk>   chunks_;
-    alignas(64) std::atomic<size_t>  write_ptr_;  // Write pointer
-    alignas(64) std::atomic<size_t>  read_ptr_;   // Read pointer
-    alignas(64) std::atomic<size_t>  end_ptr_;    // Current end of buffer for wrap around
-    alignas(64) std::atomic<bool>    streaming_;
+    alignas(CACHE_LINE_SIZE) std::vector<Chunk>   chunks_;
+    alignas(CACHE_LINE_SIZE) std::atomic<size_t>  write_ptr_;  // Write pointer
+    alignas(CACHE_LINE_SIZE) std::atomic<size_t>  read_ptr_;   // Read pointer
+    alignas(CACHE_LINE_SIZE) std::atomic<size_t>  end_ptr_;    // Current end of buffer for wrap around
+    alignas(CACHE_LINE_SIZE) std::atomic<bool>    streaming_;
 
     // Variables used only by the writing thread. alignas on first variable to isolate from the previous ones
-    alignas(64) const size_t capacity_;            // Capacity. Const and can not be changed. +1 from requested to accommodate for sentinel
+    alignas(CACHE_LINE_SIZE) const size_t capacity_;            // Capacity. Const and can not be changed. +1 from requested to accommodate for sentinel
     size_t       acquired_write_ptr_;  // Acquired write pointer
     size_t       acquired_write_len_;  // Acquired write len
     size_t       acquired_end_ptr_;    // Acquired end pointer
 
     // Variables used only by the reading thread. alignas on first variable to isolate from the previous ones
-    alignas(64) size_t acquired_read_ptr_;  // Acquired read pointer
+    alignas(CACHE_LINE_SIZE) size_t acquired_read_ptr_;  // Acquired read pointer
     size_t acquired_read_len_;  // Acquired read len
 };
 
