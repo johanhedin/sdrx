@@ -113,7 +113,7 @@ public:
         return true;
     }
 
-    bool commitWrite(void) {
+    bool commitWrite() {
         // Not allowed to call this function unless a call to acquireWrite
         // indicated that space is actually available.
         if (acquired_write_len_ == 0) return false;
@@ -173,7 +173,7 @@ public:
         return true;
     }
 
-    bool commitRead(void) {
+    bool commitRead() {
         // Not allowed to call this function unless a call to acquireRead
         // indicated that data is actually available.
         if (acquired_read_len_ == 0) return false;
