@@ -188,7 +188,7 @@ public:
     }
 
 private:
-    static const size_t ALIGN_LEN = 64; // Typical cache line size
+    static constexpr size_t ALIGN_LEN = 64; // Typical cache line size
     class alignas(64) Chunk {
     public:
         std::unique_ptr<T[]>  buf_;
