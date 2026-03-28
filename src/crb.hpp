@@ -62,7 +62,7 @@ public:
     CRB& operator=(const CRB&) = delete;
 
     void setStreaming(bool streaming) { streaming_.store(streaming, std::memory_order_relaxed); }
-    bool isStreaming(void) { return streaming_.load(std::memory_order_relaxed); }
+    bool isStreaming(void) const { return streaming_.load(std::memory_order_relaxed); }
 
     bool acquireWrite(T **buf,  M **m) {
         const size_t rd_ptr = read_ptr_.load(std::memory_order_acquire);
