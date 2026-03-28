@@ -41,8 +41,8 @@
 // when the write pointer leads the read pointer and in state 2 when the read
 // pointer leads the write pointer.
 //
-// Transistion from state 1 to state 2 can only happen from the writer thread.
-// Transistion from state 2 to state 1 can only happen from the reader thread.
+// Transition from state 1 to state 2 can only happen from the writer thread.
+// Transition from state 2 to state 1 can only happen from the reader thread.
 
 template<typename T, typename M>
 class CRB {
@@ -55,16 +55,16 @@ public:
         }
     }
 
-    ~CRB(void) {}
+    ~CRB() {}
 
-    CRB(void) = delete;
+    CRB() = delete;
     CRB(const CRB&) = delete;
     CRB& operator=(const CRB&) = delete;
 
     void setStreaming(bool streaming) { streaming_.store(streaming, std::memory_order_relaxed); }
-    bool isStreaming(void) const { return streaming_.load(std::memory_order_relaxed); }
+    bool isStreaming() const { return streaming_.load(std::memory_order_relaxed); }
 
-    bool acquireWrite(T **buf,  M **m) {
+    bool acquireWrite(T **buf, M **m) {
         const size_t rd_ptr = read_ptr_.load(std::memory_order_acquire);
         const size_t wr_ptr = write_ptr_.load(std::memory_order_relaxed);
 
@@ -118,7 +118,7 @@ public:
         // indicated that space is actually available.
         if (acquired_write_len_ == 0) return false;
 
-        // The write to end_prt_ will be syncronized by the store operation on
+        // The write to end_ptr_ will be synchronized by the store operation on
         // write_ptr_ below
         if (acquired_write_ptr_ == 0) {
             end_ptr_.store(acquired_end_ptr_, std::memory_order_relaxed);
@@ -151,7 +151,7 @@ public:
         } else {
             // State 2 (read leads write).
             //
-            // We can read up to, but not including or beond, end_ptr_
+            // We can read up to, but not including or beyond, end_ptr_
 
             const size_t end_ptr = end_ptr_.load(std::memory_order_relaxed);
             if (rd_ptr < end_ptr) {
