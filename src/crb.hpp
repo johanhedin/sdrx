@@ -56,8 +56,6 @@ public:
         }
     }
 
-    ~CRB() {}
-
     CRB() = delete;
     CRB(const CRB&) = delete;
     CRB& operator=(const CRB&) = delete;
