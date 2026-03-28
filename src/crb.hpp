@@ -49,7 +49,8 @@ class CRB {
 public:
     CRB(size_t chunk_size, size_t num_chunks) : chunks_(num_chunks+1),
     write_ptr_(0), read_ptr_(0), end_ptr_(num_chunks), streaming_(false), capacity_(num_chunks+1),
-    acquired_write_len_(0), acquired_read_len_(0) {
+    acquired_write_ptr_(0), acquired_write_len_(0), acquired_end_ptr_(0), acquired_read_ptr_(0),
+    acquired_read_len_(0) {
         for (auto &c : chunks_) {
             c.buf_ = std::make_unique<T[]>(chunk_size + ALIGN_LEN * 2);
         }
