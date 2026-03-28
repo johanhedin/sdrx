@@ -76,14 +76,14 @@ public:
             //
             // We can write up to, but not including, capacity_
             if (wr_ptr + 1 < capacity_) {
-                // The requested amount of items to write will fit in the remainig
+                // The requested amount of items to write will fit in the remaining
                 // of the buffer
                 acquired_write_ptr_ = wr_ptr;
                 acquired_write_len_ = 1;
                 acquired_end_ptr_   = capacity_ - 1;
             } else {
                 // The requested amount of items to write will not fit in the
-                // remainig of the buffer. Check if we can wrap around and find
+                // remaining of the buffer. Check if we can wrap around and find
                 // space in the beginning of the buffer. If not, the buffer is full
                 if (1 < rd_ptr) {
                     // Ok to write the data at the beginning of the buffer
@@ -95,7 +95,7 @@ public:
         } else {
             // State 2 (read leads write)
             //
-            // We can write upto, but not including, read_ptr_
+            // We can write up to, but not including, read_ptr_
             if (wr_ptr + 1 < rd_ptr) {
                 acquired_write_ptr_ = wr_ptr;
                 acquired_write_len_ = 1;
@@ -137,7 +137,7 @@ public:
         const size_t wr_ptr = write_ptr_.load(std::memory_order_acquire);
         const size_t rd_ptr = read_ptr_.load(std::memory_order_relaxed);
 
-        // Calculate how many item that are available in the buffer.
+        // Calculate how many items that are available in the buffer.
         // The calculation is different depending on the buffer state.
         if (wr_ptr >= rd_ptr) {
             // State 1 (write leads read).
