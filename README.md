@@ -5,7 +5,7 @@
 `sdrx` is a software defined multichannel narrowband AM airband receiver that
 uses R820T(2)/R860 based RTL-SDR or Airspy Mini/R2 dongles as it's hardware
 part. `sdrx` is written in C++ (C++-20) and regularly tested on a x86_64 machine
-running Fedora 41, on a Raspberry Pi 4 Model B 4GiB and on a Raspberry Pi Zero 2 W
+running Fedora 43, on a Raspberry Pi 4 Model B 4GiB and on a Raspberry Pi Zero 2 W
 running the latest Raspberry Pi OS (mostly the 64-bit version). Audio handling
 is done with ALSA.
 
