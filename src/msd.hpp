@@ -183,7 +183,7 @@ private:
                 // on m, h and translator vector. Size of translator is assumed
                 // to always be evenly divisalbe by m.
                 unsigned num_sets = translator.size() / m_;
-                unsigned j = 0;
+                unsigned j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
                 for (unsigned set = 0; set < num_sets; set++) {
                     std::vector<iqsample_t> cc;
                     auto iter = h.begin();
@@ -199,6 +199,7 @@ private:
 
                     hk_.push_back(cc);
                     j += m_;
+                    if (j >= translator.size()) j -= translator.size();
                 }
             }
         }
