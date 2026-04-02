@@ -17,6 +17,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+//
+// References:
+// https://www.dsprelated.com/showarticle/1028.php
+// https://www.dsprelated.com/thread/1567/phase-drift-if-oscillator-doesn-t-go-through-full-360-deg-rotation-when-mixing-fir-to-bandpass
+// https://www.embedded.com/digital-signal-processing-tricks-frequency-translation-without-multiplication
 
 #ifndef MSD_HPP
 #define MSD_HPP
@@ -27,10 +32,10 @@
 
 #if defined __AVX2__
 #include <immintrin.h>
-#elif defined __ARM_NEON
-#include <arm_neon.h>
+//#elif defined __ARM_NEON
+//#include <arm_neon.h>
 #else
-//#pragma message "NO AVX2 or NEON SIMD available. Using normal code"
+#pragma message "NO AVX2 SIMD available. Using standard portable C++"
 #endif
 
 // Multi-Stage Translating Down sampler
@@ -189,8 +194,8 @@ private:
                 // to always be evenly divisalbe by m (guaranteed by previous assert)
                 unsigned num_sets = translator.size() / m_;
 
-                // Start the trannslator lookup by -(N - 1) positions to align the
-                // phase, i.e. account for the filter group delay
+                // Start the trannslator lookup by -(N - 1) positions to align
+                // the phase, i.e. account for the filter group delay
                 unsigned j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
                 for (unsigned set = 0; set < num_sets; set++) {
                     std::vector<iqsample_t> cc;
@@ -199,7 +204,9 @@ private:
                     while (iter != h.end()) {
                         // Frequency translating FIR filter has a gain of 0.5
                         // so we need to compensate that with a factor 2 on
-                        // the coefficients
+                        // the coefficients.
+                        // NOTE: This has to be looked up. The *2 compensation
+                        // might not be correct.
                         cc.push_back(*iter * translator[k] * 2.0f);
                         if (++k == translator.size()) k = 0;
                         ++iter;
