@@ -2,7 +2,7 @@
 // Multi-Stage translating down sampler for tuning and decimating a IQ stream
 //
 // @author Johan Hedin
-// @date   2021 - 2024
+// @date   2021 - 2024, 2026
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -51,6 +51,8 @@ public:
         auto iter = stages.begin();
         while (iter != stages.end()) {
             if (iter == stages.begin() && !translator.empty()) {
+                // If a frequency translation is requestet, load that into the first
+                // downsampling stage
                 stages_.push_back(MSD::S(iter->m, iter->h, translator));
             } else {
                 stages_.push_back(MSD::S(iter->m, iter->h));
@@ -152,8 +154,8 @@ public:
     }
 
 private:
-    // Internal class representing one stage. Contains the delay line and
-    // filter coefficients
+    // Internal class representing one downsampling stage. Contains the delay
+    // line and filter coefficients
     class S {
     public:
         S(unsigned m, const std::vector<float> h, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
@@ -178,11 +180,17 @@ private:
                 ++iter;
             }
 
+            // Supplying a translator ("tuner") is only relevant for the first
+            // stage. Using translation on any other stage is considered
+            // undefined behaviour
             if (translator.size() > 0) {
                 // Construct frequency translating filter coefficient set based
                 // on m, h and translator vector. Size of translator is assumed
-                // to always be evenly divisalbe by m.
+                // to always be evenly divisalbe by m (guaranteed by previous assert)
                 unsigned num_sets = translator.size() / m_;
+
+                // Start the trannslator lookup by -(N - 1) positions to align the
+                // phase, i.e. account for the filter group delay
                 unsigned j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
                 for (unsigned set = 0; set < num_sets; set++) {
                     std::vector<iqsample_t> cc;
@@ -418,7 +426,7 @@ private:
     unsigned                m_;          // Total down sampling factor
     std::vector<iqsample_t> translator_; // Frequency tuning sequence
     unsigned                trans_pos_;  // Position in translator
-    bool                    use_ftfir_;  // Use frequency translating FIR for firts stage
+    bool                    use_ftfir_;  // Use frequency translating FIR for first stage
 };
 
 #endif // MSD_HPP
