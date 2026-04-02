@@ -35,7 +35,7 @@
 //#elif defined __ARM_NEON
 //#include <arm_neon.h>
 #else
-#pragma message "NO AVX2 SIMD available. Using standard portable C++"
+//#pragma message "NO AVX2 SIMD available. Using standard portable C++"
 #endif
 
 // Multi-Stage Translating Down sampler
