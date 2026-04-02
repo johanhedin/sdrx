@@ -62,10 +62,8 @@ cd sdrx
 and then build with cmake:
 
 ```console
-mkdir build
-cd build
-cmake ..
-make
+cmake -B build
+cmake --build build
 ```
 
 
@@ -76,9 +74,8 @@ To keep up to date with changes and updates to `sdrx`, simply run:
 cd sdrx
 git pull --ff-only
 git submodule update --init --recursive
-cd build
-cmake ..
-make
+cmake -B build
+cmake --build build
 ```
 
 Please always run the `git submodule update`-part as stated above since it is
@@ -90,10 +87,9 @@ If the build for some reason fails after a update, try to remove all files
 inside the build directory and start over:
 
 ```console
-cd build
-rm -rf *
-cmake ..
-make
+rm -rf build
+cmake -B build
+cmake --build build
 ```
 
 Make sure to `git pull` according to the instruction above regularly to keep up
@@ -108,11 +104,10 @@ directory defaults to `/usr/local/bin`. It can be set to a different
 location with `-DCMAKE_INSTALL_PREFIX=<your_custom_dir>`:
 
 ```console
-cd build
-rm -rf *
-cmake .. -DCMAKE_INSTALL_PREFIX=/usr
-make
-sudo make install
+rm -rf build
+cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build build
+sudo cmake --build build --target install
 ```
 
 To uninstall, you need to install like above first and have the build directory
@@ -120,8 +115,7 @@ available as it was after the install (the files installed are written to
 a file in the build directory and then used in the uninstall stage):
 
 ```console
-cd build
-sudo make uninstall
+sudo cmake --build build --target uninstall
 ```
 
 `sudo` is only needed if your install directory is owned by root.
