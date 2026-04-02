@@ -85,12 +85,17 @@ class LfAGC {
 public:
     LfAGC(float attack=10.0f, float decay=0.01f, float reference=0.25f, float max_gain=200.0f, float alpha=0.005f)
     : attack_(attack), decay_(decay), reference_(reference), max_gain_(max_gain), alpha_(alpha), gain_(1.0f),
-      power_(reference_ * reference_), active_(false) {}
+      power_(reference_ * reference_), active_(false) {
+          min_gain_ = (max_gain_ > 0.0f) ? 1.0f / max_gain_ : 1.0f / 200.0f;
+    }
 
     void setAttack(float attack) { attack_ = attack; }
     void setDecay(float decay) { decay_ = decay; }
     void setReference(float reference) { reference_ = reference; }
-    void setMaxGain(float max_gain) { max_gain_ = max_gain; }
+    void setMaxGain(float max_gain) {
+        max_gain_ = max_gain;
+        min_gain_ = (max_gain_ > 0.0f) ? 1.0f / max_gain_ : 1.0f / 200.0f;
+    }
     void setAlpha(float alpha) { alpha_ = alpha; }
 
     float gain(void) { return gain_; }
@@ -112,8 +117,8 @@ public:
             gain_ += attack_ * error;
         }
 
-        if (gain_ < 0.0f) {
-            gain_ = 0.0f;
+        if (gain_ < min_gain_) {
+            gain_ = min_gain_;
         } else if (gain_ > max_gain_) {
             gain_ = max_gain_;
         }
@@ -129,6 +134,7 @@ private:
     float   attack_;
     float   decay_;
     float   reference_;
+    float   min_gain_;
     float   max_gain_;
     float   alpha_;
     float   gain_;
