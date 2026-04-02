@@ -46,14 +46,14 @@ your time to find out the proper frequency correction and supply that with the
 `--fq-corr` option. For Airspy devices the correction concept is not used at
 all and any `--fq-corr` given is silently ignored.
 
-If you have multiple devices connected, use `--list` to list what devices that
-`sdrx` recognize on your system and what sample rates they support:
+If you have multiple devices connected, use `--list` to list the devices that
+`sdrx` recognizes on your system and what sample rates they support:
 
 ```console
 ./sdrx --list
 ```
 
-To use a specific device, it's serial is used and you must ensure that all
+To use a specific device, its serial is used and you must ensure that all
 devices have unique serials. Use `rtl_eeprom -s MYSERIAL` from the standard
 `librtlsdr` package to set unique serials for your RTL devices. Airspy devices
 normally have unique serials and you do not have to worry about them.
@@ -63,16 +63,16 @@ normally have unique serials and you do not have to worry about them.
 number like 0 or 1) is not a stable way to reference a dongle since the id
 may change over time as devices are plugged in and removed from the USB bus.
 The serial number concept is, on the other hand, a stable and predictable way
-to reference a specific dongle as long as every dongle on the system have been
+to reference a specific dongle as long as every dongle on the system has been
 given a unique name.
 
 > Note 2: The term "serial" is a bit misleading since it actually is a text
-string based on a USB descriptor. It is perfectly fine to set a serial on a RTL
+string based on a USB descriptor. It is perfectly fine to set a serial on an RTL
 device containing text.
 
 > Note 3: Airspy R2 devices are described as "AirSpy NOS" when listing available
 devices. This is what they call themselves when queried over the USB bus and is
-nothing `sdrx` can do anything about.
+not something `sdrx` can do anything about.
 
 Support for multiple channels is available as well. Just specify the channels as
 arguments. The channels must fit inside 80% of the sampling frequency used (see
@@ -85,11 +85,11 @@ below for explanation):
 The more channels you specify, the more loaded the channelization thread will be.
 Please monitor your system load when running `sdrx` with many channels to get an
 understanding of how much you can load your specific system. Especially Airspy
-devices combined with many channels consume quite some processing power at the
+devices combined with many channels consume considerable processing power at the
 moment.
 
 If the connection to a device is lost while `sdrx` is running, i.e. the device
-is being unplugged from the USB bus, `sdrx` will auto reconnect when the device
+is being unplugged from the USB bus, `sdrx` will automatically reconnect when the device
 is plugged in again. There is no need to restart the program just because a
 device disappears for some reason. Some RTL based dongles have rather flimsy
 USB connectors and a device easily disconnects by just moving it slightly.
@@ -106,10 +106,10 @@ used. If, for example, a sample rate of 2.56 MS/s is used, the available RF
 bandwidth will be 2.56 * 0.8 = 2.048 MHz. For a rate of 1.44 MS/s it will be
 1.44 * 0.8 = 1.152 MHz. And so on.
 
-Available rates for each device is shown in the output from the `--list` option.
+Available rates for each device are shown in the output from the `--list` option.
 
 > Note 4: When specifying a sample rate, use the exact text of the rate as
-shown when using `--list`, i.e. if the list say 2.56, you enter 2.56. If the list
+shown when using `--list`, i.e. if the list says 2.56, you enter 2.56. If the list
 say 0.96, you enter 0.96. If the list say 10, you enter 10. And so on. Do not
 include "MS/s" after the rate value. Do not use comma (,) as decimal separator.
 Do not set anything else other than what is shown with `--list`.
@@ -154,16 +154,16 @@ transmitter and if it is positive you are tuned below the transmitter frequency.
 The imbalance is determined by calculating the energy balance between "negative"
 and "positive" frequencies from the FFT used for the squelch. Since AM is a
 symmetric modulation around the carrier, the imbalance should be 0 if you are
-tuned to the transmitters frequency.
+tuned to the transmitter's frequency.
 
 
 ## Output in multi channel mode
-In multi channel mode, audio from the different channels are distributed between
+In multi channel mode, audio from the different channels is distributed between
 the left and right speaker in a virtual five speaker audio panorama. This will
 create the sense of a set of five speakers in front of the listener.
 
 Together with the visual presentation in the terminal, this will increase the
-awareness of what channels that are active. The channels will be placed in the
+awareness of which channels are active. The channels will be placed in the
 panorama based on their order on the command line.
 
 Output in the terminal looks about the same as for single channel but only the
