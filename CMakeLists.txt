@@ -60,9 +60,7 @@ FILE(GLOB R820DEV_SRCS
     "src/airspy_dev.cpp"
 )
 add_library(r820dev ${R820DEV_SRCS})
-target_compile_options(r820dev PRIVATE -Wall)
-target_compile_options(r820dev PRIVATE -Wextra)
-target_compile_options(r820dev PRIVATE -pedantic)
+target_compile_options(r820dev PRIVATE -Wall -Wextra -pedantic)
 target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
 target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
 
@@ -78,8 +76,7 @@ FILE(GLOB USOCKET_SRCS
 )
 add_library(usockets ${USOCKET_SRCS})
 target_compile_options(usockets PRIVATE -Wno-deprecated-declarations)
-target_compile_options(usockets PRIVATE -DLIBUS_USE_OPENSSL)
-target_compile_options(usockets PRIVATE -DLIBUS_USE_LIBUV)
+target_compile_definitions(usockets PRIVATE LIBUS_USE_OPENSSL LIBUS_USE_LIBUV)
 target_include_directories(usockets PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
 
 # Main program
