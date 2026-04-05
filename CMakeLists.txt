@@ -109,6 +109,14 @@ target_link_libraries(${CMAKE_PROJECT_NAME} m)
 target_link_libraries(${CMAKE_PROJECT_NAME} airspy-static)
 target_link_libraries(${CMAKE_PROJECT_NAME} rtlsdr_static)
 target_link_libraries(${CMAKE_PROJECT_NAME} usockets)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::POPT)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::FFTW3F)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::LIBUSB)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::SIGCPP2)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::ALSA)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::LIBUV)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::ZLIB)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::OPENSSL)
 
 # We don't use the dts tool for the time being
 #add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
@@ -132,12 +140,3 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/i
 
 # Same but to manage unwanted uninstall target inside librtlsdr
 execute_process(COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/librtlsdr/install_manifest.txt")
-
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::POPT)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::FFTW3F)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::LIBUSB)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::SIGCPP2)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::ALSA)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::LIBUV)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::ZLIB)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::OPENSSL)
