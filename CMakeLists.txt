@@ -34,6 +34,8 @@ endif()
 # We need the PkgConfig cmake module to be able to find libraries we depend on
 find_package(PkgConfig REQUIRED)
 
+find_package(Threads REQUIRED)
+
 # Use GNUInstallDirs to get standard install directories for include, lib, bin and so on
 include(GNUInstallDirs)
 
@@ -84,11 +86,7 @@ FILE(GLOB SRCS
     "src/sdrx.cpp"
 )
 add_executable(${CMAKE_PROJECT_NAME} ${SRCS})
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall)
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wextra)
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -pedantic)
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -march=native)
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -mtune=native)
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -march=native -mtune=native)
 # Extra flags for reporting around vectorization are:
 #   -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=7
 #   -fopt-info-vec -fopt-info-vec-note
@@ -112,7 +110,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME} usockets)
 #target_link_libraries(dts rtlsdr_static)
 
 # CRB lock-free SPSC queue test (build with: cmake --build build --target crb_test)
-find_package(Threads REQUIRED)
 add_executable(crb_test EXCLUDE_FROM_ALL src/crb_test.cpp)
 target_compile_options(crb_test PRIVATE -Wall -Wextra -pedantic -O2)
 target_include_directories(crb_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
