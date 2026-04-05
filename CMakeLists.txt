@@ -52,7 +52,7 @@ add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 # The EXCLUDE_FROM_ALL option will allow us to cherry pick the rtlsdr_static
 # target later on since we are only interested in librtlsdr and not the other
 # tools. We also enable the DETACH_KERNEL_DRIVER option.
-option(DETACH_KERNEL_DRIVER "" ON)
+option(DETACH_KERNEL_DRIVER "Detach kernel driver on RTL-SDR device open" ON)
 add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
 
 # Find all pkg-config dependencies up front so imported targets are available
