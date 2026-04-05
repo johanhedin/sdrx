@@ -20,7 +20,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
     message(STATUS "Build type not specified, defaulting to Release. Change to debug with -DCMAKE_BUILD_TYPE=Debug")
-endif(NOT CMAKE_BUILD_TYPE)
+endif()
 
 # Create a uninstall target if it does not already exist. We need this before
 # any add_subdirectory so that uninstall targets from them do not propagate here.
