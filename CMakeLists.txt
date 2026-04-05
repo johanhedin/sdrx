@@ -67,7 +67,7 @@ pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
 pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl>=3)
 
 # Our device/dongle module
-FILE(GLOB R820DEV_SRCS
+file(GLOB R820DEV_SRCS CONFIGURE_DEPENDS
     "src/r820_dev.cpp"
     "src/rtl_dev.cpp"
     "src/airspy_dev.cpp"
@@ -79,7 +79,7 @@ target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/inclu
 target_link_libraries(r820dev PkgConfig::SIGCPP2)
 
 # We build the bundled uSockets ourselves
-FILE(GLOB USOCKET_SRCS
+file(GLOB USOCKET_SRCS CONFIGURE_DEPENDS
     "uWebSockets/uSockets/src/bsd.c"
     "uWebSockets/uSockets/src/context.c"
     "uWebSockets/uSockets/src/loop.c"
@@ -94,10 +94,7 @@ target_compile_definitions(usockets PRIVATE LIBUS_USE_OPENSSL LIBUS_USE_LIBUV)
 target_include_directories(usockets PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
 
 # Main program
-FILE(GLOB SRCS
-    "src/sdrx.cpp"
-)
-add_executable(${CMAKE_PROJECT_NAME} ${SRCS})
+add_executable(${CMAKE_PROJECT_NAME} "src/sdrx.cpp")
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -march=native -mtune=native)
 # Extra flags for reporting around vectorization are:
 #   -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=7
