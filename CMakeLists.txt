@@ -133,7 +133,7 @@ target_include_directories(crb_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(crb_test Threads::Threads)
 
 # Add support for installing our program
-install(TARGETS ${CMAKE_PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+install(TARGETS ${CMAKE_PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Create empty install_manifest.txt so that it does not get owned by root on sudo make install
 execute_process(COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/install_manifest.txt")
