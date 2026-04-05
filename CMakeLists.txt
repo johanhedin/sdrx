@@ -114,6 +114,13 @@ target_link_libraries(${CMAKE_PROJECT_NAME} usockets)
 #target_link_libraries(dts airspy-static)
 #target_link_libraries(dts rtlsdr_static)
 
+# CRB lock-free SPSC queue test (build with: cmake --build build --target crb_test)
+find_package(Threads REQUIRED)
+add_executable(crb_test EXCLUDE_FROM_ALL src/crb_test.cpp)
+target_compile_options(crb_test PRIVATE -Wall -Wextra -pedantic -O2)
+target_include_directories(crb_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(crb_test Threads::Threads)
+
 # Add support for installing our program
 install(TARGETS ${CMAKE_PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
