@@ -55,6 +55,17 @@ add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 option(DETACH_KERNEL_DRIVER "" ON)
 add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
 
+# Find all pkg-config dependencies up front so imported targets are available
+# to all targets below
+pkg_check_modules(POPT REQUIRED IMPORTED_TARGET popt)
+pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
+pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
+pkg_check_modules(SIGCPP2 REQUIRED IMPORTED_TARGET sigc++-2.0)
+pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+pkg_check_modules(LIBUV REQUIRED IMPORTED_TARGET libuv)
+pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
+pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl>=3)
+
 # Our device/dongle module
 FILE(GLOB R820DEV_SRCS
     "src/r820_dev.cpp"
@@ -65,6 +76,7 @@ add_library(r820dev ${R820DEV_SRCS})
 target_compile_options(r820dev PRIVATE -Wall -Wextra -pedantic)
 target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
 target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
+target_link_libraries(r820dev PkgConfig::SIGCPP2)
 
 # We build the bundled uSockets ourselves
 FILE(GLOB USOCKET_SRCS
@@ -124,34 +136,11 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/i
 # Same but to manage unwanted uninstall target inside librtlsdr
 execute_process(COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/librtlsdr/install_manifest.txt")
 
-pkg_check_modules(POPT REQUIRED popt)
-include_directories(${POPT_INCLUDE_DIRS})
-target_link_libraries(${CMAKE_PROJECT_NAME} ${POPT_LIBRARIES})
-
-pkg_check_modules(FFTW3F REQUIRED fftw3f)
-include_directories(${FFTW3F_INCLUDE_DIRS})
-target_link_libraries(${CMAKE_PROJECT_NAME} ${FFTW3F_LIBRARIES})
-
-pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
-include_directories(${LIBUSB_INCLUDE_DIRS})
-target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBUSB_LIBRARIES})
-
-pkg_check_modules(SIGCPP2 REQUIRED sigc++-2.0)
-include_directories(${SIGCPP2_INCLUDE_DIRS})
-target_link_libraries(${CMAKE_PROJECT_NAME} ${SIGCPP2_LIBRARIES})
-
-pkg_check_modules(ALSA REQUIRED alsa)
-include_directories(${ALSA_INCLUDE_DIRS})
-target_link_libraries(${CMAKE_PROJECT_NAME} ${ALSA_LIBRARIES})
-
-pkg_check_modules(LIBUV REQUIRED libuv)
-include_directories(${LIBUV_INCLUDE_DIRS})
-target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBUV_LIBRARIES})
-
-pkg_check_modules(ZLIB REQUIRED zlib)
-include_directories(${ZLIB_INCLUDE_DIRS})
-target_link_libraries(${CMAKE_PROJECT_NAME} ${ZLIB_LIBRARIES})
-
-pkg_check_modules(OPENSSL REQUIRED openssl>=3)
-include_directories(${OPENSSL_INCLUDE_DIRS})
-target_link_libraries(${CMAKE_PROJECT_NAME} ${OPENSSL_LIBRARIES})
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::POPT)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::FFTW3F)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::LIBUSB)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::SIGCPP2)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::ALSA)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::LIBUV)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::ZLIB)
+target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::OPENSSL)
