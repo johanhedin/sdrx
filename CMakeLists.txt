@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20...3.31)
 project(sdrx C CXX)
 
-# We use C17 and C++20 with GNU extensions
+# We use C17 and C++20
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD_REQUIRED True)
@@ -125,15 +125,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     PkgConfig::OPENSSL
 )
 
-# We don't use the dts tool for the time being
-#add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
-#target_include_directories(dts PRIVATE ${PROJECT_SOURCE_DIR})
-#target_link_libraries(dts r820dev)
-#target_link_libraries(dts m)
-#target_link_libraries(dts airspy-static)
-#target_link_libraries(dts rtlsdr_static)
-
-# CRB lock-free SPSC queue test (build with: cmake --build build --target crb_test)
+# CRB lock-free SPSC queue test (build with: cmake --build build --target crb_test).
+# We deliberately use -O2 here since this is a test program and not affected
+# by the BUILD_TYPE settings.
 add_executable(crb_test EXCLUDE_FROM_ALL src/crb_test.cpp)
 target_compile_options(crb_test PRIVATE -Wall -Wextra -pedantic -O2)
 target_include_directories(crb_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
