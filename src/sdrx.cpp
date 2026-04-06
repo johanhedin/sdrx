@@ -315,12 +315,12 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
         // Channelize the IQ data and write output into ring buffer one
         // channel after the other
         if (ctx.settings.use_threaded_ds) {
-            std::latch latch(channels.size());
+            auto latch = std::make_shared<std::latch>(channels.size());
             for (auto &ch : channels) {
                 ch.ds_ptr->addJob(data, data_len, iq_buf_ptr, latch);
                 iq_buf_ptr += CH_IQ_BUF_SIZE;
             }
-            latch.wait();
+            latch->wait();
         } else {
             for (auto &ch : channels) {
                 ch.msd.decimate(data, data_len, iq_buf_ptr);

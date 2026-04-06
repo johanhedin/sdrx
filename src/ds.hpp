@@ -25,6 +25,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <latch>
+#include <memory>
 
 #include "msd.hpp"
 
@@ -39,13 +40,13 @@ public:
         thread_.join();
     }
 
-    void addJob(const iqsample_t *data, unsigned data_len, iqsample_t *out, std::latch &latch) {
+    void addJob(const iqsample_t *data, unsigned data_len, iqsample_t *out, std::shared_ptr<std::latch> latch) {
         std::unique_lock<std::mutex> lock(mutex_);
 
         in_data_ptr_ = data;
         in_data_len_ = data_len;
         out_ptr_ = out;
-        latch_ = &latch;
+        latch_ = std::move(latch);
 
         lock.unlock();
         condition_.notify_one();
@@ -61,7 +62,7 @@ private:
     std::mutex              mutex_;
     std::condition_variable condition_;
     std::thread             thread_;
-    std::latch             *latch_;
+    std::shared_ptr<std::latch> latch_;
 
     void worker_(void) {
         std::unique_lock<std::mutex> lock(mutex_);
