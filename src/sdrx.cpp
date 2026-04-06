@@ -31,6 +31,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <latch>
 #include <atomic>
 #include <new>
 #include <cstring>
@@ -59,7 +60,11 @@
 #include "fir.hpp"
 #include "agc.hpp"
 #include "r820_dev.hpp"
+#ifdef USE_THREAD_POOL
+#include "tp.hpp"
+#else
 #include "ds.hpp"
+#endif
 
 // Down sampling filters
 #include "filters/fs_00960_08bit_ds_to_00016.hpp"
@@ -202,7 +207,7 @@ private:
 class Channel {
 public:
     Channel(const std::string &name, float sql_level = 9.0f, Modulation mod = Modulation::AM)
-    : name(name), ds_ptr(nullptr), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0), mod(mod), demod(mod) {}
+    : name(name), sql_level(sql_level), sql_state(SQL_CLOSED), sql_state_prev(SQL_CLOSED), pos(0), mod(mod), demod(mod) {}
 
     bool operator<(const Channel &rhv) { return name < rhv.name; }
     bool operator==(const Channel &rhv) { return name == rhv.name; }
@@ -212,7 +217,9 @@ public:
 
     std::string      name;           // Channel name, e.g "118.105"
     MSD              msd;            // Multi stage down sampler with tuner
-    DS              *ds_ptr;         // Threaded downsampler
+#ifndef USE_THREAD_POOL
+    DS              *ds_ptr = nullptr; // Threaded downsampler (one per channel)
+#endif
     AGC              agc;            // AGC
     float            sql_level;      // Squelch level for the channel
     sql_state_t      sql_state;      // Squelch state (open/closed)
@@ -259,6 +266,9 @@ struct InputState {
     rb_t                 *rb_ptr;                  // Input -> Output buffer
     R820Dev::StreamState  stream_state = R820Dev::StreamState::IDLE;
     Settings              settings;                // System wide settings
+#ifdef USE_THREAD_POOL
+    ThreadPool           *tp_ptr = nullptr;        // Shared thread pool for downsampling
+#endif
 };
 
 
@@ -317,7 +327,14 @@ static void data_cb(const iqsample_t *data, unsigned data_len, void *user_data, 
         if (ctx.settings.use_threaded_ds) {
             auto latch = std::make_shared<std::latch>(channels.size());
             for (auto &ch : channels) {
+#ifdef USE_THREAD_POOL
+                ctx.tp_ptr->submit([&ch, data, data_len, out = iq_buf_ptr, latch]() {
+                    ch.msd.decimate(data, data_len, out);
+                    latch->count_down();
+                });
+#else
                 ch.ds_ptr->addJob(data, data_len, iq_buf_ptr, latch);
+#endif
                 iq_buf_ptr += CH_IQ_BUF_SIZE;
             }
             latch->wait();
@@ -1674,9 +1691,11 @@ int main(int argc, char** argv) {
 
         ch.msd = MSD(translator, stages, settings.use_ftfir);
 
+#ifndef USE_THREAD_POOL
         if (settings.use_threaded_ds) {
             ch.ds_ptr = new DS(ch.msd);
         }
+#endif
 
         ch.ch_flt = FIR3<iqsample_t>(fs_00016_16bit_ch_amdemod_lpf1);
 
@@ -1725,6 +1744,13 @@ int main(int argc, char** argv) {
     struct InputState input_state;
     input_state.settings   = settings;
     input_state.rb_ptr     = &iq_rb;
+#ifdef USE_THREAD_POOL
+    if (settings.use_threaded_ds) {
+        input_state.tp_ptr = new ThreadPool(
+            std::min(settings.channels.size(),
+                     static_cast<size_t>(std::thread::hardware_concurrency())));
+    }
+#endif
 
     // Create tuner class instance
     R820Dev *device = R820Dev::create(settings.device_type, settings.device_serial, settings.rate, settings.fq_corr);
@@ -1791,9 +1817,13 @@ int main(int argc, char** argv) {
 quit:
     delete device;
 
+#ifdef USE_THREAD_POOL
+    delete input_state.tp_ptr;
+#else
     for (auto &ch : settings.channels) {
         if (ch.ds_ptr) delete ch.ds_ptr;
     }
+#endif
 
     alsa_thread.join();
 

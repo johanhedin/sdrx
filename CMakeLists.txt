@@ -99,8 +99,15 @@ target_compile_definitions(usockets PRIVATE LIBUS_USE_OPENSSL LIBUS_USE_LIBUV)
 target_include_directories(usockets PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
 
 # Main program
+
+# Optional thread pool. Activate with cmake -B build -DUSE_THREAD_POOL=ON
+option(USE_THREAD_POOL "Use a thread pool for downsampling instead of one thread per channel" OFF)
+
 add_executable(${CMAKE_PROJECT_NAME} src/sdrx.cpp)
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -march=native -mtune=native)
+if(USE_THREAD_POOL)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_THREAD_POOL)
+endif()
 # Extra flags for reporting around vectorization are:
 #   -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=7
 #   -fopt-info-vec -fopt-info-vec-note
