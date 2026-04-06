@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD_REQUIRED True)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# We use pure C++ and avoid relying on GNU extensions. For C we still
+# need GNU extensions to be able to compile librtlsdr
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_EXTENSIONS ON)
+
 # This property is needed to handle the uninstall custom target added by
 # librtlsdr. It can probably be removed if librtlsdr adds a guard for
 # the uninstall target
@@ -31,6 +36,21 @@ endif()
 # Use GNUInstallDirs to get standard install directories for include, lib, bin and so on
 include(GNUInstallDirs)
 
+# Find and bring in all libraries we depend on. We use CMake find_package()
+# when there exist properly written CMake modules and pkg_check_modules()
+# for the rest.
+find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(POPT REQUIRED IMPORTED_TARGET popt)
+pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
+pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
+pkg_check_modules(SIGCPP2 REQUIRED IMPORTED_TARGET sigc++-2.0)
+pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+pkg_check_modules(LIBUV REQUIRED IMPORTED_TARGET libuv)
+pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
+pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl>=3)
+
 # Add submodule libairspy (airspyone_host) as a subdirectory to our project.
 # The EXCLUDE_FROM_ALL option allows us to cherry pick the airspy-static
 # target later on since we are only interested in libairspy and not the host
@@ -47,58 +67,45 @@ add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 option(DETACH_KERNEL_DRIVER "Detach kernel driver on RTL-SDR device open" ON)
 add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
 
-# Find and bring in all libraries we depend on. We use CMake find_package()
-# when there exist properly written CMake modules and pkg_check_modules()
-# for the rest.
-find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
-
-pkg_check_modules(POPT REQUIRED IMPORTED_TARGET popt)
-pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
-pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
-pkg_check_modules(SIGCPP2 REQUIRED IMPORTED_TARGET sigc++-2.0)
-pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
-pkg_check_modules(LIBUV REQUIRED IMPORTED_TARGET libuv)
-pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
-pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl>=3)
-
 # Our device/dongle module
-file(GLOB R820DEV_SRCS CONFIGURE_DEPENDS
-    "src/r820_dev.cpp"
-    "src/rtl_dev.cpp"
-    "src/airspy_dev.cpp"
+add_library(r820dev
+    src/r820_dev.cpp
+    src/rtl_dev.cpp
+    src/airspy_dev.cpp
 )
-add_library(r820dev ${R820DEV_SRCS})
 target_compile_options(r820dev PRIVATE -Wall -Wextra -pedantic)
-target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src)
-target_include_directories(r820dev PRIVATE ${PROJECT_SOURCE_DIR}/librtlsdr/include)
+target_include_directories(r820dev PRIVATE
+    ${PROJECT_SOURCE_DIR}/libairspy/libairspy/src
+    ${PROJECT_SOURCE_DIR}/librtlsdr/include
+)
 target_link_libraries(r820dev PkgConfig::SIGCPP2)
 
 # We build the bundled uSockets ourselves
-file(GLOB USOCKET_SRCS CONFIGURE_DEPENDS
-    "uWebSockets/uSockets/src/bsd.c"
-    "uWebSockets/uSockets/src/context.c"
-    "uWebSockets/uSockets/src/loop.c"
-    "uWebSockets/uSockets/src/socket.c"
-    "uWebSockets/uSockets/src/eventing/libuv.c"
-    "uWebSockets/uSockets/src/crypto/openssl.c"
-    "uWebSockets/uSockets/src/crypto/sni_tree.cpp"
+add_library(usockets
+    uWebSockets/uSockets/src/bsd.c
+    uWebSockets/uSockets/src/context.c
+    uWebSockets/uSockets/src/loop.c
+    uWebSockets/uSockets/src/socket.c
+    uWebSockets/uSockets/src/eventing/libuv.c
+    uWebSockets/uSockets/src/crypto/openssl.c
+    uWebSockets/uSockets/src/crypto/sni_tree.cpp
 )
-add_library(usockets ${USOCKET_SRCS})
 target_compile_options(usockets PRIVATE -Wno-deprecated-declarations)
 target_compile_definitions(usockets PRIVATE LIBUS_USE_OPENSSL LIBUS_USE_LIBUV)
 target_include_directories(usockets PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
 
 # Main program
-add_executable(${CMAKE_PROJECT_NAME} "src/sdrx.cpp")
+add_executable(${CMAKE_PROJECT_NAME} src/sdrx.cpp)
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -march=native -mtune=native)
 # Extra flags for reporting around vectorization are:
 #   -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=7
 #   -fopt-info-vec -fopt-info-vec-note
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/src)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src
+    ${PROJECT_SOURCE_DIR}/uWebSockets/src
+)
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
     m
