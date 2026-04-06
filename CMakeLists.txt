@@ -111,6 +111,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PROJECT_SOURCE_DIR}/uWebSockets/src
 )
 
+# airspy-static carries no libusb dependency in its link interface, so we
+# must link it explicitly here. Do not remove PkgConfig::LIBUSB thinking
+# rtlsdr_static covers it — it does for rtlsdr, but not for airspy.
 target_link_libraries(${CMAKE_PROJECT_NAME}
     m
     r820dev
