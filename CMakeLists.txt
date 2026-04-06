@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10...3.27)
 project(sdrx C CXX)
 
-# We use C17 and C++20
+# We use C17 and C++20 with GNU extensions
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD_REQUIRED True)
@@ -20,18 +20,13 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Create a uninstall target if it does not already exist. We need this before
-# any add_subdirectory so that uninstall targets from them do not propagate here.
+# any add_subdirectory() so that uninstall targets from them do not propagate here.
 # https://gitlab.kitware.com/cmake/community/-/wikis/FAQ#can-i-do-make-uninstall-with-cmake
 if(NOT TARGET uninstall)
     configure_file("${PROJECT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
                    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" @ONLY)
     add_custom_target(uninstall COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 endif()
-
-# We need the PkgConfig cmake module to be able to find libraries we depend on
-find_package(PkgConfig REQUIRED)
-
-find_package(Threads REQUIRED)
 
 # Use GNUInstallDirs to get standard install directories for include, lib, bin and so on
 include(GNUInstallDirs)
@@ -52,8 +47,12 @@ add_subdirectory(libairspy/libairspy EXCLUDE_FROM_ALL)
 option(DETACH_KERNEL_DRIVER "Detach kernel driver on RTL-SDR device open" ON)
 add_subdirectory(librtlsdr EXCLUDE_FROM_ALL)
 
-# Find all pkg-config dependencies up front so imported targets are available
-# to all targets below
+# Find and bring in all libraries we depend on. We use CMake find_package()
+# when there exist properly written CMake modules and pkg_check_modules()
+# for the rest.
+find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+
 pkg_check_modules(POPT REQUIRED IMPORTED_TARGET popt)
 pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
 pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
