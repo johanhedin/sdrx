@@ -66,14 +66,12 @@ private:
     void worker_(void) {
         std::unique_lock<std::mutex> lock(mutex_);
         while (run_) {
-            if (in_data_ptr_) {
-                msd_.decimate(in_data_ptr_, in_data_len_, out_ptr_);
-                in_data_ptr_ = nullptr;
-                latch_->count_down();
-                latch_ = nullptr;
-            }
-
-            condition_.wait(lock); // mutex is unlocked during wait
+            condition_.wait(lock, [this]{ return in_data_ptr_ != nullptr || !run_; });
+            if (!run_) break;
+            msd_.decimate(in_data_ptr_, in_data_len_, out_ptr_);
+            in_data_ptr_ = nullptr;
+            latch_->count_down();
+            latch_ = nullptr;
         }
     }
 };
