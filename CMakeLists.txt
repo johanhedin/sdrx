@@ -107,6 +107,9 @@ add_executable(${CMAKE_PROJECT_NAME} src/sdrx.cpp)
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -march=native -mtune=native)
 if(USE_THREAD_POOL)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USE_THREAD_POOL)
+    message(STATUS "Using thread pool for channelization")
+else()
+    message(STATUS "Thread pool not used. Enable with -DUSE_THREAD_POOL=On")
 endif()
 # Extra flags for reporting around vectorization are:
 #   -ftree-vectorize -fopt-info-vec-missed -ftree-vectorizer-verbose=7
