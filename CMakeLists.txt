@@ -100,19 +100,19 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/s
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/uSockets/src)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/uWebSockets/src)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} r820dev)
-target_link_libraries(${CMAKE_PROJECT_NAME} m)
-target_link_libraries(${CMAKE_PROJECT_NAME} airspy-static)
-target_link_libraries(${CMAKE_PROJECT_NAME} rtlsdr_static)
-target_link_libraries(${CMAKE_PROJECT_NAME} usockets)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::POPT)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::FFTW3F)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::LIBUSB)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::SIGCPP2)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::ALSA)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::LIBUV)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::ZLIB)
-target_link_libraries(${CMAKE_PROJECT_NAME} PkgConfig::OPENSSL)
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    m
+    r820dev
+    airspy-static rtlsdr_static usockets
+    PkgConfig::POPT
+    PkgConfig::FFTW3F
+    PkgConfig::LIBUSB
+    PkgConfig::SIGCPP2
+    PkgConfig::ALSA
+    PkgConfig::LIBUV
+    PkgConfig::ZLIB
+    PkgConfig::OPENSSL
+)
 
 # We don't use the dts tool for the time being
 #add_executable(dts EXCLUDE_FROM_ALL src/dts.cpp)
