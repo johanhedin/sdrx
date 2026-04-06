@@ -12,9 +12,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # the uninstall target
 set_property(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS TRUE)
 
-# Import our local modules
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
-
 # Default build type is Release. Run cmake with -DCMAKE_BUILD_TYPE=Debug to
 # build in debug mode
 if(NOT CMAKE_BUILD_TYPE)
