@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10...3.27)
+cmake_minimum_required(VERSION 3.20...3.31)
 project(sdrx C CXX)
 
 # We use C17 and C++20 with GNU extensions
@@ -11,6 +11,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # need GNU extensions to be able to compile librtlsdr
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_C_EXTENSIONS ON)
+
+# Output JSON representation of the configuration in the build directory.
+# Useful for some tooling
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # This property is needed to handle the uninstall custom target added by
 # librtlsdr. It can probably be removed if librtlsdr adds a guard for
