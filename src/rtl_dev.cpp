@@ -240,7 +240,7 @@ void RtlDev::worker_(RtlDev &self) {
 }
 
 
-int RtlDev::open_(void) {
+int RtlDev::open_() {
     int      ret = 0;
     uint32_t id = 0;
     uint32_t fs = 0;
@@ -351,7 +351,7 @@ void RtlDev::data_cb_(unsigned char *data, uint32_t data_len, void *ctx) {
 // Static functions below
 //
 
-std::vector<R820Dev::Info> RtlDev::list(void) {
+std::vector<R820Dev::Info> RtlDev::list() {
 #define RLT_STR_MAX_LEN 256
     int                 ret = 0;
     char                manufacturer[RLT_STR_MAX_LEN+1];

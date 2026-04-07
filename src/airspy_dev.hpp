@@ -37,7 +37,7 @@ public:
     // immediately and the internal thread will start looking for the
     // device requested in the constructor and start it. The getState()
     // member function can be used to monitor the progress.
-    int start(void);
+    int start();
 
     int setFq(uint32_t fq = 100000000);
     int setGain(float gain = 30.0f);
@@ -48,10 +48,10 @@ public:
 
     // Stop the instance. This function will block until the worker thread
     // is stopped and the Airspy device is fully closed
-    int stop(void);
+    int stop();
 
     // Get a list of available devices
-    static std::vector<R820Dev::Info> list(void);
+    static std::vector<R820Dev::Info> list();
 
     // Check if a given device is present on the USB bus
     static bool isPresent(const std::string &serial);
@@ -67,7 +67,7 @@ private:
     unsigned       vga_gain_idx_;
     void          *dev_;
     std::thread    worker_thread_;
-    int            open_(void);
+    int            open_();
     static void    worker_(AirspyDev &self);
     static int     data_cb_(void *transfer);
     iqsample_t     iq_buffer_[320000*2]; // Largest buffer for 10MS/s. Times twice

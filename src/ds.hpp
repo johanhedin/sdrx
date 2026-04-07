@@ -32,7 +32,7 @@
 class DS {
 public:
     DS(const MSD &msd) : run_(true), in_data_ptr_(nullptr), msd_(msd), thread_(&DS::worker_, this) {}
-    ~DS(void) {
+    ~DS() {
         std::unique_lock<std::mutex> lock(mutex_);
         run_ = false;
         lock.unlock();
@@ -64,7 +64,7 @@ private:
     std::thread             thread_;
     std::shared_ptr<std::latch> latch_;
 
-    void worker_(void) {
+    void worker_() {
         std::unique_lock<std::mutex> lock(mutex_);
         while (run_) {
             condition_.wait(lock, [this]{ return in_data_ptr_ != nullptr || !run_; });

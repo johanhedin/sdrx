@@ -173,7 +173,7 @@ static Modulation str_to_modulation(const std::string &str) {
 class Demod {
 public:
     Demod(Modulation mod = Modulation::UNSPECIFIED) : mod_(mod), prev_sample(0, 0) {}
-    ~Demod(void) {}
+    ~Demod() {}
 
     float demod(iqsample_t sample) {
         if (mod_ == Modulation::AM) {
@@ -1045,7 +1045,7 @@ static int get_audio_pos(unsigned channel_no, unsigned num_channels) {
 
 
 // Print available devices to stdout
-static void list_available_devices(void) {
+static void list_available_devices() {
     std::vector<std::string> serials;
     bool duplicate_serials = false;
 
@@ -1479,7 +1479,7 @@ static int channel_to_offset(const std::string &channel, int32_t tuner_fq) {
 
 
 // Get info for first available device on the system
-static R820Dev::Info get_first_avaialble_device(void) {
+static R820Dev::Info get_first_avaialble_device() {
     R820Dev::Info              device;
     std::vector<R820Dev::Info> devices;
 

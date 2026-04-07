@@ -290,7 +290,7 @@ void AirspyDev::worker_(AirspyDev &self) {
 }
 
 
-int AirspyDev::open_(void) {
+int AirspyDev::open_() {
 #define PACKING_ON  1
 #define PACKING_OFF 0
     int      ret;
@@ -427,7 +427,7 @@ int AirspyDev::data_cb_(void *t) {
 // Static functions below
 //
 
-std::vector<R820Dev::Info> AirspyDev::list(void) {
+std::vector<R820Dev::Info> AirspyDev::list() {
 #define MAX_NUM_DEVICES   32
 #define MAX_FWSTR_LEN     255
 #define MAX_SERSTR_LEN    255

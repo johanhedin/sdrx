@@ -64,7 +64,7 @@ public:
     }
 
     // Get filter gain (in dB)
-    float gain(void) const { return gain_; }
+    float gain() const { return gain_; }
 
 private:
     std::vector<float>  c_;       // FIR coefficients
@@ -78,7 +78,7 @@ private:
 
 class FIR {
 public:
-    FIR(void) = default;
+    FIR() = default;
     FIR(const std::vector<float> c) : c_(c), c_adj_(c), buf_(c.size(), 0.0f), size_(c.size()), pos_(0), gain_(0.0f) {}
 
     // Filter data from in and write to out. in and out may point to the same array
@@ -115,7 +115,7 @@ public:
     }
 
     // Get filter gain (in dB)
-    float gain(void) const { return gain_; }
+    float gain() const { return gain_; }
 
 private:
     std::vector<float>  c_;       // FIR coefficients
@@ -130,7 +130,7 @@ private:
 // Stereo version. ALSA interleaved samples assumed
 class FIR2 {
 public:
-    FIR2(void) = default;
+    FIR2() = default;
     FIR2(const std::vector<float> c) : c_(c), c_adj_(c), bufr_(c.size(), 0.0f), bufl_(c.size(), 0.0f), size_(c.size()), pos_(0), gain_(0.0f) {}
 
     // Filter data from in and write to out. in and out may point to the same array
@@ -170,7 +170,7 @@ public:
     }
 
     // Get filter gain (in dB)
-    float gain(void) const { return gain_; }
+    float gain() const { return gain_; }
 
 private:
     std::vector<float>  c_;        // FIR coefficients

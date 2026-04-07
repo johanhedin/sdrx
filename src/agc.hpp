@@ -43,7 +43,7 @@ public:
     }
     void setAlpha(float alpha) { alpha_ = alpha; }
 
-    float gain(void) { return gain_; }
+    float gain() { return gain_; }
 
     iqsample_t adjust(iqsample_t sample) {
         iqsample_t sample_adjusted = sample * gain_;
@@ -98,10 +98,10 @@ public:
     }
     void setAlpha(float alpha) { alpha_ = alpha; }
 
-    float gain(void) { return gain_; }
-    bool active(void) { return active_; }
-    void activate(void) { active_ = true; }
-    void deactivate(void) { active_ = false; }
+    float gain() { return gain_; }
+    bool active() { return active_; }
+    void activate() { active_ = true; }
+    void deactivate() { active_ = false; }
 
     float adjust(float sample) {
         float sample_adjusted = sample * gain_;

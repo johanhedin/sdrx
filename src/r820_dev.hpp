@@ -102,10 +102,10 @@ public:
     R820Dev& operator=(const R820Dev&) = delete;
 
     // Destructor may be implemented in an inherited class as well
-    virtual ~R820Dev(void);
+    virtual ~R820Dev();
 
     // Get device type that this instance is controlling
-    Type getType(void) { return type_; }
+    Type getType() { return type_; }
 
     // Associate opaque arbitrary user data with the instance.
     void setUserData(void *user_data = nullptr) { user_data_ = user_data; }
@@ -114,7 +114,7 @@ public:
     // immediately and the internal thread will start looking for the
     // device requested in the constructor and start it. The getState()
     // member function can be used to monitor the progress.
-    virtual int start(void) = 0;
+    virtual int start() = 0;
 
     virtual int setFq(uint32_t fq = 100000000) = 0;
     virtual int setGain(float gain = 30.0f) = 0;
@@ -124,10 +124,10 @@ public:
 
     // Stop the device manager. This function will block until the worker thread
     // is stopped and the device is fully closed
-    virtual int stop(void) = 0;
+    virtual int stop() = 0;
 
     // Get the current state of the device manager
-    State getState(void) { return state_; }
+    State getState() { return state_; }
 
     // Data signal. Emitted when a block of 32ms of data is available
     // irrespective of the sample rate. Data len will ofcourse vary. 32ms
@@ -150,7 +150,7 @@ public:
     static bool rateSupported(const std::string &serial, SampleRate rate);
 
     // Get a list of available devices
-    static std::vector<R820Dev::Info> list(void);
+    static std::vector<R820Dev::Info> list();
 
 protected:
     // Prevent instantiation of the base class

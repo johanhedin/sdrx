@@ -29,7 +29,7 @@ R820Dev::R820Dev(const std::string &serial, SampleRate rate)
  : serial_(serial), fs_(rate), state_(State::IDLE), user_data_(nullptr), run_(false), type_(Type::UNKNOWN) {}
 
 
-R820Dev::~R820Dev(void) {
+R820Dev::~R820Dev() {
     // Destroying the instance while is still running is considered a
     // programming error
     assert(run_ == false);
@@ -133,7 +133,7 @@ bool R820Dev::rateSupported(const std::string &serial, SampleRate rate) {
 }
 
 
-std::vector<R820Dev::Info> R820Dev::list(void) {
+std::vector<R820Dev::Info> R820Dev::list() {
     std::vector<R820Dev::Info> devices;
     std::vector<R820Dev::Info> devices_tmp;
 

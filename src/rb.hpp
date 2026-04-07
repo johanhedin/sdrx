@@ -48,7 +48,7 @@ public:
     RB(size_t capacity) : buf_(std::make_unique<T[]>(capacity+1)),
         write_ptr_(0), read_ptr_(0), end_ptr_(capacity), capacity_(capacity+1),
         acquired_write_len_(0), acquired_read_len_(0) {}
-    ~RB(void) {}
+    ~RB() {}
 
     RB() = delete;
     RB(const RB&) = delete;

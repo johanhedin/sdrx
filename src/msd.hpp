@@ -48,7 +48,7 @@ public:
         std::vector<float> h;    // Low pass filter FIR coefficients
     };
 
-    MSD(void) = default;
+    MSD() = default;
 
     // Construct a MSD. Argument is a translation vector and a list of stage configurations
     MSD(const std::vector<iqsample_t> &translator, const std::vector<MSD::Stage> &stages, bool use_ftfir = false) :
@@ -68,7 +68,7 @@ public:
     }
 
     // Get decimation factor for the MSD
-    unsigned m(void) { return m_; }
+    unsigned m() { return m_; }
 
     // Translate and down sample. If in_len is a multiple of m, you don't need
     // out_len since you know how many out samples that are to be output.
@@ -243,7 +243,7 @@ private:
 
         // Calculate one output sample based on the samples in the delay line
         // and the filter coefficients
-        inline iqsample_t calculateOutput(void) {
+        inline iqsample_t calculateOutput() {
             unsigned half_h_size = (h_.size() - 1) >> 1;
             unsigned rounded_half_h_size = (half_h_size >> 2) << 2;
             unsigned i = 0;
@@ -333,7 +333,7 @@ private:
         // and the frequency translating filter coefficient sets. This function
         // is called as the first one if ftfir is used. All subsequent calls
         // use the "normal" calculateOutput() above.
-        inline iqsample_t calculateOutputTranslated(void) {
+        inline iqsample_t calculateOutputTranslated() {
             unsigned rounded_h_size = (h_.size() >> 2) << 2;
             unsigned i = 0;
             float real_sum = 0.0f;
