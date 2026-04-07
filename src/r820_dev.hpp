@@ -31,17 +31,15 @@
 #include "rates.hpp"
 #include "iqsample.hpp"
 
-
-// The three gain settings available in the R820T(2) tuner; LNA, Mixer and VGA.
-// The index (0..15) in the array represent the register value.
-// Values from http://steve-m.de/projects/rtl-sdr/gain_measurement/r820t
-static const float lna_gain_steps[] = { 0.0f, 0.9f, 1.3f, 4.0f, 3.8f, 1.3f, 3.1f, 2.2f, 2.6f, 3.1f, 2.6f, 1.4f, 1.9f, 0.5f, 3.5f,  1.3f };
-static const float mix_gain_steps[] = { 0.0f, 0.5f, 1.0f, 1.0f, 1.9f, 0.9f, 1.0f, 2.5f, 1.7f, 1.0f, 0.8f, 1.6f, 1.3f, 0.6f, 0.3f, -0.8f };
-static const float vga_gain_steps[] = { 0.0f, 2.6f, 2.6f, 3.0f, 4.2f, 3.5f, 2.4f, 1.3f, 1.4f, 3.2f, 3.6f, 3.4f, 3.5f, 3.7f, 3.5f,  3.6f };
-
-
 class R820Dev {
 public:
+    // The three gain settings available in the R820T(2) tuner; LNA, Mixer and VGA.
+    // The index (0..15) in the array represent the register value.
+    // Values from http://steve-m.de/projects/rtl-sdr/gain_measurement/r820t
+    static constexpr float lna_gain_steps[16] = { 0.0f, 0.9f, 1.3f, 4.0f, 3.8f, 1.3f, 3.1f, 2.2f, 2.6f, 3.1f, 2.6f, 1.4f, 1.9f, 0.5f, 3.5f,  1.3f };
+    static constexpr float mix_gain_steps[16] = { 0.0f, 0.5f, 1.0f, 1.0f, 1.9f, 0.9f, 1.0f, 2.5f, 1.7f, 1.0f, 0.8f, 1.6f, 1.3f, 0.6f, 0.3f, -0.8f };
+    static constexpr float vga_gain_steps[16] = { 0.0f, 2.6f, 2.6f, 3.0f, 4.2f, 3.5f, 2.4f, 1.3f, 1.4f, 3.2f, 3.6f, 3.4f, 3.5f, 3.7f, 3.5f,  3.6f };
+
     // Device types that this interface class support
     enum class Type { UNKNOWN, RTL, AIRSPY };
 
