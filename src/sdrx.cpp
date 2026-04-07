@@ -81,7 +81,7 @@
 #include "filters/fs_00016_16bit_ch.hpp"
 
 
-// Usefull notes:
+// Useful notes:
 // libusb and threads: http://libusb.sourceforge.net/api-1.0/libusb_mtasync.html
 // AM demodulation: https://www.diva-portal.org/smash/get/diva2:831827/FULLTEXT01.pdf
 // AGC: https://www.eit.lth.se/fileadmin/eit/courses/etin80/2017/reports/adaptive-gain-control.pdf
@@ -99,7 +99,7 @@
 // of 2 400 000 (1/12th), 1 800 000 (1/16th) 1 200 000 (1/24th),
 // 960 000 (1/30th) and so on.
 //
-// To extract the channel of intrest (16kHz bandwidth) we need to down sample
+// To extract the channel of interest (16kHz bandwidth) we need to down sample
 // with an integral factor.
 //
 // The minimum "block" of data that can be transported through USB is 512 bytes
@@ -255,7 +255,7 @@ public:
     Modulation           mod = Modulation::AM;
     bool                 use_lf_agc = false;
     bool                 verbose_printout = false;             // Print extra info while running as AGC gain values
-    bool                 bw_check_override = false;            // Ovveride the 80% bw check
+    bool                 bw_check_override = false;            // Override the 80% bw check
     bool                 compact_printout = false;             // Compact printout. Will override verbose
     bool                 use_ftfir = false;                    // Use frequency translating FIR
     bool                 use_threaded_ds = false;              // Use threaded downsamplers

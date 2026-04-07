@@ -111,7 +111,7 @@ public:
         // Not allowed to commit more items than returned by acquireWrite
         if (items_written > acquired_write_len_) return false;
 
-        // The write to end_prt_ will be syncronized by the store operation on
+        // The write to end_prt_ will be synchronized by the store operation on
         // write_ptr_ below
         end_ptr_ = acquired_end_ptr_;
 
@@ -128,7 +128,7 @@ public:
         const size_t wr_ptr = write_ptr_.load(std::memory_order_acquire);
         const size_t rd_ptr = read_ptr_.load(std::memory_order_relaxed);
 
-        // Calculate how many item that are available in the buffer.
+        // Calculate how many items that are available in the buffer.
         // The calculation is different depending on the buffer state.
         if (wr_ptr >= rd_ptr) {
             // State 1 (write leads read).
@@ -164,7 +164,7 @@ public:
     }
 
     // Function to call by the read thread after a call to acquireRead to
-    // finalize the read. The items_read agrument is the actual amount of data
+    // finalize the read. The items_read argument is the actual amount of data
     // that is read and can be less than what was acquired.
     bool commitRead(size_t items_read) {
         // Not allowed to call this function unless a call to acquireRead

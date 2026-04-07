@@ -186,7 +186,7 @@ Write some more here...)"
         }
 
         if (duplicate_serials) {
-            std::cout << "Warning: Duplicate serials found. dts may show inconsistent behaviour. Please rename RTL dongles using 'rtl_eeprom -s NEW_SERIAL'.\n";
+            std::cout << "Warning: Duplicate serials found. dts may show inconsistent behavior. Please rename RTL dongles using 'rtl_eeprom -s NEW_SERIAL'.\n";
         }
 
         return 0;
