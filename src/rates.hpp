@@ -1,5 +1,5 @@
 //
-// Sample rates om sdrx
+// Sample rates in sdrx
 //
 // @author Johan Hedin
 // @date   2022

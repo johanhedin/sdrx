@@ -56,7 +56,7 @@ public:
         auto iter = stages.begin();
         while (iter != stages.end()) {
             if (iter == stages.begin() && !translator.empty()) {
-                // If a frequency translation is requestet, load that into the first
+                // If a frequency translation is requested, load that into the first
                 // downsampling stage
                 stages_.push_back(MSD::S(iter->m, iter->h, translator));
             } else {
@@ -175,7 +175,7 @@ private:
 
             // We store our filter coefficients in a complex vector with
             // the same value in the real and imaginary parts. This is then
-            // used in the SIMD optimized code to allow easy loding into
+            // used in the SIMD optimized code to allow easy loading into
             // SIMD registers. When we just need "real" coefficients, we
             // can read the value from the real or imag part since it
             // is the same.
@@ -191,10 +191,10 @@ private:
             if (translator.size() > 0) {
                 // Construct frequency translating filter coefficient set based
                 // on m, h and translator vector. Size of translator is assumed
-                // to always be evenly divisalbe by m (guaranteed by previous assert)
+                // to always be evenly divisible by m (guaranteed by previous assert)
                 unsigned num_sets = translator.size() / m_;
 
-                // Start the trannslator lookup by -(N - 1) positions to align
+                // Start the translator lookup by -(N - 1) positions to align
                 // the phase, i.e. account for the filter group delay
                 unsigned j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
                 for (unsigned set = 0; set < num_sets; set++) {
@@ -224,7 +224,7 @@ private:
             bool ret = false;
 
             // Add sample to the delay line at current position. Delay line
-            // has doubble length and we also add the sample to pos + size
+            // has double length and we also add the sample to pos + size
             d_[pos_] = sample;
             d_[pos_ + h_.size()] = sample;
 

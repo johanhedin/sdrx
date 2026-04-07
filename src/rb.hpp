@@ -39,8 +39,8 @@
 // when the write pointer leads the read pointer and in state 2 when the read
 // pointer leads the write pointer.
 //
-// Transistion from state 1 to state 2 can only happen from the writer thread.
-// Transistion from state 2 to state 1 can only happen from the reader thread.
+// Transition from state 1 to state 2 can only happen from the writer thread.
+// Transition from state 2 to state 1 can only happen from the reader thread.
 
 template<typename T>
 class RB {
@@ -67,14 +67,14 @@ public:
             // We can write up to, but not including, capacity_
 
             if (wr_ptr + items_requested < capacity_) {
-                // The requested amount of items to write will fit in the remainig
+                // The requested amount of items to write will fit in the remaining
                 // of the buffer
                 acquired_write_ptr_ = wr_ptr;
                 acquired_write_len_ = items_requested;
                 acquired_end_ptr_   = capacity_ - 1;
             } else {
                 // The requested amount of items to write will not fit in the
-                // remainig of the buffer. Check if we can wrap around and find
+                // remaining of the buffer. Check if we can wrap around and find
                 // space in the beginning of the buffer. If not, the buffer is full
                 if (items_requested < rd_ptr) {
                     // Ok to write the data at the beginning of the buffer
@@ -86,7 +86,7 @@ public:
         } else {
             // State 2 (read leads write)
             //
-            // We can write upto, but not including, read_ptr_
+            // We can write up to, but not including, read_ptr_
             if (wr_ptr + items_requested < rd_ptr) {
                 acquired_write_ptr_ = wr_ptr;
                 acquired_write_len_ = items_requested;
@@ -142,7 +142,7 @@ public:
         } else {
             // State 2 (read leads write).
             //
-            // We can read up to, but not including or beond, end_ptr_
+            // We can read up to, but not including or beyond, end_ptr_
 
             if (rd_ptr < end_ptr_) {
                 acquired_read_ptr_ = rd_ptr;

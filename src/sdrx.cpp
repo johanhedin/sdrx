@@ -94,7 +94,7 @@
 
 // Sampling, down sampling, latency, audio and IQ buffer sizes for RTL dongles
 //
-// A sample frequency that is evenly divided with the TCXO clock is advicable.
+// A sample frequency that is evenly divided with the TCXO clock is advisable.
 // The dongle clock runs at 28.8MHz. This gives "nice" IQ sampling frequencies
 // of 2 400 000 (1/12th), 1 800 000 (1/16th) 1 200 000 (1/24th),
 // 960 000 (1/30th) and so on.
@@ -102,7 +102,7 @@
 // To extract the channel of intrest (16kHz bandwidth) we need to down sample
 // with an integral factor.
 //
-// The minumum "block" of data that can be transported through USB is 512 bytes
+// The minimum "block" of data that can be transported through USB is 512 bytes
 // so the buffer size used when starting librtlsdr must be a multiple of 512
 // bytes. 512 bytes equals 256 complex samples and represent a "time slice"
 // of (512/2)/fs seconds.
@@ -453,7 +453,7 @@ static void alsa_write_cb(OutputState &ctx) {
         unsigned j = 0;
         for (auto &ch : channels) {
             for (unsigned i = 0; i < CH_IQ_BUF_SIZE; ++i) {
-                // Should we always run IQ samples through the AGC even if the squelsh is not open?
+                // Should we always run IQ samples through the AGC even if the squelch is not open?
                 iqsample_t agc_adj_sample = ch.agc.adjust(iq_buffer[j]); // AGC adjusted IQ sample
                 if (ch.sql_state == SQL_OPEN) {
                     // AM demodulator
@@ -462,7 +462,7 @@ static void alsa_write_cb(OutputState &ctx) {
 
                     s = ch.agc_lf.adjust(s);
 
-                    // If the squelsh has just opend, ramp up the audio
+                    // If the squelch has just opend, ramp up the audio
                     if (ch.sql_state_prev == SQL_CLOSED) {
                         s = ramp_up[i] * s;
                     }
@@ -565,7 +565,7 @@ static void alsa_write_cb(OutputState &ctx) {
             // Calculate SNR
             float snr = 10 * std::log10(sig_level / noise_level);
 
-            // Require a bit higher SNR than requested to open the squelsh
+            // Require a bit higher SNR than requested to open the squelch
             if (snr > ch.sql_level + 3 || ch.sql_level == 0.0f) {
                 ch.sql_state = SQL_OPEN;
             } else if (snr < ch.sql_level) {
@@ -665,7 +665,7 @@ static void alsa_write_cb(OutputState &ctx) {
         }
 
     } else {
-        // Underrrun
+        // Underrun
         if (ctx.rb_ptr->isStreaming()) {
             // Only write warning while streaming
             std::cerr << "Warning: Ring buffer empty. Playing 32ms of silence.\n";
@@ -749,7 +749,7 @@ static snd_pcm_t *open_alsa_dev(const std::string &device_name) {
                   << ". Got " << tmp_sample_rate << std::endl;
     }
 
-    // Write hadware configuration to the device
+    // Write hardware configuration to the device
     ret = snd_pcm_hw_params(handle, pcm_hw_params);
     if (ret < 0) {
         std::cerr << "ALSA error. Unable to set hw params: " << snd_strerror(ret) << std::endl;
@@ -823,7 +823,7 @@ static void alsa_worker(struct OutputState &ctx) {
     pcm_handle = open_alsa_dev(ctx.settings.audio_device);
     if (!pcm_handle) return;
 
-    // Determine how many descriptos we need to poll for the ALSA device
+    // Determine how many descriptors we need to poll for the ALSA device
     ret = snd_pcm_poll_descriptors_count(pcm_handle);
     if (ret < 0) {
         std::cerr << "Error. Unable to get number of ALSA poll descriptors: " << snd_strerror(ret) << std::endl;
@@ -901,7 +901,7 @@ static void alsa_worker(struct OutputState &ctx) {
 
     // A bit unclear if this is needed since we configure the device for
     // "auto start" when initial amount of samples have been written.
-    // Investigate futher...
+    // Investigate further...
     //snd_pcm_prepare(pcm_handle);
 
     // We can use ALSAs internal event loop instead of our own. Maybe ALSA
@@ -980,7 +980,7 @@ uint32_t parse_fq(const std::string &str, bool aeronautical = false) {
         frac_str.length() == 0 || frac_str.length() > 6
     ) return 0;
 
-    // Aeronautical notation reqires exactly thre digits in the fractional part
+    // Aeronautical notation requires exactly three digits in the fractional part
     if (aeronautical && frac_str.length() != 3) return 0;
 
     if (aeronautical) {
@@ -1193,7 +1193,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
         { "volume",      'v', POPT_ARG_FLOAT,  &settings.lf_gain, 0, "audio volume (+/-) in dB relative to system. Defaults to 0 if not set", "VOLUME" },
         { "sql-level",   's', POPT_ARG_FLOAT,  &settings.sql_level, 0, "squelch level in dB over channel noise floor. Can also be set per channel. Defaults to 9 if not set", "SQLLEVEL" },
         { "audio-dev",     0, POPT_ARG_STRING, &audio_device, 0, "ALSA audio device string. Defaults to 'default' if not set", "AUDIODEV" },
-        { "sample-rate",   0, POPT_ARG_STRING, &sample_rate_str, 0, "sampel rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
+        { "sample-rate",   0, POPT_ARG_STRING, &sample_rate_str, 0, "sample rate in MS/s. Defaults to 1.44 (RTL) or 6 (Airspy) if not set. Use --list to see valid rates", "RATE" },
         { "modulation",    0, POPT_ARG_STRING, &modulation_str, 0, "modulation. AM or FM. Defaults to AM if not set. EXPERIMENTAL!", "MOD" },
         { "lf-agc",        0, POPT_ARG_NONE,   &use_lf_agc, 0, "enable post demodulation AGC. EXPERIMENTAL!", nullptr },
         { "ftfir",         0, POPT_ARG_NONE,   &use_ftfir, 0, "use frequency translation FIR. EXPERIMENTAL!", nullptr },
@@ -1287,7 +1287,7 @@ static int parse_cmd_line(int argc, char **argv, class Settings &settings) {
             std::cerr << R"(
 Explanation:
 sdrx is a software defined narrow band AM receiver that is using a R820T(2)/R860
-based RTL-SDR or Airspy Mini/R2 dongle as its hadware backend. It is mainly
+based RTL-SDR or Airspy Mini/R2 dongle as its hardware backend. It is mainly
 designed for use in the 118 to 138 MHz airband. The program is run from the
 command line and the channels to listen to are given as arguments in the
 standard six digit aeronautical notation. Both the legacy 25kHz channel
@@ -1314,7 +1314,7 @@ device with serial "MY-DEVICE":
 
 Listen to the channels 118.105 and 118.505 with gain indexes set to 5:8:10
 (LNA 5, MIX 8 and VGA 10), 6dB squelch and a sample rate of 1.92 MS/s. Use
-dedicated squelsh of 10 for channel 118.505. Use first available device on the
+dedicated squelch of 10 for channel 118.505. Use first available device on the
 system:
 
     $ sdrx --gain 5:8:10 --sql-level 6 --sample-rate 1.92 118.105 118.505/10

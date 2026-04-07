@@ -130,8 +130,8 @@ public:
     State getState(void) { return state_; }
 
     // Data signal. Emitted when a block of 32ms of data is available
-    // irrespectively of the sample rate. Data len will ofcourse vary. 32ms
-    // bocks equals a callback frequency of 31.25Hz. The signal will be
+    // irrespective of the sample rate. Data len will ofcourse vary. 32ms
+    // blocks equals a callback frequency of 31.25Hz. The signal will be
     // emitted in the context of an internal thread. Use appropriate mutex
     // in your slot if you need to.
     sigc::signal<void(const iqsample_t*, unsigned, void*, const BlockInfo&)> data;
