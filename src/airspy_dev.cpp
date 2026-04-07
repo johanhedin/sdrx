@@ -34,22 +34,25 @@
 
 #include "airspy_dev.hpp"
 
-#define MIN_FQ 45000000
-#define MAX_FQ 1700000000
+static constexpr uint32_t MIN_FQ               = 45000000;
+static constexpr uint32_t MAX_FQ               = 1700000000;
 
-#define MIN_GAIN 0.0f
-#define MAX_GAIN 50.0f
+static constexpr float    MIN_GAIN             = 0.0f;
+static constexpr float    MAX_GAIN             = 50.0f;
 
-#define DEFAULT_FQ            100000000
-#define DEFAULT_GAIN          30.0f
+static constexpr uint32_t DEFAULT_FQ           = 100000000;
+static constexpr float    DEFAULT_GAIN         = 30.0f;
 // 9, 8, 12 typically represents 30dB-ish
-#define DEFAULT_LNA_GAIN_IDX  9
-#define DEFAULT_MIX_GAIN_IDX  8
-#define DEFAULT_VGA_GAIN_IDX  12
+static constexpr unsigned DEFAULT_LNA_GAIN_IDX = 9;
+static constexpr unsigned DEFAULT_MIX_GAIN_IDX = 8;
+static constexpr unsigned DEFAULT_VGA_GAIN_IDX = 12;
+
+static constexpr int      MAX_FWSTR_LEN        = 255;
+static constexpr int      MAX_NUM_DEVICES      = 32;
+static constexpr int      MAX_SERSTR_LEN       = 255;
 
 
 static inline std::vector<SampleRate> get_sample_rates(const std::string& serial_str) {
-#define MAX_FWSTR_LEN 255
     int                     ret;
     uint64_t                serial = 0;
     struct airspy_device   *dev = nullptr;
@@ -291,8 +294,7 @@ void AirspyDev::worker_(AirspyDev &self) {
 
 
 int AirspyDev::open_() {
-#define PACKING_ON  1
-#define PACKING_OFF 0
+    constexpr int PACKING_ON = 1;
     int      ret;
     uint64_t serial = 0;
 
@@ -428,9 +430,6 @@ int AirspyDev::data_cb_(void *t) {
 //
 
 std::vector<R820Dev::Info> AirspyDev::list() {
-#define MAX_NUM_DEVICES   32
-#define MAX_FWSTR_LEN     255
-#define MAX_SERSTR_LEN    255
     int                   ret = 0;
     int                   num_devices = 0;
     uint64_t              serials[MAX_NUM_DEVICES];
@@ -503,8 +502,6 @@ std::vector<R820Dev::Info> AirspyDev::list() {
 
 
 bool AirspyDev::isPresent(const std::string &serial) {
-#define MAX_NUM_DEVICES   32
-#define MAX_SERSTR_LEN    255
     int                   num_devices = 0;
     uint64_t              serials[MAX_NUM_DEVICES];
     char                  serial_str[MAX_SERSTR_LEN];

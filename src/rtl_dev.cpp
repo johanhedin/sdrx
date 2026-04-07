@@ -26,18 +26,21 @@
 
 #include "rtl_dev.hpp"
 
-#define MIN_FQ 45000000
-#define MAX_FQ 1700000000
+static constexpr uint32_t MIN_FQ               = 45000000;
+static constexpr uint32_t MAX_FQ               = 1700000000;
 
-#define MIN_GAIN 0.0f
-#define MAX_GAIN 50.0f
+static constexpr float    MIN_GAIN             = 0.0f;
+static constexpr float    MAX_GAIN             = 50.0f;
 
-#define DEFAULT_FQ            100000000
-#define DEFAULT_GAIN          30.0f
+static constexpr uint32_t DEFAULT_FQ           = 100000000;
+static constexpr float    DEFAULT_GAIN         = 30.0f;
 // 9, 8, 12 typically represents 30dB-ish
-#define DEFAULT_LNA_GAIN_IDX  9
-#define DEFAULT_MIX_GAIN_IDX  8
-#define DEFAULT_VGA_GAIN_IDX  12
+static constexpr unsigned DEFAULT_LNA_GAIN_IDX = 9;
+static constexpr unsigned DEFAULT_MIX_GAIN_IDX = 8;
+static constexpr unsigned DEFAULT_VGA_GAIN_IDX = 12;
+
+static constexpr int      RTL_STR_MAX_LEN      = 256;
+static constexpr int      RTL_NUM_IQ_BUFFERS   = 16;
 
 
 static inline std::vector<SampleRate> get_sample_rates(const std::string&) {
@@ -190,8 +193,6 @@ int RtlDev::setVgaGain(unsigned idx) {
 
 
 void RtlDev::worker_(RtlDev &self) {
-//#define RTL_IQ_BUF_SIZE    (512 * 75 *2)
-#define RTL_NUM_IQ_BUFFERS (16)   // Use 16 buffers to cycle around
     int ret;
     uint32_t rtl_iq_buff_size;
     uint32_t down_sampling_factor;
@@ -352,11 +353,10 @@ void RtlDev::data_cb_(unsigned char *data, uint32_t data_len, void *ctx) {
 //
 
 std::vector<R820Dev::Info> RtlDev::list() {
-#define RLT_STR_MAX_LEN 256
     int                 ret = 0;
-    char                manufacturer[RLT_STR_MAX_LEN+1];
-    char                product[RLT_STR_MAX_LEN+1];
-    char                serial[RLT_STR_MAX_LEN+1];
+    char                manufacturer[RTL_STR_MAX_LEN+1];
+    char                product[RTL_STR_MAX_LEN+1];
+    char                serial[RTL_STR_MAX_LEN+1];
     std::vector<Info>   devices;
     rtlsdr_dev_t       *rtl_device = nullptr;
     uint32_t            num_devices;
@@ -368,9 +368,9 @@ std::vector<R820Dev::Info> RtlDev::list() {
             break;
         }
 
-        manufacturer[RLT_STR_MAX_LEN] = 0;
-        product[RLT_STR_MAX_LEN] = 0;
-        serial[RLT_STR_MAX_LEN] = 0;
+        manufacturer[RTL_STR_MAX_LEN] = 0;
+        product[RTL_STR_MAX_LEN] = 0;
+        serial[RTL_STR_MAX_LEN] = 0;
 
         Info info;
         info.type = Type::RTL;
@@ -415,9 +415,8 @@ std::vector<R820Dev::Info> RtlDev::list() {
 
 
 bool RtlDev::isPresent(const std::string &serial) {
-#define RLT_STR_MAX_LEN 256
     uint32_t            num_devices;
-    char                serial_str[RLT_STR_MAX_LEN+1];
+    char                serial_str[RTL_STR_MAX_LEN+1];
     int                 ret = 0;
 
     num_devices = rtlsdr_get_device_count();
@@ -427,7 +426,7 @@ bool RtlDev::isPresent(const std::string &serial) {
             break;
         }
 
-        serial_str[RLT_STR_MAX_LEN] = 0;
+        serial_str[RTL_STR_MAX_LEN] = 0;
 
         if (serial == serial_str) return true;
     }
