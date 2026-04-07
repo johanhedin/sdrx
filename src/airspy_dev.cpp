@@ -250,7 +250,7 @@ void AirspyDev::worker_(AirspyDev &self) {
     while (self.run_) {
         ret = self.open_();
         if (ret == ReturnValue::OK) {
-            std::cerr << "Device " << self.serial_ << " opended successfully\n";
+            std::cerr << "Device " << self.serial_ << " opened successfully\n";
 
             self.block_info_.stream_state = StreamState::STREAMING;
             ret = airspy_start_rx((struct airspy_device*)self.dev_,

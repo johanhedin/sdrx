@@ -212,7 +212,7 @@ void RtlDev::worker_(RtlDev &self) {
     while (self.run_) {
         ret = self.open_();
         if (ret == ReturnValue::OK) {
-            std::cerr << "Device " << self.serial_ << " opended successfully\n";
+            std::cerr << "Device " << self.serial_ << " opened successfully\n";
             rtlsdr_reset_buffer((rtlsdr_dev_t*)self.dev_);
             self.state_ = State::RUNNING;
             self.block_info_.stream_state = StreamState::STREAMING;
