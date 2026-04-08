@@ -25,8 +25,8 @@
 #include "airspy_dev.hpp"
 
 
-R820Dev::R820Dev(const std::string &serial, SampleRate rate)
- : serial_(serial), fs_(rate), state_(State::IDLE), user_data_(nullptr), run_(false), type_(Type::UNKNOWN) {}
+R820Dev::R820Dev(const std::string &serial, SampleRate rate, Type type)
+ : serial_(serial), fs_(rate), state_(State::IDLE), user_data_(nullptr), run_(false), type_(type) {}
 
 
 R820Dev::~R820Dev() {
@@ -47,12 +47,10 @@ std::unique_ptr<R820Dev> R820Dev::create(Type type, const std::string &serial, S
     switch (type) {
         case Type::RTL:
             dev_ptr = std::unique_ptr<R820Dev>(new RtlDev(serial, rate, xtal_corr));
-            dev_ptr->type_ = type;
             break;
 
         case Type::AIRSPY:
             dev_ptr = std::unique_ptr<R820Dev>(new AirspyDev(serial, rate));
-            dev_ptr->type_ = type;
             break;
 
         default:

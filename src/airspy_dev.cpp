@@ -106,7 +106,7 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string& serial
 
 
 AirspyDev::AirspyDev(const std::string &serial, SampleRate fs)
-: R820Dev(serial, fs), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
+: R820Dev(serial, fs, Type::AIRSPY), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
   lna_gain_idx_(DEFAULT_LNA_GAIN_IDX), mix_gain_idx_(DEFAULT_MIX_GAIN_IDX), vga_gain_idx_(DEFAULT_VGA_GAIN_IDX),
   dev_(nullptr), part_pos_(0), block_size_(0), iq_pos_(0) {
       if (sample_rate_to_uint(fs_) * 4 % 125) {

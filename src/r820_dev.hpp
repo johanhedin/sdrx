@@ -155,7 +155,7 @@ public:
 
 protected:
     // Prevent instantiation of the base class
-    R820Dev(const std::string&, SampleRate);
+    R820Dev(const std::string&, SampleRate, Type);
 
     std::string    serial_;
     SampleRate     fs_;

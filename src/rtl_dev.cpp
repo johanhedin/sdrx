@@ -60,7 +60,7 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string&) {
 
 
 RtlDev::RtlDev(const std::string &serial, SampleRate fs, int xtal_corr)
-: R820Dev(serial, fs), xtal_corr_(xtal_corr), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
+: R820Dev(serial, fs, Type::RTL), xtal_corr_(xtal_corr), fq_(DEFAULT_FQ), gain_(DEFAULT_GAIN),
   lna_gain_idx_(DEFAULT_LNA_GAIN_IDX), mix_gain_idx_(DEFAULT_MIX_GAIN_IDX), vga_gain_idx_(DEFAULT_VGA_GAIN_IDX),
   dev_(nullptr) { }
 
