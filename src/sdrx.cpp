@@ -1753,8 +1753,8 @@ int main(int argc, char** argv) {
 #endif
 
     // Create tuner class instance
-    R820Dev *device = R820Dev::create(settings.device_type, settings.device_serial, settings.rate, settings.fq_corr);
-    if (device == nullptr) {
+    std::unique_ptr<R820Dev> device = R820Dev::create(settings.device_type, settings.device_serial, settings.rate, settings.fq_corr);
+    if (!device) {
         std::cerr << "Error: Unable to create device instance.\n";
         return 1;
     }
@@ -1815,7 +1815,6 @@ int main(int argc, char** argv) {
     }
 
 quit:
-    delete device;
 
 #ifdef USE_THREAD_POOL
     delete input_state.tp_ptr;

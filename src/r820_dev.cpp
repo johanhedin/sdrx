@@ -41,22 +41,21 @@ R820Dev::~R820Dev() {
 // Static functions below
 //
 
-R820Dev *R820Dev::create(Type type, const std::string &serial, SampleRate rate, int xtal_corr) {
-    R820Dev *dev_ptr;
+std::unique_ptr<R820Dev> R820Dev::create(Type type, const std::string &serial, SampleRate rate, int xtal_corr) {
+    std::unique_ptr<R820Dev> dev_ptr;
 
     switch (type) {
         case Type::RTL:
-            dev_ptr = new RtlDev(serial, rate, xtal_corr);
+            dev_ptr = std::unique_ptr<R820Dev>(new RtlDev(serial, rate, xtal_corr));
             dev_ptr->type_ = type;
             break;
 
         case Type::AIRSPY:
-            dev_ptr = new AirspyDev(serial, rate);
+            dev_ptr = std::unique_ptr<R820Dev>(new AirspyDev(serial, rate));
             dev_ptr->type_ = type;
             break;
 
         default:
-            dev_ptr = nullptr;
             break;
     }
 

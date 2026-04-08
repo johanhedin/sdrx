@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <string>
 #include <chrono>
+#include <memory>
 
 #include <sigc++/sigc++.h>
 
@@ -95,7 +96,7 @@ public:
     };
 
     // Factory function for creating a new instance
-    static R820Dev *create(Type type, const std::string &serial, SampleRate rate, int xtal_corr = 0);
+    static std::unique_ptr<R820Dev> create(Type type, const std::string &serial, SampleRate rate, int xtal_corr = 0);
 
     // Instances of this class is not intended to be copied in any way
     R820Dev(const R820Dev&) = delete;
