@@ -1799,22 +1799,19 @@ int main(int argc, char** argv) {
     ret = device->start();
     if (ret < 0) {
         std::cerr << "Error: Unable to start device, ret = " << ret << " (" << R820Dev::retToStr(ret) << ").\n";
-        goto quit;
-    }
+    } else {
+        // Sleep until the stop_condition is signaled from the sigint handler
+        std::unique_lock<std::mutex> lock(stop_mutex);
+        while (run) {
+            stop_condition.wait(lock);
+        }
+        lock.unlock();
 
-    // Sleep until the stop_condition is signaled from the sigint handler
-    std::unique_lock<std::mutex> lock(stop_mutex);
-    while (run) {
-        stop_condition.wait(lock);
+        ret = device->stop();
+        if (ret < 0) {
+            std::cerr << "Error: Unable to stop device, ret = " << ret << " (" << R820Dev::retToStr(ret) << ").\n";
+        }
     }
-    lock.unlock();
-
-    ret = device->stop();
-    if (ret < 0) {
-        std::cerr << "Error: Unable to stop device, ret = " << ret << " (" << R820Dev::retToStr(ret) << ").\n";
-    }
-
-quit:
 
 #ifdef USE_THREAD_POOL
     delete input_state.tp_ptr;
