@@ -1753,7 +1753,7 @@ int main(int argc, char** argv) {
 #endif
 
     // Create tuner class instance
-    std::unique_ptr<R820Dev> device = R820Dev::create(settings.device_type, settings.device_serial, settings.rate, settings.fq_corr);
+    auto device = R820Dev::create(settings.device_type, settings.device_serial, settings.rate, settings.fq_corr);
     if (!device) {
         std::cerr << "Error: Unable to create device instance.\n";
         return 1;
