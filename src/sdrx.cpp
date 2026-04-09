@@ -281,7 +281,7 @@ struct OutputState {
     FIR2              *audio_filter;
     iqsample_t         fft_in[FFT_SIZE];
     iqsample_t         fft_out[FFT_SIZE];
-    float              window[FFT_SIZE+1];
+    float              window[FFT_SIZE];
     fftwf_plan         fft_plan;
     unsigned           sql_wait;
     std::vector<float> hi_energy;
@@ -894,8 +894,8 @@ static void alsa_worker(struct OutputState &ctx) {
     ctx.lo_energy.reserve(10);
 
     // Create FFT window
-    // Hamming: 0.54-0.46cos(2*pi*x/N), 0 <= n <= N. Length L = N+1
-    for (unsigned n = 0; n <= FFT_SIZE; n++) {
+    // Hamming: 0.54-0.46cos(2*pi*n/N), 0 <= n < N
+    for (unsigned n = 0; n < FFT_SIZE; n++) {
         ctx.window[n] = 0.54f - 0.46f * std::cos((2.0f * M_PI * n) / FFT_SIZE);
     }
 
