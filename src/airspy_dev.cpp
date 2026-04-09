@@ -354,7 +354,6 @@ int AirspyDev::data_cb_(void *t) {
         std::cerr << "Warning: " << transfer->dropped_samples << " samples dropped. Your system is probably overloaded.\n";
     }
 
-    sample_pos = 0;
     float *data = (float*)transfer->samples;
     for (int i = 0; i < transfer->sample_count; i++) {
         self.iq_buffer_[self.part_pos_ + self.iq_pos_] = iqsample_t(data[sample_pos], data[sample_pos+1]);
