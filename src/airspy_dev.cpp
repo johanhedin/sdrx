@@ -58,7 +58,6 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string& serial
     struct airspy_device   *dev = nullptr;
     char                    firmware_str[MAX_FWSTR_LEN] = "<unknown fw version>";
     uint32_t                num_samplerates = 0;
-    uint32_t               *sample_rates = nullptr;
     std::vector<SampleRate> rates;
 
     // If serial string is set, use it. Otherwise defaults to "first device" (serial == 0)
@@ -73,8 +72,8 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string& serial
         std::string tmp_str = firmware_str;
 
         airspy_get_samplerates(dev, &num_samplerates, 0);
-        sample_rates = (uint32_t*)malloc(num_samplerates * sizeof(uint32_t));     // TODO: Change from malloc to new (and delete)
-        airspy_get_samplerates(dev, sample_rates, num_samplerates);
+        std::vector<uint32_t> sample_rates(num_samplerates);
+        airspy_get_samplerates(dev, sample_rates.data(), num_samplerates);
 
         if (num_samplerates > 0) {
             for (uint32_t i = 0; i < num_samplerates; ++i) {
@@ -97,7 +96,6 @@ static inline std::vector<SampleRate> get_sample_rates(const std::string& serial
             std::sort(rates.begin(), rates.end());
         }
 
-        free(sample_rates);
         airspy_close(dev);
     }
 
@@ -432,7 +430,6 @@ std::vector<R820Dev::Info> AirspyDev::list() {
     int                   ret = 0;
     int                   num_devices = 0;
     uint64_t              serials[MAX_NUM_DEVICES];
-    uint32_t             *sample_rates;
     uint32_t              num_samplerates = 0;
     char                  firmware_str[MAX_FWSTR_LEN] = "<unknown fw version>";
     char                  serial_str[MAX_SERSTR_LEN];
@@ -459,8 +456,8 @@ std::vector<R820Dev::Info> AirspyDev::list() {
                 info.description = firmware_str;
 
                 airspy_get_samplerates(dev, &num_samplerates, 0);
-                sample_rates = (uint32_t*)malloc(num_samplerates * sizeof(uint32_t));
-                airspy_get_samplerates(dev, sample_rates, num_samplerates);
+                std::vector<uint32_t> sample_rates(num_samplerates);
+                airspy_get_samplerates(dev, sample_rates.data(), num_samplerates);
 
                 if (num_samplerates > 0) {
                     for (uint32_t i = 0; i < num_samplerates; ++i) {
@@ -488,7 +485,6 @@ std::vector<R820Dev::Info> AirspyDev::list() {
                     std::sort(info.sample_rates.begin(), info.sample_rates.end());
                 }
 
-                free(sample_rates);
                 airspy_close(dev);
             }
 
