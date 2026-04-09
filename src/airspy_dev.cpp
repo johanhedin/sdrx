@@ -305,35 +305,35 @@ int AirspyDev::open_() {
     ret = airspy_open_sn((struct airspy_device**)&dev_, serial);
     if (ret != AIRSPY_SUCCESS) return ReturnValue::UNABLE_TO_OPEN_DEVICE;
 
+    auto close_and_fail = [&]() -> int {
+        airspy_close((struct airspy_device*)dev_);
+        dev_ = nullptr;
+        return ReturnValue::ERROR;
+    };
+
     ret = airspy_set_sample_type((struct airspy_device*)dev_, AIRSPY_SAMPLE_FLOAT32_IQ);
     //ret = airspy_set_sample_type((struct airspy_device*)dev_, AIRSPY_SAMPLE_RAW);
-    if (ret != AIRSPY_SUCCESS) goto error;
+    if (ret != AIRSPY_SUCCESS) return close_and_fail();
 
     ret = airspy_set_packing((struct airspy_device*)dev_, PACKING_ON);
-    if (ret != AIRSPY_SUCCESS) goto error;
+    if (ret != AIRSPY_SUCCESS) return close_and_fail();
 
     ret = airspy_set_samplerate((struct airspy_device*)dev_, sample_rate_to_uint(fs_));
-    if (ret != AIRSPY_SUCCESS) goto error;
+    if (ret != AIRSPY_SUCCESS) return close_and_fail();
 
     ret = airspy_set_freq((struct airspy_device*)dev_, fq_);
-    if (ret != AIRSPY_SUCCESS) goto error;
+    if (ret != AIRSPY_SUCCESS) return close_and_fail();
 
     ret = airspy_set_lna_gain((struct airspy_device*)dev_, (uint8_t)lna_gain_idx_);
-    if (ret != AIRSPY_SUCCESS) goto error;
+    if (ret != AIRSPY_SUCCESS) return close_and_fail();
 
     ret = airspy_set_mixer_gain((struct airspy_device*)dev_, (uint8_t)mix_gain_idx_);
-    if (ret != AIRSPY_SUCCESS) goto error;
+    if (ret != AIRSPY_SUCCESS) return close_and_fail();
 
     ret = airspy_set_vga_gain((struct airspy_device*)dev_, (uint8_t)vga_gain_idx_);
-    if (ret != AIRSPY_SUCCESS) goto error;
+    if (ret != AIRSPY_SUCCESS) return close_and_fail();
 
     return ReturnValue::OK;
-
-error:
-    airspy_close((struct airspy_device*)dev_);
-    dev_ = nullptr;
-
-    return ReturnValue::ERROR;
 }
 
 

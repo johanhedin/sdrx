@@ -262,41 +262,38 @@ int RtlDev::open_() {
 
     fs = sample_rate_to_uint(fs_);
 
+    auto close_and_fail = [&]() -> int {
+        rtlsdr_close((rtlsdr_dev_t*)dev_);
+        dev_ = nullptr;
+        return ReturnValue::ERROR;
+    };
+
     ret = rtlsdr_set_center_freq((rtlsdr_dev_t*)dev_, fq_);
     if (ret < 0) {
         std::cerr << "Error: Unable to set frequency.\n";
-        goto error;
+        return close_and_fail();
     }
 
     if (xtal_corr_ != 0) {
         ret = rtlsdr_set_freq_correction((rtlsdr_dev_t*)dev_, xtal_corr_);
         if (ret < 0) {
             std::cerr << "Error: Unable to set correction: " << xtal_corr_ << ".\n";
-            goto error;
+            return close_and_fail();
         }
     }
 
     ret = rtlsdr_set_tuner_gain_ext((rtlsdr_dev_t*)dev_, lna_gain_idx_, mix_gain_idx_, vga_gain_idx_);
     if (ret < 0) {
         std::cerr << "Error: Unable to set gain.\n";
-        goto error;
+        return close_and_fail();
     }
 
     ret = rtlsdr_set_sample_rate((rtlsdr_dev_t*)dev_, fs);
     if (ret < 0) {
         std::cerr << "Error: Unable to set sample rate.\n";
-        goto error;
+        return close_and_fail();
     }
 
-    goto ok;
-
-error:
-    rtlsdr_close((rtlsdr_dev_t*)dev_);
-    dev_ = nullptr;
-
-    return ReturnValue::ERROR;
-
-ok:
     return ReturnValue::OK;
 }
 
