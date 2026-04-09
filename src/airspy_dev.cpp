@@ -120,7 +120,7 @@ AirspyDev::AirspyDev(const std::string &serial, SampleRate fs)
 int AirspyDev::start() {
     std::vector<SampleRate> supported_rates;
 
-    if (run_) return ReturnValue::ALREADY_STARTED;
+    if (run_.load(std::memory_order_relaxed)) return ReturnValue::ALREADY_STARTED;
 
     supported_rates = get_sample_rates(serial_);
     if (std::find(supported_rates.begin(), supported_rates.end(), fs_) == supported_rates.end())
@@ -132,7 +132,7 @@ int AirspyDev::start() {
     block_info_.stream_state = StreamState::IDLE;
 
     state_ = State::STARTING;
-    run_ = true;
+    run_.store(true, std::memory_order_relaxed);
     worker_thread_ = std::thread(worker_, std::ref(*this));
 
     return ReturnValue::OK;
@@ -140,9 +140,9 @@ int AirspyDev::start() {
 
 
 int AirspyDev::stop() {
-    if (!run_) return ReturnValue::ALREADY_STOPPED;
+    if (!run_.load(std::memory_order_relaxed)) return ReturnValue::ALREADY_STOPPED;
 
-    run_ = false;
+    run_.store(false, std::memory_order_relaxed);
     state_ = State::STOPPING;
     worker_thread_.join();
 
@@ -250,7 +250,7 @@ int AirspyDev::setVgaGain(unsigned idx) {
 void AirspyDev::worker_(AirspyDev &self) {
     int ret;
 
-    while (self.run_) {
+    while (self.run_.load(std::memory_order_relaxed)) {
         ret = self.open_();
         if (ret == ReturnValue::OK) {
             std::cerr << "Device " << self.serial_ << " opened successfully\n";
@@ -261,7 +261,7 @@ void AirspyDev::worker_(AirspyDev &self) {
                                   &self);
             if (ret == AIRSPY_SUCCESS) {
                 self.state_ = State::RUNNING;  // TODO: Move to above airspy_start_rx? How to revert on error then?
-                while (self.run_ && airspy_is_streaming((struct airspy_device*)self.dev_) == AIRSPY_TRUE) {
+                while (self.run_.load(std::memory_order_relaxed) && airspy_is_streaming((struct airspy_device*)self.dev_) == AIRSPY_TRUE) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
                 airspy_stop_rx((struct airspy_device*)self.dev_);
@@ -272,7 +272,7 @@ void AirspyDev::worker_(AirspyDev &self) {
                 self.block_info_.ts = std::chrono::system_clock::now();
                 self.data(self.iq_buffer_, 0, self.user_data_, self.block_info_);
 
-                if (self.run_) {
+                if (self.run_.load(std::memory_order_relaxed)) {
                     self.state_ = State::RESTARTING;
                     std::cerr << "Device " << self.serial_ << " disappeared. Trying to reopen...\n";
                 }
@@ -282,7 +282,7 @@ void AirspyDev::worker_(AirspyDev &self) {
 
             airspy_close((struct airspy_device*)self.dev_);
             self.dev_ = nullptr;
-            if (self.run_) std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            if (self.run_.load(std::memory_order_relaxed)) std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -346,7 +346,7 @@ int AirspyDev::data_cb_(void *t) {
 
     self.block_info_.ts = std::chrono::system_clock::now();
 
-    if (!self.run_) {
+    if (!self.run_.load(std::memory_order_relaxed)) {
         return 0;
     }
 

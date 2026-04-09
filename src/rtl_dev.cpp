@@ -68,7 +68,7 @@ RtlDev::RtlDev(const std::string &serial, SampleRate fs, int xtal_corr)
 int RtlDev::start() {
     std::vector<SampleRate> supported_rates;
 
-    if (run_) return ReturnValue::ALREADY_STARTED;
+    if (run_.load(std::memory_order_relaxed)) return ReturnValue::ALREADY_STARTED;
 
     supported_rates = get_sample_rates(serial_);
     if (std::find(supported_rates.begin(), supported_rates.end(), fs_) == supported_rates.end())
@@ -80,7 +80,7 @@ int RtlDev::start() {
     block_info_.stream_state = StreamState::IDLE;
 
     state_ = State::STARTING;
-    run_ = true;
+    run_.store(true, std::memory_order_relaxed);
     worker_thread_ = std::thread(worker_, std::ref(*this));
 
     return ReturnValue::OK;
@@ -88,9 +88,9 @@ int RtlDev::start() {
 
 
 int RtlDev::stop() {
-    if (!run_) return ReturnValue::ALREADY_STOPPED;
+    if (!run_.load(std::memory_order_relaxed)) return ReturnValue::ALREADY_STOPPED;
 
-    run_ = false;
+    run_.store(false, std::memory_order_relaxed);
     state_ = State::STOPPING;
     worker_thread_.join();
 
@@ -210,7 +210,7 @@ void RtlDev::worker_(RtlDev &self) {
     // whole number.
     rtl_iq_buff_size = 512 * down_sampling_factor * 2;
 
-    while (self.run_) {
+    while (self.run_.load(std::memory_order_relaxed)) {
         ret = self.open_();
         if (ret == ReturnValue::OK) {
             std::cerr << "Device " << self.serial_ << " opened successfully\n";
@@ -227,7 +227,7 @@ void RtlDev::worker_(RtlDev &self) {
             self.block_info_.ts = std::chrono::system_clock::now();
             self.data(self.iq_buffer_, 0, self.user_data_, self.block_info_);
 
-            if (self.run_) {
+            if (self.run_.load(std::memory_order_relaxed)) {
                 std::cerr << "Device " << self.serial_ << " disappeared. Trying to reopen...\n";
                 self.state_ = State::RESTARTING;
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -309,7 +309,7 @@ void RtlDev::data_cb_(unsigned char *data, uint32_t data_len, void *ctx) {
     self.block_info_.ts = std::chrono::system_clock::now();
 
     // Stopping streaming is requested in the ctrl thread but done here
-    if (!self.run_) {
+    if (!self.run_.load(std::memory_order_relaxed)) {
         rtlsdr_cancel_async((rtlsdr_dev_t*)self.dev_);
         return;
     }

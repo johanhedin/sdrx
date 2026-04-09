@@ -26,6 +26,7 @@
 #include <string>
 #include <chrono>
 #include <memory>
+#include <atomic>
 
 #include <sigc++/sigc++.h>
 
@@ -161,7 +162,7 @@ protected:
     SampleRate     fs_;
     State          state_;
     void          *user_data_;
-    bool           run_;
+    std::atomic<bool> run_;
     BlockInfo      block_info_;
 
 private:
