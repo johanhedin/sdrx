@@ -252,8 +252,8 @@ private:
             size_t   j = h_.size();
             float    real_sum = 0.0f;
             float    imag_sum = 0.0f;
-            auto     d_ptr = &d_[pos_];
-            auto     h_ptr = &h_[0];
+            auto     d_ptr = d_.data() + pos_;
+            auto     h_ptr = h_.data();
 
             /*
             // Simple calculation. Not vectorize friendly. Not used
@@ -340,8 +340,8 @@ private:
             size_t i = 0;
             float real_sum = 0.0f;
             float imag_sum = 0.0f;
-            auto d_ptr = &d_[pos_];
-            auto h_ptr = &hk_[k_][0];
+            auto d_ptr = d_.data() + pos_;
+            auto h_ptr = hk_[k_].data();
 
             /*
             // Simple calculation. Not vectorize friendly
