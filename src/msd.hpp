@@ -167,7 +167,7 @@ private:
           m_(m), d_(h.size() * 2, iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), k_(0) {
             // Make sure that the filter coefficients can be used for folded FIR
             assert(h.size() > 0);
-            assert((h.size() - 1) % 2 == 0);
+            assert(h.size() % 2 == 1);
 
             // Make sure the translator size and down sampling factor supports
             // frequency translating FIR
