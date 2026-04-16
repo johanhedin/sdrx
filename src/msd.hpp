@@ -199,7 +199,8 @@ private:
                 // the phase, i.e. account for the filter group delay
                 size_t j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
                 for (size_t set = 0; set < num_sets; set++) {
-                    std::vector<iqsample_t> cc(h.size());
+                    std::vector<iqsample_t> cc;
+                    cc.reserve(h.size());
                     auto iter = h.begin();
                     size_t k = j;
                     while (iter != h.end()) {
