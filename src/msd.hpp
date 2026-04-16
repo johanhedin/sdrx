@@ -163,7 +163,7 @@ private:
     // line and filter coefficients
     class S {
     public:
-        S(size_t m, const std::vector<float> &h, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
+        S(size_t m, const std::vector<float> &h, const std::vector<iqsample_t> &translator = {}) :
           m_(m), d_(h.size() * 2, iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), k_(0) {
             // Make sure that the filter coefficients can be used for folded FIR
             assert(h.size() > 0);
@@ -285,7 +285,7 @@ private:
                 vec_sum = _mm256_fmadd_ps(vec_h, vec_d, vec_sum);
             }
             // Complete the vector summation
-            for (auto q = 0; q < 8; q += 2) {
+            for (size_t q = 0; q < 8; q += 2) {
                 real_sum += vec_sum[q + 0];
                 imag_sum += vec_sum[q + 1];
             }
@@ -360,7 +360,7 @@ private:
             // Intel AVX SIMD variant.
             __m256 real_sum_vec = _mm256_set1_ps(0.0f);
             __m256 imag_sum_vec = _mm256_set1_ps(0.0f);
-            const __m256 neg_vec = _mm256_set_ps(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+            static const __m256 neg_vec = _mm256_set_ps(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
             for (; i < rounded_h_size; i += 4) {
                 __m256 d_vec = _mm256_loadu_ps((float*)&d_ptr[i]);
                 __m256 h_vec = _mm256_loadu_ps((float*)&h_ptr[i]);
