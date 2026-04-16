@@ -163,7 +163,7 @@ private:
     // line and filter coefficients
     class S {
     public:
-        S(unsigned m, const std::vector<float> h, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
+        S(unsigned m, const std::vector<float> &h, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
           m_(m), d_(h.size() * 2, iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), k_(0) {
             // Make sure that the filter coefficients can be used for folded FIR
             assert(h.size() > 0);
