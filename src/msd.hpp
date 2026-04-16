@@ -247,7 +247,7 @@ private:
         // and the filter coefficients
         inline iqsample_t calculateOutput() {
             size_t   half_h_size = (h_.size() - 1) >> 1;
-            size_t   rounded_half_h_size = (half_h_size >> 2) << 2;
+            size_t   rounded_half_h_size = half_h_size & ~size_t{3}; // round-down to multiple of 4
             size_t   i = 0;
             size_t   j = h_.size();
             float    real_sum = 0.0f;
@@ -336,7 +336,7 @@ private:
         // is called as the first one if ftfir is used. All subsequent calls
         // use the "normal" calculateOutput() above.
         inline iqsample_t calculateOutputTranslated() {
-            size_t rounded_h_size = (h_.size() >> 2) << 2;
+            size_t rounded_h_size = h_.size() & ~size_t{3}; // round-down to multiple of 4
             size_t i = 0;
             float real_sum = 0.0f;
             float imag_sum = 0.0f;
