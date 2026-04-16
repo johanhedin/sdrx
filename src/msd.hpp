@@ -44,7 +44,7 @@ public:
     // Configuration for one down sampling stage. We need the down sampling
     // factor and the coefficients that make up the low pass FIR filter
     struct Stage {
-        unsigned           m;    // Down sampling factor
+        size_t             m;    // Down sampling factor
         std::vector<float> h;    // Low pass filter FIR coefficients
     };
 
@@ -68,17 +68,17 @@ public:
     }
 
     // Get decimation factor for the MSD
-    unsigned m() const { return m_; }
+    size_t m() const { return m_; }
 
     // Translate and down sample. If in_len is a multiple of m, you don't need
     // out_len since you know how many out samples that are to be output.
-    inline void decimate(const iqsample_t *in, unsigned in_len, iqsample_t *out, unsigned *out_len_ptr = nullptr) {
+    inline void decimate(const iqsample_t *in, size_t in_len, iqsample_t *out, size_t *out_len_ptr = nullptr) {
         iqsample_t sample;
-        unsigned   out_len = 0;
+        size_t     out_len = 0;
 
         if (translator_.empty()) {
             // No tuning required
-            for (unsigned i = 0; i < in_len; ++i) {
+            for (size_t i = 0; i < in_len; ++i) {
                 sample = in[i];
 
                 auto stage_iter = stages_.begin();
@@ -102,7 +102,7 @@ public:
         } else {
             // Tune to requested channel
             if (use_ftfir_) {
-                for (unsigned i = 0; i < in_len; ++i) {
+                for (size_t i = 0; i < in_len; ++i) {
                     sample = in[i];
                     auto stage_iter = stages_.begin();
                     if (stage_iter->addSample(sample)) {
@@ -130,7 +130,7 @@ public:
                     }
                 }
             } else {
-                for (unsigned i = 0; i < in_len; ++i) {
+                for (size_t i = 0; i < in_len; ++i) {
                     sample = in[i] * translator_[trans_pos_];
                     if (++trans_pos_ == translator_.size()) trans_pos_ = 0;
 
@@ -163,7 +163,7 @@ private:
     // line and filter coefficients
     class S {
     public:
-        S(unsigned m, const std::vector<float> &h, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
+        S(size_t m, const std::vector<float> &h, const std::vector<iqsample_t> &translator = std::vector<iqsample_t>(0)) :
           m_(m), d_(h.size() * 2, iqsample_t(0.0f, 0.0f)), pos_(0), isn_(m), k_(0) {
             // Make sure that the filter coefficients can be used for folded FIR
             assert(h.size() > 0);
@@ -192,15 +192,15 @@ private:
                 // Construct frequency translating filter coefficient set based
                 // on m, h and translator vector. Size of translator is assumed
                 // to always be evenly divisible by m (guaranteed by previous assert)
-                unsigned num_sets = translator.size() / m_;
+                size_t num_sets = translator.size() / m_;
 
                 // Start the translator lookup by -(N - 1) positions to align
                 // the phase, i.e. account for the filter group delay
-                unsigned j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
-                for (unsigned set = 0; set < num_sets; set++) {
+                size_t j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
+                for (size_t set = 0; set < num_sets; set++) {
                     std::vector<iqsample_t> cc;
                     auto iter = h.begin();
-                    unsigned k = j;
+                    size_t k = j;
                     while (iter != h.end()) {
                         // Frequency translating FIR filter has a gain of 0.5
                         // so we need to compensate that with a factor 2 on
@@ -244,10 +244,10 @@ private:
         // Calculate one output sample based on the samples in the delay line
         // and the filter coefficients
         inline iqsample_t calculateOutput() {
-            unsigned half_h_size = (h_.size() - 1) >> 1;
-            unsigned rounded_half_h_size = (half_h_size >> 2) << 2;
-            unsigned i = 0;
-            unsigned j = h_.size();
+            size_t   half_h_size = (h_.size() - 1) >> 1;
+            size_t   rounded_half_h_size = (half_h_size >> 2) << 2;
+            size_t   i = 0;
+            size_t   j = h_.size();
             float    real_sum = 0.0f;
             float    imag_sum = 0.0f;
             auto     d_ptr = &d_[pos_];
@@ -334,8 +334,8 @@ private:
         // is called as the first one if ftfir is used. All subsequent calls
         // use the "normal" calculateOutput() above.
         inline iqsample_t calculateOutputTranslated() {
-            unsigned rounded_h_size = (h_.size() >> 2) << 2;
-            unsigned i = 0;
+            size_t rounded_h_size = (h_.size() >> 2) << 2;
+            size_t i = 0;
             float real_sum = 0.0f;
             float imag_sum = 0.0f;
             auto d_ptr = &d_[pos_];
@@ -420,19 +420,19 @@ private:
     private:
         using hk_t = std::vector<std::vector<iqsample_t>>; // Vector of FIR filter coefficients, hk
 
-        unsigned                m_;     // Downsampling factor M
+        size_t                  m_;     // Downsampling factor M
         std::vector<iqsample_t> h_;     // FIR coefficients, h, in complex form (same value in real and imag)
         std::vector<iqsample_t> d_;     // Delay line with input samples. 2 * h_.size() to avoid wrap around
-        unsigned                pos_;   // Current write position in the delay line
-        unsigned                isn_;   // New in-samples needed in the delay line before an output sample can be calculated
+        size_t                  pos_;   // Current write position in the delay line
+        size_t                  isn_;   // New in-samples needed in the delay line before an output sample can be calculated
         hk_t                    hk_;    // Frequency translating FIR filter coefficient sets
-        unsigned                k_;     // Current frequency translating FIR filter coefficient set
+        size_t                  k_;     // Current frequency translating FIR filter coefficient set
     };
 
     std::vector<MSD::S>     stages_;     // List of stages
-    unsigned                m_;          // Total down sampling factor
+    size_t                  m_;          // Total down sampling factor
     std::vector<iqsample_t> translator_; // Frequency tuning sequence
-    unsigned                trans_pos_;  // Position in translator
+    size_t                  trans_pos_;  // Position in translator
     bool                    use_ftfir_;  // Use frequency translating FIR for first stage
 };
 
