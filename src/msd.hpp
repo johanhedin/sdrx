@@ -68,7 +68,7 @@ public:
     }
 
     // Get decimation factor for the MSD
-    unsigned m() { return m_; }
+    unsigned m() const { return m_; }
 
     // Translate and down sample. If in_len is a multiple of m, you don't need
     // out_len since you know how many out samples that are to be output.
