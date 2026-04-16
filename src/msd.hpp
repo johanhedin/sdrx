@@ -195,6 +195,9 @@ private:
                 // to always be evenly divisible by m (guaranteed by previous assert)
                 size_t num_sets = translator.size() / m_;
 
+                // Reserve hk_ since its size is now known
+                hk_.reserve(num_sets);
+
                 // Start the translator lookup by -(N - 1) positions to align
                 // the phase, i.e. account for the filter group delay
                 size_t j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
@@ -214,7 +217,7 @@ private:
                         ++iter;
                     }
 
-                    hk_.push_back(cc);
+                    hk_.push_back(std::move(cc));
                     j += m_;
                     if (j >= translator.size()) j -= translator.size();
                 }
