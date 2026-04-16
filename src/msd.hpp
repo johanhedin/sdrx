@@ -179,6 +179,7 @@ private:
             // SIMD registers. When we just need "real" coefficients, we
             // can read the value from the real or imag part since it
             // is the same.
+            h_.reserve(h.size());
             auto iter = h.begin();
             while (iter != h.end()) {
                 h_.push_back(iqsample_t(*iter, *iter));
@@ -198,7 +199,7 @@ private:
                 // the phase, i.e. account for the filter group delay
                 size_t j = (translator.size() - (h.size() - 1) % translator.size()) % translator.size();
                 for (size_t set = 0; set < num_sets; set++) {
-                    std::vector<iqsample_t> cc;
+                    std::vector<iqsample_t> cc(h.size());
                     auto iter = h.begin();
                     size_t k = j;
                     while (iter != h.end()) {
