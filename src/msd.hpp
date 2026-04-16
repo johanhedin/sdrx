@@ -189,7 +189,7 @@ private:
             // Supplying a translator ("tuner") is only relevant for the first
             // stage. Using translation on any other stage is considered
             // undefined behaviour
-            if (translator.size() > 0) {
+            if (!translator.empty()) {
                 // Construct frequency translating filter coefficient set based
                 // on m, h and translator vector. Size of translator is assumed
                 // to always be evenly divisible by m (guaranteed by previous assert)
