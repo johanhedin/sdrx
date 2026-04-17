@@ -192,9 +192,9 @@ static const std::vector<float> fs_10000_12bit_ds_lpf2_02000_to_00400 = {
 //
 // Output the filter coefficients as a C++ float vector:
 //
-//   > vectortocpp(c, "fs_10000_12bit_ds_lpf3_00400_to_00800")
+//   > vectortocpp(c, "fs_10000_12bit_ds_lpf3_00400_to_00080")
 //
-static const std::vector<float> fs_10000_12bit_ds_lpf3_00400_to_00800 = {
+static const std::vector<float> fs_10000_12bit_ds_lpf3_00400_to_00080 = {
      0.0001748744558828f,
      0.0009842833658397f,
      0.0034403805150893f,

@@ -1662,7 +1662,7 @@ int main(int argc, char** argv) {
             stages = std::vector<MSD::Stage>{
                 { 5, fs_10000_12bit_ds_lpf1_10000_to_02000 },
                 { 5, fs_10000_12bit_ds_lpf2_02000_to_00400 },
-                { 5, fs_10000_12bit_ds_lpf3_00400_to_00800 },
+                { 5, fs_10000_12bit_ds_lpf3_00400_to_00080 },
                 { 5, fs_10000_12bit_ds_lpf4_00080_to_00016 }
             };
             break;
